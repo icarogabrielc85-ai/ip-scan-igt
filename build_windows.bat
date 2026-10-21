@@ -17,16 +17,25 @@ if %ERRORLEVEL% neq 0 (
 )
 
 echo [*] Python detectado com sucesso.
-echo [*] Instalando/atualizando dependencias necessarias (PyQt5 e PyInstaller)...
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+echo [*] Verificando se PyQt5 e PyInstaller estao instalados no sistema...
+
+python -c "import PyQt5, PyInstaller" >nul 2>nul
 if %ERRORLEVEL% neq 0 (
-    echo.
-    echo [ERRO] Falha ao instalar dependencias do requirements.txt.
-    echo Verifique sua conexao com a internet ou permissoes do Python.
-    echo.
-    pause
-    exit /b 1
+    echo [*] PyQt5 ou PyInstaller ausentes.
+    echo [*] Instalando dependencias automaticamente (PyQt5>=5.15.9 e pyinstaller>=6.3.0)...
+    python -m pip install --upgrade pip
+    python -m pip install -r requirements.txt
+    if %ERRORLEVEL% neq 0 (
+        echo.
+        echo [ERRO] Falha ao instalar dependencias do requirements.txt.
+        echo Verifique sua conexao com a internet ou permissoes do Python.
+        echo.
+        pause
+        exit /b 1
+    )
+    echo [OK] Dependencias instaladas com sucesso!
+) else (
+    echo [OK] PyQt5 e PyInstaller ja estao instalados e prontos!
 )
 
 echo.

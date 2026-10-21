@@ -23,6 +23,23 @@ if IS_WINDOWS:
     except Exception:
         pass
 
+# Verificação e Auto-Instalação Automática do PyQt5 se ausente
+try:
+    import PyQt5
+except ImportError:
+    print("[*] PyQt5 não encontrado no sistema. Instalando automaticamente...")
+    try:
+        pip_cmd = [sys.executable, "-m", "pip", "install", "PyQt5>=5.15.9"]
+        if not IS_WINDOWS:
+            pip_cmd.extend(["--break-system-packages", "--user"])
+        subprocess.check_call(pip_cmd)
+        import PyQt5
+        print("[OK] PyQt5 instalado com sucesso!")
+    except Exception as err:
+        print(f"[ERRO] Não foi possível instalar o PyQt5 automaticamente: {err}")
+        print("Instale manualmente executando: pip install PyQt5>=5.15.9")
+        sys.exit(1)
+
 
 def get_resource_path(filename: str) -> str:
     base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))

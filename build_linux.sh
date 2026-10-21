@@ -4,7 +4,12 @@ echo "======================================================================"
 echo "          IP SCAN IGT - COMPILADOR AUTOMATICO PARA LINUX"
 echo "======================================================================"
 
-python3 -m pip install --user --break-system-packages -r requirements.txt
+if ! python3 -c "import PyQt5, PyInstaller" 2>/dev/null; then
+    echo "[*] Instalando dependências ausentes (PyQt5 e PyInstaller)..."
+    python3 -m pip install --user --break-system-packages -r requirements.txt
+else
+    echo "[OK] PyQt5 e PyInstaller já estão instalados!"
+fi
 python3 -m PyInstaller --clean ipscan_linux.spec
 
 echo ""

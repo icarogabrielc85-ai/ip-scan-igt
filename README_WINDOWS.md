@@ -4,9 +4,20 @@ Este projeto foi totalmente adaptado para funcionar nativamente no **Windows 10,
 
 ---
 
-## 🚀 Método 1: Compilação em 1 Clique (Recomendado)
+## ⚡ Método 0: Executar Direto no Windows (Sem Compilar)
 
-Se você já possui o **Python 3.10+** instalado no Windows:
+Se você só quer rodar o programa sem precisar gerar o `.exe`:
+1. Dê um duplo-clique no arquivo:
+   ```cmd
+   executar_windows.bat
+   ```
+2. Ele verifica se o **PyQt5** está instalado; caso não esteja, instala automaticamente e abre o IP Scan IGT!
+
+---
+
+## 🚀 Método 1: Compilação do .exe em 1 Clique (Recomendado)
+
+Se você deseja gerar o arquivo executável único portátil (`dist\IPScanIGT.exe`):
 
 1. Dê um duplo-clique no arquivo:
    ```cmd
@@ -14,7 +25,7 @@ Se você já possui o **Python 3.10+** instalado no Windows:
    ```
 2. O script irá:
    - Verificar a instalação do Python.
-   - Instalar automaticamente o `PyQt5` e o `PyInstaller`.
+   - Verificar se `PyQt5` e `PyInstaller` estão instalados; se faltar algum, instala na hora automaticamente.
    - Empacotar todos os arquivos (`icon.ico`, banco MACs `mac-vendors.txt`, temas, etc.).
    - Gerar o executável único **`dist\IPScanIGT.exe`** (sem necessidade de instalação).
 
