@@ -25,19 +25,40 @@ if IS_WINDOWS:
 
 # Verificação e Auto-Instalação Automática do PyQt5 se ausente
 try:
-    import PyQt5
-except ImportError:
-    print("[*] PyQt5 não encontrado no sistema. Instalando automaticamente...")
+    from PyQt5 import QtCore, QtGui, QtWidgets
+except ImportError as e:
+    print("=" * 65)
+    print("             IP SCAN IGT - VERIFICANDO DEPENDÊNCIAS")
+    print("=" * 65)
+    print("[*] A biblioteca gráfica PyQt5 não foi encontrada no seu Python.")
+    print("[*] Instalando PyQt5 automaticamente via pip... Por favor, aguarde...")
+    print("")
     try:
         pip_cmd = [sys.executable, "-m", "pip", "install", "PyQt5>=5.15.9"]
         if not IS_WINDOWS:
             pip_cmd.extend(["--break-system-packages", "--user"])
         subprocess.check_call(pip_cmd)
-        import PyQt5
-        print("[OK] PyQt5 instalado com sucesso!")
+        from PyQt5 import QtCore, QtGui, QtWidgets
+        print("\n[OK] PyQt5 foi instalado com sucesso! Iniciando aplicativo...\n")
     except Exception as err:
-        print(f"[ERRO] Não foi possível instalar o PyQt5 automaticamente: {err}")
-        print("Instale manualmente executando: pip install PyQt5>=5.15.9")
+        msg = (
+            f"O IP Scan IGT precisa do pacote PyQt5 para abrir a interface gráfica.\n\n"
+            f"A instalação automática falhou com o erro:\n{err}\n\n"
+            f"Solução:\n"
+            f"Abra o Prompt de Comando (CMD) e execute manualmente:\n"
+            f"pip install PyQt5>=5.15.9"
+        )
+        print(f"\n[ERRO FATAL]\n{msg}\n")
+        if IS_WINDOWS:
+            try:
+                import ctypes
+                ctypes.windll.user32.MessageBoxW(0, msg, "IP Scan IGT - Dependência Ausente", 0x10)
+            except Exception:
+                pass
+            try:
+                input("\nPressione ENTER para fechar esta janela...")
+            except Exception:
+                pass
         sys.exit(1)
 
 
@@ -1552,11 +1573,32 @@ class MainWindow(QMainWindow):
 
 
 def main():
-    app = QApplication(sys.argv)
-    app.setApplicationName("IP Scan IGT")
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec_())
+    try:
+        app = QApplication(sys.argv)
+        app.setApplicationName("IP Scan IGT")
+        window = MainWindow()
+        window.show()
+        sys.exit(app.exec_())
+    except Exception as err:
+        import traceback
+        tb = traceback.format_exc()
+        print(f"\n[ERRO FATAL NA EXECUÇÃO]\n{tb}")
+        if IS_WINDOWS:
+            try:
+                import ctypes
+                ctypes.windll.user32.MessageBoxW(
+                    0,
+                    f"Erro fatal ao executar o IP Scan IGT:\n\n{err}\n\nDetalhes:\n{tb[:400]}",
+                    "IP Scan IGT - Erro",
+                    0x10,
+                )
+            except Exception:
+                pass
+            try:
+                input("\nPressione ENTER para fechar esta janela...")
+            except Exception:
+                pass
+        sys.exit(1)
 
 
 if __name__ == "__main__":

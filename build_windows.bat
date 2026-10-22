@@ -1,16 +1,26 @@
 @echo off
 chcp 65001 >nul
 title Compilador IP Scan IGT para Windows
+cd /d "%~dp0"
+
 echo ======================================================================
 echo           IP SCAN IGT - COMPILADOR AUTOMATICO PARA WINDOWS
 echo ======================================================================
 echo.
 
-where python >nul 2>nul
+python --version >nul 2>nul
 if %ERRORLEVEL% neq 0 (
-    echo [ERRO] Python nao foi encontrado no sistema!
-    echo Por favor, instale o Python 3.10 ou superior marcando a opcao "Add Python to PATH".
-    echo Download oficial: https://www.python.org/downloads/
+    echo ======================================================================
+    echo [ERRO] O Python nao esta instalado ou nao esta no PATH do Windows!
+    echo ======================================================================
+    echo.
+    echo 1. Baixe o instalador oficial do Python (versao 3.10 ou mais recente):
+    echo    https://www.python.org/downloads/
+    echo.
+    echo 2. IMPORTANTE: Na primeira tela do instalador, marque a caixa:
+    echo    "[X] Add python.exe to PATH"
+    echo.
+    echo Depois de instalar, feche este terminal e tente novamente.
     echo.
     pause
     exit /b 1
@@ -19,20 +29,26 @@ if %ERRORLEVEL% neq 0 (
 echo [*] Python detectado com sucesso.
 echo [*] Verificando se PyQt5 e PyInstaller estao instalados no sistema...
 
-python -c "import PyQt5, PyInstaller" >nul 2>nul
+python -c "import PyQt5.QtCore, PyQt5.QtWidgets, PyInstaller" >nul 2>nul
 if %ERRORLEVEL% neq 0 (
+    echo.
     echo [*] PyQt5 ou PyInstaller ausentes.
-    echo [*] Instalando dependencias automaticamente (PyQt5>=5.15.9 e pyinstaller>=6.3.0)...
+    echo [*] Instalando dependencias automaticamente via pip...
+    echo [*] Aguarde alguns instantes...
+    echo.
     python -m pip install --upgrade pip
     python -m pip install -r requirements.txt
     if %ERRORLEVEL% neq 0 (
         echo.
-        echo [ERRO] Falha ao instalar dependencias do requirements.txt.
-        echo Verifique sua conexao com a internet ou permissoes do Python.
+        echo ======================================================================
+        echo [ERRO] Falha ao instalar dependencias do requirements.txt!
+        echo ======================================================================
+        echo Verifique sua conexao com a internet ou execute este arquivo como Administrador.
         echo.
         pause
         exit /b 1
     )
+    echo.
     echo [OK] Dependencias instaladas com sucesso!
 ) else (
     echo [OK] PyQt5 e PyInstaller ja estao instalados e prontos!
@@ -43,7 +59,9 @@ echo [*] Iniciando empacotamento do executavel IPScanIGT.exe...
 python -m PyInstaller --clean ipscan_windows.spec
 if %ERRORLEVEL% neq 0 (
     echo.
+    echo ======================================================================
     echo [ERRO] Ocorreu uma falha durante o processo do PyInstaller!
+    echo ======================================================================
     echo.
     pause
     exit /b 1
