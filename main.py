@@ -92,7 +92,7 @@ def open_terminal_ping(ip: str):
                 return
         subprocess.Popen(["xterm", "-e", f"ping {ip}"])
 
-from PyQt5.QtCore import QObject, QPoint, QSize, Qt, QThread, QTimer, QUrl, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import QObject, QPoint, QProcess, QSize, Qt, QThread, QTimer, QUrl, pyqtSignal, pyqtSlot
 from PyQt5.QtGui import QColor, QDesktopServices, QFont, QIcon
 from PyQt5.QtWidgets import (
     QAction,
@@ -111,6 +111,7 @@ from PyQt5.QtWidgets import (
     QMenuBar,
     QMessageBox,
     QProgressBar,
+    QProgressDialog,
     QPushButton,
     QSplitter,
     QStatusBar,
@@ -248,6 +249,114 @@ class PingSweepWorker(QThread):
             for ip, rtt in ex.map(ping_one, self.ips):
                 results.append((ip, rtt))
         self.batch_finished.emit(results)
+
+
+class AppUpdateWorker(QThread):
+    progress_status = pyqtSignal(str)
+    update_finished = pyqtSignal(bool, str, bool)  # success, message, needs_restart
+
+    def __init__(self, repo_dir: str):
+        super().__init__()
+        self.repo_dir = repo_dir
+
+    def run(self):
+        try:
+            self.progress_status.emit("Verificando repositório Git...")
+            is_git = False
+            try:
+                res = subprocess.run(
+                    ["git", "rev-parse", "--is-inside-work-tree"],
+                    cwd=self.repo_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=4
+                )
+                if res.returncode == 0 and "true" in res.stdout:
+                    is_git = True
+            except Exception:
+                pass
+
+            if is_git:
+                self.progress_status.emit("Consultando atualizações no GitHub...")
+                fetch_res = subprocess.run(
+                    ["git", "fetch", "origin", "main"],
+                    cwd=self.repo_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=15
+                )
+                if fetch_res.returncode != 0:
+                    err_msg = fetch_res.stderr.strip() or fetch_res.stdout.strip()
+                    self.update_finished.emit(False, f"Não foi possível conectar ao GitHub:\n{err_msg}", False)
+                    return
+
+                rev_res = subprocess.run(
+                    ["git", "rev-list", "HEAD..origin/main", "--count"],
+                    cwd=self.repo_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                count = 0
+                if rev_res.returncode == 0:
+                    try:
+                        count = int(rev_res.stdout.strip())
+                    except ValueError:
+                        count = 0
+
+                if count == 0:
+                    self.progress_status.emit("O aplicativo já está na versão mais recente.")
+                    self.update_finished.emit(True, "O IP Scan IGT já está na versão mais recente!\nNenhuma nova atualização disponível no momento.", False)
+                    return
+
+                self.progress_status.emit(f"Baixando e aplicando {count} nova(s) atualização(ões)...")
+                pull_res = subprocess.run(
+                    ["git", "pull", "--rebase", "origin", "main"],
+                    cwd=self.repo_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=25
+                )
+                if pull_res.returncode != 0:
+                    pull_res = subprocess.run(
+                        ["git", "pull", "origin", "main"],
+                        cwd=self.repo_dir,
+                        capture_output=True,
+                        text=True,
+                        timeout=25
+                    )
+                    if pull_res.returncode != 0:
+                        err_str = pull_res.stderr.strip() or pull_res.stdout.strip()
+                        self.update_finished.emit(False, f"Erro ao aplicar atualizações via git pull:\n{err_str}", False)
+                        return
+
+                self.progress_status.emit("Verificando dependências Python...")
+                req_file = os.path.join(self.repo_dir, "requirements.txt")
+                if os.path.exists(req_file):
+                    try:
+                        pip_args = [sys.executable, "-m", "pip", "install", "-r", req_file, "--quiet"]
+                        if not IS_WINDOWS:
+                            pip_args.extend(["--break-system-packages", "--user"])
+                        subprocess.run(pip_args, cwd=self.repo_dir, timeout=30)
+                    except Exception:
+                        pass
+
+                self.progress_status.emit("Atualização concluída com sucesso!")
+                self.update_finished.emit(
+                    True,
+                    f"O IP Scan IGT foi atualizado com sucesso!\n"
+                    f"{count} melhoria(s) foram baixadas e integradas.\n\n"
+                    f"Deseja reiniciar o aplicativo agora para carregar a nova versão?",
+                    True
+                )
+            else:
+                self.update_finished.emit(
+                    False,
+                    "Modo de instalação manual: o diretório local não é um repositório Git rastreável para auto-atualização.",
+                    False
+                )
+        except Exception as e:
+            self.update_finished.emit(False, f"Erro durante o processo de atualização:\n{str(e)}", False)
 
 
 def ip_sort_tuple(ip_str: str) -> tuple:
@@ -446,6 +555,11 @@ class MainWindow(QMainWindow):
 
         # 4. Ajuda
         menu_help = menu_bar.addMenu("&Ajuda")
+        act_update = QAction("🔄 Verificar e Atualizar IP Scan IGT...", self)
+        act_update.triggered.connect(self.check_and_apply_update)
+        menu_help.addAction(act_update)
+        menu_help.addSeparator()
+
         act_about = QAction("Sobre o IP Scan IGT...", self)
         act_about.triggered.connect(self.show_about_dialog)
         menu_help.addAction(act_about)
@@ -487,7 +601,7 @@ class MainWindow(QMainWindow):
         top_layout.addWidget(lbl_from)
 
         self.txt_start_ip = QLineEdit(self.local_info.get("start_ip", "192.168.1.1"))
-        self.txt_start_ip.setFixedWidth(130)
+        self.txt_start_ip.setFixedWidth(120)
         self.txt_start_ip.setFixedHeight(32)
         top_layout.addWidget(self.txt_start_ip)
 
@@ -496,16 +610,25 @@ class MainWindow(QMainWindow):
         top_layout.addWidget(lbl_sep)
 
         self.txt_end_ip = QLineEdit(self.local_info.get("end_ip", "192.168.1.254"))
-        self.txt_end_ip.setFixedWidth(130)
+        self.txt_end_ip.setFixedWidth(120)
         self.txt_end_ip.setFixedHeight(32)
         top_layout.addWidget(self.txt_end_ip)
 
+        lbl_mask = QLabel("Máscara:")
+        lbl_mask.setStyleSheet("font-weight: 500;")
+        top_layout.addWidget(lbl_mask)
+
         self.combo_mask = QComboBox()
-        self.combo_mask.addItems(["/24 (254 IPs)", "/16 (65k IPs)", "/26 (62 IPs)", "/28 (14 IPs)"])
-        self.combo_mask.setFixedWidth(125)
+        self.combo_mask.setMinimumWidth(190)
         self.combo_mask.setFixedHeight(32)
+        self.combo_mask.setToolTip("Máscara de sub-rede / Prefixo CIDR da rede")
+        self.populate_mask_combo()
+        self.set_mask_cidr(self.local_info.get("cidr", 24))
         self.combo_mask.currentIndexChanged.connect(self.on_mask_changed)
         top_layout.addWidget(self.combo_mask)
+
+        self.txt_start_ip.textChanged.connect(self.auto_detect_mask_from_inputs)
+        self.txt_end_ip.textChanged.connect(self.auto_detect_mask_from_inputs)
 
         top_layout.addSpacing(6)
 
@@ -560,6 +683,14 @@ class MainWindow(QMainWindow):
         self.btn_theme.setToolTip("Alternar Tema Claro / Escuro")
         self.btn_theme.clicked.connect(self.toggle_theme)
         top_layout.addWidget(self.btn_theme)
+
+        # 1-Click Update Button
+        self.btn_update = QPushButton("🔄 Atualizar")
+        self.btn_update.setObjectName("btnUpdate")
+        self.btn_update.setFixedHeight(32)
+        self.btn_update.setToolTip("Verificar e aplicar atualizações do repositório em 1 clique")
+        self.btn_update.clicked.connect(self.check_and_apply_update)
+        top_layout.addWidget(self.btn_update)
 
         main_layout.addWidget(top_bar)
 
@@ -849,6 +980,9 @@ class MainWindow(QMainWindow):
             act.triggered.connect(lambda checked, info=iface: self.select_network_interface(info))
 
         menu.addSeparator()
+        act_refresh = menu.addAction("🔄  Recarregar Placas e Auto-detectar Rede")
+        act_refresh.triggered.connect(self.refresh_network_interfaces)
+
         act_dialog = menu.addAction("⚙️  Gerenciar e Ver Detalhes das Placas...")
         act_dialog.triggered.connect(self.open_interface_dialog)
 
@@ -856,26 +990,107 @@ class MainWindow(QMainWindow):
         btn_pos = self.btn_subnet.mapToGlobal(QPoint(0, self.btn_subnet.height() + 2))
         menu.exec_(btn_pos)
 
+    COMMON_MASKS = [
+        (24, "255.255.255.0", "254 IPs"),
+        (16, "255.255.0.0", "65k IPs"),
+        (20, "255.255.240.0", "4.094 IPs"),
+        (21, "255.255.248.0", "2.046 IPs"),
+        (22, "255.255.252.0", "1.022 IPs"),
+        (23, "255.255.254.0", "510 IPs"),
+        (25, "255.255.255.128", "126 IPs"),
+        (26, "255.255.255.192", "62 IPs"),
+        (27, "255.255.255.224", "30 IPs"),
+        (28, "255.255.255.240", "14 IPs"),
+        (29, "255.255.255.248", "6 IPs"),
+        (30, "255.255.255.252", "2 IPs"),
+        (8,  "255.0.0.0", "16M IPs"),
+    ]
+
+    def populate_mask_combo(self):
+        self.combo_mask.blockSignals(True)
+        self.combo_mask.clear()
+        for cidr, netmask, desc in self.COMMON_MASKS:
+            self.combo_mask.addItem(f"/{cidr} • {netmask} ({desc})", cidr)
+        self.combo_mask.blockSignals(False)
+
+    def set_mask_cidr(self, cidr):
+        try:
+            cidr_int = int(cidr)
+        except (ValueError, TypeError):
+            cidr_int = 24
+
+        self.combo_mask.blockSignals(True)
+        idx = -1
+        for i in range(self.combo_mask.count()):
+            if self.combo_mask.itemData(i) == cidr_int:
+                idx = i
+                break
+
+        if idx != -1:
+            self.combo_mask.setCurrentIndex(idx)
+        else:
+            try:
+                fake_net = ipaddress.IPv4Network(f"0.0.0.0/{cidr_int}", strict=False)
+                mask_str = str(fake_net.netmask)
+                total_ips = max(0, fake_net.num_addresses - 2)
+                self.combo_mask.addItem(f"/{cidr_int} • {mask_str} ({total_ips} IPs)", cidr_int)
+                self.combo_mask.setCurrentIndex(self.combo_mask.count() - 1)
+            except Exception:
+                pass
+        self.combo_mask.blockSignals(False)
+
+    def auto_detect_mask_from_inputs(self):
+        start_text = self.txt_start_ip.text().strip()
+        end_text = self.txt_end_ip.text().strip()
+        try:
+            ip1 = ipaddress.IPv4Address(start_text)
+            ip2 = ipaddress.IPv4Address(end_text)
+            if ip1 <= ip2:
+                for prefix in range(30, 7, -1):
+                    net = ipaddress.IPv4Network(f"{start_text}/{prefix}", strict=False)
+                    first_host = str(net.network_address + 1) if net.num_addresses > 2 else str(net.network_address)
+                    last_host = str(net.broadcast_address - 1) if net.num_addresses > 2 else str(net.broadcast_address)
+                    if (first_host == start_text and last_host == end_text) or \
+                       (str(net.network_address) == start_text and str(net.broadcast_address) == end_text):
+                        self.set_mask_cidr(prefix)
+                        return
+        except Exception:
+            pass
+
     def select_network_interface(self, iface_info: dict):
         self.local_info = iface_info
         start_ip = iface_info.get("start_ip", "")
         end_ip = iface_info.get("end_ip", "")
         cidr = iface_info.get("cidr", "24")
+        netmask = iface_info.get("netmask", "255.255.255.0")
 
+        self.txt_start_ip.blockSignals(True)
+        self.txt_end_ip.blockSignals(True)
         if start_ip:
             self.txt_start_ip.setText(start_ip)
         if end_ip:
             self.txt_end_ip.setText(end_ip)
+        self.txt_start_ip.blockSignals(False)
+        self.txt_end_ip.blockSignals(False)
 
-        prefix_map = {"24": 0, "16": 1, "26": 2, "28": 3}
-        if str(cidr) in prefix_map:
-            self.combo_mask.blockSignals(True)
-            self.combo_mask.setCurrentIndex(prefix_map[str(cidr)])
-            self.combo_mask.blockSignals(False)
+        self.set_mask_cidr(cidr)
 
         iface_name = iface_info.get("name", "eth0")
         ip_addr = iface_info.get("ip", "")
-        self.lbl_stats.setText(f"Placa selecionada: {iface_info.get('icon', '🖧')} {iface_name} ({ip_addr}/{cidr}) • Faixa: {start_ip} - {end_ip}")
+        self.lbl_stats.setText(f"Placa selecionada: {iface_info.get('icon', '🖧')} {iface_name} ({ip_addr}/{cidr} • {netmask}) • Faixa: {start_ip} - {end_ip}")
+
+    def refresh_network_interfaces(self):
+        new_info = get_local_network_info()
+        self.select_network_interface(new_info)
+        QMessageBox.information(
+            self,
+            "Rede Atualizada",
+            f"Placa de rede e máscara atualizadas com sucesso:\n\n"
+            f"• Interface: {new_info.get('name')} ({new_info.get('type')})\n"
+            f"• Endereço IPv4: {new_info.get('ip')}\n"
+            f"• Máscara de Sub-rede: {new_info.get('netmask')} (/{new_info.get('cidr')})\n"
+            f"• Faixa de IPs: {new_info.get('start_ip')} — {new_info.get('end_ip')}"
+        )
 
     def open_interface_dialog(self):
         cur_name = self.local_info.get("name") or self.local_info.get("interface", "")
@@ -888,17 +1103,69 @@ class MainWindow(QMainWindow):
         self.select_network_interface(self.local_info)
 
     def on_mask_changed(self):
-        idx = self.combo_mask.currentIndex()
-        prefix = [24, 16, 26, 28][idx]
+        cidr = self.combo_mask.currentData()
+        if not cidr:
+            return
         try:
             start_ip = self.txt_start_ip.text().strip()
-            net = ipaddress.IPv4Network(f"{start_ip}/{prefix}", strict=False)
-            hosts = list(net.hosts())
-            if hosts:
-                self.txt_start_ip.setText(str(hosts[0]))
-                self.txt_end_ip.setText(str(hosts[-1]))
+            if not start_ip:
+                start_ip = self.local_info.get("ip", "192.168.1.1")
+            net = ipaddress.IPv4Network(f"{start_ip}/{cidr}", strict=False)
+            first_host = str(net.network_address + 1) if net.num_addresses > 2 else str(net.network_address)
+            last_host = str(net.broadcast_address - 1) if net.num_addresses > 2 else str(net.broadcast_address)
+            self.txt_start_ip.blockSignals(True)
+            self.txt_end_ip.blockSignals(True)
+            self.txt_start_ip.setText(first_host)
+            self.txt_end_ip.setText(last_host)
+            self.txt_start_ip.blockSignals(False)
+            self.txt_end_ip.blockSignals(False)
         except Exception:
             pass
+
+    def check_and_apply_update(self):
+        repo_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        self._update_dialog = QProgressDialog("Iniciando verificação de atualização...", "Cancelar", 0, 0, self)
+        self._update_dialog.setWindowTitle("IP Scan IGT — Atualização do Sistema")
+        self._update_dialog.setWindowModality(Qt.WindowModal)
+        self._update_dialog.setMinimumDuration(0)
+        self._update_dialog.setAutoClose(False)
+        self._update_dialog.setAutoReset(False)
+        self._update_dialog.setStyleSheet("QProgressDialog { padding: 15px; font-size: 13px; }")
+        self._update_dialog.show()
+
+        self._update_worker = AppUpdateWorker(repo_dir)
+        self._update_worker.progress_status.connect(self.on_update_status)
+        self._update_worker.update_finished.connect(self.on_update_completed)
+        self._update_dialog.canceled.connect(self._update_worker.terminate)
+        self._update_worker.start()
+
+    def on_update_status(self, text: str):
+        if hasattr(self, "_update_dialog") and self._update_dialog:
+            self._update_dialog.setLabelText(text)
+
+    def on_update_completed(self, success: bool, message: str, needs_restart: bool):
+        if hasattr(self, "_update_dialog") and self._update_dialog:
+            self._update_dialog.close()
+            self._update_dialog = None
+
+        if success:
+            if needs_restart:
+                reply = QMessageBox.question(
+                    self,
+                    "Atualização Concluída",
+                    message,
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.Yes
+                )
+                if reply == QMessageBox.Yes:
+                    main_py = os.path.abspath(__file__)
+                    QProcess.startDetached(sys.executable, [main_py])
+                    QApplication.quit()
+            else:
+                QMessageBox.information(self, "IP Scan IGT Atualizado", message)
+        else:
+            QMessageBox.warning(self, "Aviso de Atualização", message)
 
     def toggle_scan(self):
         if self.scan_worker and self.scan_worker.isRunning():

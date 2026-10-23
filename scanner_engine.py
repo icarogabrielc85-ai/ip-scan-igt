@@ -191,7 +191,7 @@ def _get_windows_network_interfaces() -> List[Dict[str, Any]]:
                         ipv4 = ipm.group(1).strip()
 
                 if not netmask:
-                    smm = re.search(r"(?:subnet mask|máscara de sub-rede)[^:]*:\s*(\d{1,3}(?:\.\d{1,3}){3})", line, re.I)
+                    smm = re.search(r"(?:subnet\s*mask|m[aá\u00a0\ufffd\?]?scara\s*de\s*sub[- ]*rede|m.{1,2}scara)[^:]*:\s*(\d{1,3}(?:\.\d{1,3}){3})", line, re.I)
                     if smm:
                         netmask = smm.group(1).strip()
 
@@ -310,20 +310,25 @@ def get_all_network_interfaces() -> List[Dict[str, Any]]:
             timeout=2.0,
         )
         for line in out.splitlines():
+            m_inet = re.search(r"\binet\s+(\d{1,3}(?:\.\d{1,3}){3})/(\d{1,2})\b", line)
+            if not m_inet:
+                continue
+            ip_str = m_inet.group(1)
+            prefix = m_inet.group(2)
+            if ip_str.startswith("127."):
+                continue
+
             parts = line.split()
-            if len(parts) >= 4:
-                name = parts[1]
-                ip_cidr = parts[3]
-                if "/" not in ip_cidr:
-                    continue
-                ip_str, prefix = ip_cidr.split("/", 1)
-                if ip_str.startswith("127."):
-                    continue
-                try:
-                    net = ipaddress.IPv4Network(f"{ip_str}/{prefix}", strict=False)
-                    hosts = list(net.hosts())
-                except Exception:
-                    continue
+            name = parts[1].rstrip(":") if len(parts) >= 2 else "eth0"
+            m_name = re.match(r"^\d+:\s+([^\s:]+)", line)
+            if m_name:
+                name = m_name.group(1)
+
+            try:
+                net = ipaddress.IPv4Network(f"{ip_str}/{prefix}", strict=False)
+                hosts = list(net.hosts())
+            except Exception:
+                continue
 
                 mac = ""
                 mac_path = f"/sys/class/net/{name}/address"
@@ -387,6 +392,44 @@ def get_all_network_interfaces() -> List[Dict[str, Any]]:
                 })
     except Exception as e:
         print("Error reading network interfaces:", e)
+
+    if not ifaces:
+        try:
+            out_if = subprocess.check_output(["ifconfig"], text=True, timeout=2.0)
+            cur_name = ""
+            for line in out_if.splitlines():
+                if line and not line.startswith(" "):
+                    cur_name = line.split(":")[0].strip()
+                if "inet " in line and ("netmask " in line or "mascara " in line):
+                    ip_m = re.search(r"inet\s+(\d{1,3}(?:\.\d{1,3}){3})", line)
+                    nm_m = re.search(r"(?:netmask|m[aá\u00a0\ufffd\?]?scara)\s+(\d{1,3}(?:\.\d{1,3}){3})", line, re.I)
+                    if ip_m and nm_m:
+                        ip_val = ip_m.group(1)
+                        mask_val = nm_m.group(1)
+                        if not ip_val.startswith("127."):
+                            net = ipaddress.IPv4Network(f"{ip_val}/{mask_val}", strict=False)
+                            hosts = list(net.hosts())
+                            ifaces.append({
+                                "name": cur_name or "eth0",
+                                "interface": cur_name or "eth0",
+                                "ip": ip_val,
+                                "cidr": str(net.prefixlen),
+                                "netmask": str(net.netmask),
+                                "network": str(net.network_address),
+                                "start_ip": str(hosts[0]) if hosts else ip_val,
+                                "end_ip": str(hosts[-1]) if hosts else ip_val,
+                                "total_hosts": len(hosts),
+                                "mac": "",
+                                "vendor": "",
+                                "type": "Ethernet (Cabeada)",
+                                "icon": "🌐",
+                                "speed": "",
+                                "gateway": gw_map.get(cur_name, ""),
+                                "is_default": cur_name in gw_map,
+                                "hostname": hostname,
+                            })
+        except Exception:
+            pass
 
     # Sort default interface first, then by name
     ifaces.sort(key=lambda x: (not x.get("is_default", False), x.get("name", "")))

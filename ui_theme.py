@@ -146,6 +146,20 @@ QPushButton#btnSubnet:hover {
     background-color: #0369a1;
 }
 
+QPushButton#btnUpdate {
+    background-color: #0284c7;
+    border: 1px solid #38bdf8;
+    color: #ffffff;
+    font-weight: bold;
+    font-size: 12px;
+    padding: 6px 14px;
+}
+
+QPushButton#btnUpdate:hover {
+    background-color: #38bdf8;
+    color: #0f172a;
+}
+
 QTreeWidget, QTableWidget {
     background-color: #111827;
     border: 1px solid #1f2937;
@@ -384,6 +398,20 @@ QPushButton#btnSubnet {
 
 QPushButton#btnSubnet:hover {
     background-color: #0860ca;
+}
+
+QPushButton#btnUpdate {
+    background-color: #0284c7;
+    border: 1px solid #0369a1;
+    border-radius: 4px;
+    color: #ffffff;
+    font-weight: bold;
+    font-size: 12px;
+    padding: 6px 14px;
+}
+
+QPushButton#btnUpdate:hover {
+    background-color: #0369a1;
 }
 
 /* Tree & Tables style (Advanced IP Scanner Look) */
