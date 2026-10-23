@@ -89,9 +89,18 @@ QLineEdit, QComboBox, QSpinBox {
     background-color: #1e293b;
     border: 1px solid #334155;
     border-radius: 5px;
-    padding: 5px 10px;
+    padding: 4px 8px;
     color: #f8fafc;
     selection-background-color: #0284c7;
+}
+
+QLineEdit#txtStartIp, QLineEdit#txtEndIp {
+    font-family: "JetBrains Mono", "Segoe UI Mono", "Ubuntu Mono", "DejaVu Sans Mono", monospace;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 3px 6px;
+    letter-spacing: 0.5px;
+    color: #38bdf8;
 }
 
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus {
@@ -99,10 +108,14 @@ QLineEdit:focus, QComboBox:focus, QSpinBox:focus {
     background-color: #0f172a;
 }
 
+QComboBox {
+    padding: 4px 6px 4px 8px;
+}
+
 QComboBox::drop-down {
     subcontrol-origin: padding;
     subcontrol-position: top right;
-    width: 22px;
+    width: 20px;
     border-left: 1px solid #334155;
     border-top-right-radius: 5px;
     border-bottom-right-radius: 5px;
@@ -296,9 +309,10 @@ QLabel#kpiOnline {
     color: #34d399;
     border: 1px solid #059669;
     border-radius: 12px;
-    padding: 3px 10px;
+    padding: 2px 10px;
     font-weight: bold;
     font-size: 11px;
+    min-height: 20px;
 }
 
 QLabel#kpiLatency {
@@ -306,9 +320,10 @@ QLabel#kpiLatency {
     color: #38bdf8;
     border: 1px solid #0284c7;
     border-radius: 12px;
-    padding: 3px 10px;
+    padding: 2px 10px;
     font-weight: bold;
     font-size: 11px;
+    min-height: 20px;
 }
 
 QLabel#kpiServices {
@@ -316,9 +331,10 @@ QLabel#kpiServices {
     color: #fbbf24;
     border: 1px solid #d97706;
     border-radius: 12px;
-    padding: 3px 10px;
+    padding: 2px 10px;
     font-weight: bold;
     font-size: 11px;
+    min-height: 20px;
 }
 
 /* Device Tree & Tables */
@@ -546,10 +562,19 @@ QLineEdit, QComboBox, QSpinBox {
     background-color: #ffffff;
     border: 1px solid #cbd5e1;
     border-radius: 5px;
-    padding: 5px 10px;
+    padding: 4px 8px;
     color: #0f172a;
     font-weight: 500;
     selection-background-color: #0969da;
+}
+
+QLineEdit#txtStartIp, QLineEdit#txtEndIp {
+    font-family: "JetBrains Mono", "Segoe UI Mono", "Ubuntu Mono", "DejaVu Sans Mono", monospace;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 3px 6px;
+    letter-spacing: 0.5px;
+    color: #0969da;
 }
 
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus {
@@ -557,10 +582,14 @@ QLineEdit:focus, QComboBox:focus, QSpinBox:focus {
     background-color: #f0f9ff;
 }
 
+QComboBox {
+    padding: 4px 6px 4px 8px;
+}
+
 QComboBox::drop-down {
     subcontrol-origin: padding;
     subcontrol-position: top right;
-    width: 22px;
+    width: 20px;
     border-left: 1px solid #cbd5e1;
     border-top-right-radius: 5px;
     border-bottom-right-radius: 5px;
@@ -750,9 +779,10 @@ QLabel#kpiOnline {
     color: #047857;
     border: 1px solid #a7f3d0;
     border-radius: 12px;
-    padding: 3px 10px;
+    padding: 2px 10px;
     font-weight: bold;
     font-size: 11px;
+    min-height: 20px;
 }
 
 QLabel#kpiLatency {
@@ -760,9 +790,10 @@ QLabel#kpiLatency {
     color: #0369a1;
     border: 1px solid #bae6fd;
     border-radius: 12px;
-    padding: 3px 10px;
+    padding: 2px 10px;
     font-weight: bold;
     font-size: 11px;
+    min-height: 20px;
 }
 
 QLabel#kpiServices {
@@ -770,9 +801,10 @@ QLabel#kpiServices {
     color: #b45309;
     border: 1px solid #fde68a;
     border-radius: 12px;
-    padding: 3px 10px;
+    padding: 2px 10px;
     font-weight: bold;
     font-size: 11px;
+    min-height: 20px;
 }
 
 /* Device Tree & Tables */

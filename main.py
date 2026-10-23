@@ -720,28 +720,34 @@ class MainWindow(QMainWindow):
         self.btn_subnet = QPushButton("🖧 IP ▾")
         self.btn_subnet.setObjectName("btnSubnet")
         self.btn_subnet.setMinimumHeight(34)
-        self.btn_subnet.setMinimumWidth(60)
+        self.btn_subnet.setMinimumWidth(68)
         self.btn_subnet.setToolTip("Preencher faixa IP e selecionar Placa de Rede")
         self.btn_subnet.clicked.connect(self.show_interface_menu)
         top_layout.addWidget(self.btn_subnet)
 
         # Range inputs
-        lbl_from = QLabel("De:")
+        lbl_from = QLabel("Faixa:")
         lbl_from.setStyleSheet("font-weight: 600; font-size: 12px;")
         top_layout.addWidget(lbl_from)
 
         self.txt_start_ip = QLineEdit(self.local_info.get("start_ip", "192.168.1.1"))
-        self.txt_start_ip.setFixedWidth(120)
+        self.txt_start_ip.setObjectName("txtStartIp")
+        self.txt_start_ip.setFixedWidth(145)
         self.txt_start_ip.setFixedHeight(30)
+        self.txt_start_ip.setAlignment(Qt.AlignCenter)
+        self.txt_start_ip.setToolTip("Endereço IP inicial da faixa de varredura")
         top_layout.addWidget(self.txt_start_ip)
 
         lbl_sep = QLabel("➔")
-        lbl_sep.setStyleSheet("font-weight: bold; font-size: 13px; color: #64748b;")
+        lbl_sep.setStyleSheet("font-weight: bold; font-size: 13px; color: #64748b; margin: 0 1px;")
         top_layout.addWidget(lbl_sep)
 
         self.txt_end_ip = QLineEdit(self.local_info.get("end_ip", "192.168.1.254"))
-        self.txt_end_ip.setFixedWidth(120)
+        self.txt_end_ip.setObjectName("txtEndIp")
+        self.txt_end_ip.setFixedWidth(145)
         self.txt_end_ip.setFixedHeight(30)
+        self.txt_end_ip.setAlignment(Qt.AlignCenter)
+        self.txt_end_ip.setToolTip("Endereço IP final da faixa de varredura")
         top_layout.addWidget(self.txt_end_ip)
 
         lbl_mask = QLabel("Máscara:")
@@ -749,7 +755,7 @@ class MainWindow(QMainWindow):
         top_layout.addWidget(lbl_mask)
 
         self.combo_mask = QComboBox()
-        self.combo_mask.setMinimumWidth(185)
+        self.combo_mask.setMinimumWidth(235)
         self.combo_mask.setFixedHeight(30)
         self.combo_mask.setToolTip("Máscara de sub-rede / Prefixo CIDR da rede")
         self.populate_mask_combo()
@@ -762,9 +768,11 @@ class MainWindow(QMainWindow):
 
         # Search filter
         self.txt_search = QLineEdit()
-        self.txt_search.setPlaceholderText("🔍 Filtrar por nome, IP, MAC, fabricante...")
+        self.txt_search.setPlaceholderText("🔍 Filtrar (Nome, IP, MAC)...")
         self.txt_search.setClearButtonEnabled(True)
         self.txt_search.setFixedHeight(30)
+        self.txt_search.setMinimumWidth(150)
+        self.txt_search.setToolTip("Filtrar dispositivos por nome, IP, MAC ou fabricante")
         self.txt_search.textChanged.connect(self.filter_current_tree)
         top_layout.addWidget(self.txt_search, 1)
 
@@ -772,6 +780,7 @@ class MainWindow(QMainWindow):
         self.btn_update = QPushButton("🔄 Atualizar")
         self.btn_update.setObjectName("btnUpdate")
         self.btn_update.setFixedHeight(32)
+        self.btn_update.setMinimumWidth(95)
         self.btn_update.setToolTip("Verificar e aplicar atualizações do repositório em 1 clique")
         self.btn_update.clicked.connect(self.check_and_apply_update)
         top_layout.addWidget(self.btn_update)
@@ -788,14 +797,14 @@ class MainWindow(QMainWindow):
         ribbon_layout.setSpacing(6)
 
         # Quick Expand/Collapse buttons
-        btn_expand = QPushButton("⊞ Expandir Tudo")
+        btn_expand = QPushButton("⊞ Expandir")
         btn_expand.setObjectName("ribbonBtn")
         btn_expand.setFixedHeight(28)
         btn_expand.setToolTip("Expandir todos os serviços e recursos de todos os hosts [+] (Ctrl+E)")
         btn_expand.clicked.connect(self.expand_all_results)
         ribbon_layout.addWidget(btn_expand)
 
-        btn_collapse = QPushButton("⊟ Recolher Tudo")
+        btn_collapse = QPushButton("⊟ Recolher")
         btn_collapse.setObjectName("ribbonBtn")
         btn_collapse.setFixedHeight(28)
         btn_collapse.setToolTip("Recolher todos os dispositivos [-] (Ctrl+R)")
@@ -826,7 +835,7 @@ class MainWindow(QMainWindow):
         ribbon_layout.addWidget(self.btn_nmap)
 
         # Executive Report Export Menu button
-        self.btn_report = QPushButton("📑 Relatório Executivo ▾")
+        self.btn_report = QPushButton("📑 Relatório ▾")
         self.btn_report.setObjectName("ribbonBtn")
         self.btn_report.setFixedHeight(28)
         self.btn_report.setToolTip("Gerar relatório executivo profissional em HTML/PDF, planilha CSV, JSON ou TXT")
@@ -864,16 +873,19 @@ class MainWindow(QMainWindow):
         # Real-time KPI Dashboard Badges
         self.kpi_online = QLabel("● 0 Online")
         self.kpi_online.setObjectName("kpiOnline")
+        self.kpi_online.setAlignment(Qt.AlignCenter)
         self.kpi_online.setFixedHeight(24)
         ribbon_layout.addWidget(self.kpi_online)
 
         self.kpi_latency = QLabel("⚡ -- ms")
         self.kpi_latency.setObjectName("kpiLatency")
+        self.kpi_latency.setAlignment(Qt.AlignCenter)
         self.kpi_latency.setFixedHeight(24)
         ribbon_layout.addWidget(self.kpi_latency)
 
         self.kpi_services = QLabel("🛡️ 0 Serviços")
         self.kpi_services.setObjectName("kpiServices")
+        self.kpi_services.setAlignment(Qt.AlignCenter)
         self.kpi_services.setFixedHeight(24)
         ribbon_layout.addWidget(self.kpi_services)
 
@@ -966,7 +978,7 @@ class MainWindow(QMainWindow):
         # Left: Live Ping Sparkline
         self.oscilloscope = LivePingOscilloscope()
         self.oscilloscope.setMinimumHeight(110)
-        content_box.addWidget(self.oscilloscope, 6)
+        content_box.addWidget(self.oscilloscope, 5)
 
         # Right: Details Table + Actions
         right_box = QVBoxLayout()
@@ -980,10 +992,7 @@ class MainWindow(QMainWindow):
         self.details_table.setAlternatingRowColors(True)
         right_box.addWidget(self.details_table)
 
-        # Categorized action buttons
-        actions_box = QHBoxLayout()
-        actions_box.setSpacing(6)
-
+        # Categorized action buttons organized into 2 clean rows
         # Web category
         btn_open_http = QPushButton("🌐 HTTP")
         btn_open_http.setObjectName("btnActionWeb")
@@ -1032,18 +1041,28 @@ class MainWindow(QMainWindow):
         btn_copy_ip.setToolTip("Copiar endereço IP para a área de transferência")
         btn_copy_ip.clicked.connect(self.action_copy_current_ip)
 
-        actions_box.addWidget(btn_open_http)
-        actions_box.addWidget(btn_open_https)
-        actions_box.addWidget(btn_open_smb)
-        actions_box.addWidget(btn_rdp)
-        actions_box.addWidget(btn_ssh)
-        actions_box.addWidget(btn_wol)
-        actions_box.addWidget(btn_rtsp)
-        actions_box.addWidget(btn_nmap_bottom)
-        actions_box.addWidget(btn_copy_ip)
-        right_box.addLayout(actions_box)
+        # Row 1: Remote Access & Web
+        actions_row1 = QHBoxLayout()
+        actions_row1.setSpacing(6)
+        actions_row1.addWidget(btn_open_http)
+        actions_row1.addWidget(btn_open_https)
+        actions_row1.addWidget(btn_open_smb)
+        actions_row1.addWidget(btn_rdp)
+        actions_row1.addWidget(btn_ssh)
 
-        content_box.addLayout(right_box, 4)
+        # Row 2: Diagnostics, Media & Utilities
+        actions_row2 = QHBoxLayout()
+        actions_row2.setSpacing(6)
+        actions_row2.addWidget(btn_wol)
+        actions_row2.addWidget(btn_rtsp)
+        actions_row2.addWidget(btn_nmap_bottom)
+        actions_row2.addWidget(btn_copy_ip)
+        actions_row2.addStretch()
+
+        right_box.addLayout(actions_row1)
+        right_box.addLayout(actions_row2)
+
+        content_box.addLayout(right_box, 5)
         panel_layout.addLayout(content_box)
 
         self.main_splitter.addWidget(self.bottom_panel)
@@ -1092,15 +1111,15 @@ class MainWindow(QMainWindow):
         tree.header().sectionClicked.connect(lambda col, t=tree: self.on_tree_header_clicked(t, col))
 
         tree.header().setSectionResizeMode(0, QHeaderView.Fixed)
-        tree.header().resizeSection(0, 56)
+        tree.header().resizeSection(0, 68)
         tree.header().setSectionResizeMode(1, QHeaderView.Interactive)
         tree.header().resizeSection(1, 260)
         tree.header().setSectionResizeMode(2, QHeaderView.Interactive)
-        tree.header().resizeSection(2, 140)
+        tree.header().resizeSection(2, 145)
         tree.header().setSectionResizeMode(3, QHeaderView.Interactive)
         tree.header().resizeSection(3, 200)
         tree.header().setSectionResizeMode(4, QHeaderView.Interactive)
-        tree.header().resizeSection(4, 145)
+        tree.header().resizeSection(4, 155)
         tree.header().setSectionResizeMode(5, QHeaderView.Interactive)
         tree.header().resizeSection(5, 85)
         tree.header().setSectionResizeMode(6, QHeaderView.Stretch)
