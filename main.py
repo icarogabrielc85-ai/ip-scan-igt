@@ -92,6 +92,64 @@ def open_terminal_ping(ip: str):
                 return
         subprocess.Popen(["xterm", "-e", f"ping {ip}"])
 
+
+def open_rdp(ip: str) -> bool:
+    if not ip:
+        return False
+    if IS_WINDOWS:
+        try:
+            subprocess.Popen(["mstsc", f"/v:{ip}"])
+            return True
+        except Exception:
+            return False
+    else:
+        clients = [
+            ("remmina", ["remmina", "-c", f"rdp://{ip}"]),
+            ("xfreerdp", ["xfreerdp", f"/v:{ip}", "/cert-ignore", "+clipboard"]),
+            ("krdc", ["krdc", f"rdp://{ip}"]),
+            ("rdesktop", ["rdesktop", "-u", "", ip]),
+        ]
+        for name, cmd in clients:
+            if shutil.which(name):
+                try:
+                    subprocess.Popen(cmd)
+                    return True
+                except Exception:
+                    pass
+        return False
+
+
+def open_terminal_ssh(ip: str, user: str = "") -> bool:
+    if not ip:
+        return False
+    target = f"{user}@{ip}" if user else ip
+    if IS_WINDOWS:
+        try:
+            subprocess.Popen(f'cmd.exe /c start "SSH {target}" ssh {target}', shell=True)
+            return True
+        except Exception:
+            return False
+    else:
+        terms = [
+            ("konsole", ["konsole", "-e", "ssh", target]),
+            ("gnome-terminal", ["gnome-terminal", "--", "ssh", target]),
+            ("x-terminal-emulator", ["x-terminal-emulator", "-e", f"ssh {target}"]),
+            ("xfce4-terminal", ["xfce4-terminal", "-e", f"ssh {target}"]),
+            ("xterm", ["xterm", "-e", f"ssh {target}"]),
+        ]
+        for name, cmd in terms:
+            if shutil.which(name):
+                try:
+                    subprocess.Popen(cmd)
+                    return True
+                except Exception:
+                    pass
+        try:
+            subprocess.Popen(["xterm", "-e", f"ssh {target}"])
+            return True
+        except Exception:
+            return False
+
 from PyQt5.QtCore import QObject, QPoint, QProcess, QSize, Qt, QThread, QTimer, QUrl, pyqtSignal, pyqtSlot
 from PyQt5.QtGui import QColor, QDesktopServices, QFont, QIcon, QPixmap
 from PyQt5.QtWidgets import (
@@ -136,6 +194,7 @@ from scanner_engine import (
     probe_ping,
     read_linux_arp_table,
     scan_single_ip,
+    send_wake_on_lan,
 )
 from onvif_engine import discover_onvif_devices, probe_rtsp
 from nmap_engine import is_nmap_available, get_nmap_path
@@ -492,6 +551,11 @@ class MainWindow(QMainWindow):
         act_csv.triggered.connect(lambda: self.export_results("csv"))
         menu_file.addAction(act_csv)
 
+        act_html = QAction("Exportar Relatório Executivo HTML / PDF...", self)
+        act_html.setShortcut("Ctrl+H")
+        act_html.triggered.connect(lambda: self.export_results("html"))
+        menu_file.addAction(act_html)
+
         act_json = QAction("Exportar Resultados para JSON...", self)
         act_json.triggered.connect(lambda: self.export_results("json"))
         menu_file.addAction(act_json)
@@ -549,6 +613,19 @@ class MainWindow(QMainWindow):
         act_nmap.setShortcut("Ctrl+N")
         act_nmap.triggered.connect(self.action_open_nmap)
         menu_actions.addAction(act_nmap)
+
+        menu_actions.addSeparator()
+        act_rdp = QAction("Conectar via Área de Trabalho Remota (RDP)...", self)
+        act_rdp.triggered.connect(self.action_open_rdp)
+        menu_actions.addAction(act_rdp)
+
+        act_ssh = QAction("Conectar via Terminal SSH...", self)
+        act_ssh.triggered.connect(self.action_open_ssh)
+        menu_actions.addAction(act_ssh)
+
+        act_wol = QAction("Enviar Wake-on-LAN (Ligar Computador)...", self)
+        act_wol.triggered.connect(self.action_open_wol)
+        menu_actions.addAction(act_wol)
 
         # 3. Exibir
         menu_view = menu_bar.addMenu("&Exibir")
@@ -849,13 +926,22 @@ class MainWindow(QMainWindow):
         # Action buttons
         actions_box = QHBoxLayout()
         actions_box.setSpacing(6)
-        btn_open_http = QPushButton("Abrir HTTP")
+        btn_open_http = QPushButton("🌐 HTTP")
         btn_open_http.clicked.connect(self.action_open_http)
-        btn_open_https = QPushButton("Abrir HTTPS")
+        btn_open_https = QPushButton("🔒 HTTPS")
         btn_open_https.clicked.connect(self.action_open_https)
-        btn_open_smb = QPushButton("Abrir SMB")
+        btn_open_smb = QPushButton("📁 SMB")
         btn_open_smb.clicked.connect(self.action_open_smb)
-        btn_rtsp = QPushButton("🎬 Vídeo ao Vivo")
+        btn_rdp = QPushButton("🖥️ RDP")
+        btn_rdp.setToolTip("Conectar via Área de Trabalho Remota (mstsc / Remmina / xfreerdp)")
+        btn_rdp.clicked.connect(self.action_open_rdp)
+        btn_ssh = QPushButton("💻 SSH")
+        btn_ssh.setToolTip("Abrir sessão SSH em novo terminal")
+        btn_ssh.clicked.connect(self.action_open_ssh)
+        btn_wol = QPushButton("⚡ WoL")
+        btn_wol.setToolTip("Enviar Magic Packet Wake-on-LAN para ligar o computador pelo MAC")
+        btn_wol.clicked.connect(self.action_open_wol)
+        btn_rtsp = QPushButton("🎬 Vídeo")
         btn_rtsp.setToolTip("Assistir transmissão de vídeo em tempo real da câmera (RTSP / ONVIF)")
         btn_rtsp.clicked.connect(self.action_open_rtsp)
         btn_nmap_bottom = QPushButton("🔍 Nmap")
@@ -866,6 +952,9 @@ class MainWindow(QMainWindow):
         actions_box.addWidget(btn_open_http)
         actions_box.addWidget(btn_open_https)
         actions_box.addWidget(btn_open_smb)
+        actions_box.addWidget(btn_rdp)
+        actions_box.addWidget(btn_ssh)
+        actions_box.addWidget(btn_wol)
         actions_box.addWidget(btn_rtsp)
         actions_box.addWidget(btn_nmap_bottom)
         actions_box.addWidget(btn_copy_ip)
@@ -1559,6 +1648,12 @@ class MainWindow(QMainWindow):
         if url:
             if url.startswith("rtsp://"):
                 self.launch_rtsp_stream(url, ip=ip)
+            elif url.startswith("rdp://"):
+                self.open_rdp_connection(ip or url.replace("rdp://", ""))
+            elif url.startswith("ssh://"):
+                self.open_ssh_connection(ip or url.replace("ssh://", ""))
+            elif url.startswith("smb://"):
+                open_smb(ip or url.replace("smb://", "").strip("/"))
             else:
                 QDesktopServices.openUrl(QUrl(url))
             return
@@ -1567,6 +1662,10 @@ class MainWindow(QMainWindow):
             rec = records_pool[ip]
             if rec.rtsp_url or 554 in rec.open_ports:
                 self.launch_rtsp_stream(rec.rtsp_url or f"rtsp://{ip}:554/", ip=ip)
+            elif 3389 in rec.open_ports:
+                self.open_rdp_connection(ip)
+            elif 22 in rec.open_ports:
+                self.open_ssh_connection(ip)
             elif 443 in rec.open_ports:
                 QDesktopServices.openUrl(QUrl(f"https://{ip}/"))
             elif 80 in rec.open_ports:
@@ -1600,6 +1699,11 @@ class MainWindow(QMainWindow):
         a_nmap = menu.addAction("🔍 Escanear com Nmap (-sV)...")
         menu.addSeparator()
 
+        a_rdp = menu.addAction("🖥️ Conectar via Área de Trabalho Remota (RDP)")
+        a_ssh = menu.addAction("💻 Conectar via Terminal SSH")
+        a_wol = menu.addAction("⚡ Enviar Wake-on-LAN (Ligar Computador)")
+        menu.addSeparator()
+
         a_open_http = menu.addAction("Abrir no Navegador (HTTP)")
         a_open_https = menu.addAction("Abrir no Navegador Seguro (HTTPS)")
         a_open_smb = menu.addAction("Abrir Compartilhamento de Rede (SMB)")
@@ -1621,6 +1725,12 @@ class MainWindow(QMainWindow):
             QDesktopServices.openUrl(QUrl(rec.onvif_url))
         elif action == a_nmap:
             self.open_nmap_dialog(rec.ip, rec.hostname)
+        elif action == a_rdp:
+            self.open_rdp_connection(rec.ip)
+        elif action == a_ssh:
+            self.open_ssh_connection(rec.ip)
+        elif action == a_wol:
+            self.action_send_wol(rec)
         elif action == a_open_http:
             QDesktopServices.openUrl(QUrl(f"http://{rec.ip}/"))
         elif action == a_open_https:
@@ -1654,6 +1764,10 @@ class MainWindow(QMainWindow):
             a_rtsp = menu.addAction("🎬 Assistir Transmissão ao Vivo (RTSP)")
         a_nmap = menu.addAction("🔍 Escanear com Nmap (-sV)...")
         menu.addSeparator()
+        a_rdp = menu.addAction("🖥️ Conectar via Área de Trabalho Remota (RDP)")
+        a_ssh = menu.addAction("💻 Conectar via Terminal SSH")
+        a_wol = menu.addAction("⚡ Enviar Wake-on-LAN (Ligar Computador)")
+        menu.addSeparator()
         a_open_http = menu.addAction("Abrir HTTP")
         a_open_smb = menu.addAction("Abrir SMB")
         a_term_ping = menu.addAction("Ping no Terminal")
@@ -1666,6 +1780,12 @@ class MainWindow(QMainWindow):
             self.launch_rtsp_stream(rec.rtsp_url or f"rtsp://{rec.ip}:554/", ip=rec.ip)
         elif action == a_nmap:
             self.open_nmap_dialog(rec.ip, rec.hostname)
+        elif action == a_rdp:
+            self.open_rdp_connection(rec.ip)
+        elif action == a_ssh:
+            self.open_ssh_connection(rec.ip)
+        elif action == a_wol:
+            self.action_send_wol(rec)
         elif action == a_open_http:
             QDesktopServices.openUrl(QUrl(f"http://{rec.ip}/"))
         elif action == a_open_smb:
@@ -1731,9 +1851,90 @@ class MainWindow(QMainWindow):
             QDesktopServices.openUrl(QUrl(f"https://{ip}/"))
 
     def action_open_smb(self):
-        ip = self.oscilloscope.current_ip
+        ip = self.get_selected_or_current_ip()
         if ip:
             open_smb(ip)
+
+    def get_selected_or_current_ip(self) -> str:
+        ip = self.oscilloscope.current_ip
+        if not ip:
+            tree = self.get_active_tree()
+            items = tree.selectedItems()
+            if items:
+                ip = items[0].data(2, Qt.UserRole) or ""
+        return ip
+
+    def open_rdp_connection(self, ip: str):
+        if not ip:
+            QMessageBox.information(self, "RDP", "Selecione um dispositivo na lista primeiro.")
+            return
+        ok = open_rdp(ip)
+        if ok:
+            self.lbl_stats.setText(f"Iniciando conexão RDP para {ip}...")
+        else:
+            QMessageBox.warning(
+                self,
+                "Cliente RDP Ausente",
+                f"Nenhum cliente RDP foi encontrado no sistema para conectar em {ip}.\n\n"
+                f"No Linux, instale o Remmina para acesso à Área de Trabalho Remota:\n"
+                f"sudo apt install remmina"
+            )
+
+    def open_ssh_connection(self, ip: str):
+        if not ip:
+            QMessageBox.information(self, "SSH", "Selecione um dispositivo na lista primeiro.")
+            return
+        ok = open_terminal_ssh(ip)
+        if ok:
+            self.lbl_stats.setText(f"Iniciando sessão de terminal SSH para {ip}...")
+        else:
+            QMessageBox.warning(
+                self,
+                "Terminal Ausente",
+                f"Não foi possível abrir o emulador de terminal para conectar em {ip}."
+            )
+
+    def action_open_rdp(self):
+        ip = self.get_selected_or_current_ip()
+        self.open_rdp_connection(ip)
+
+    def action_open_ssh(self):
+        ip = self.get_selected_or_current_ip()
+        self.open_ssh_connection(ip)
+
+    def action_open_wol(self):
+        ip = self.get_selected_or_current_ip()
+        if not ip:
+            QMessageBox.information(self, "Wake-on-LAN", "Selecione um dispositivo na lista primeiro.")
+            return
+        rec = self.records.get(ip) or self.fav_records.get(ip)
+        if rec:
+            self.action_send_wol(rec)
+
+    def action_send_wol(self, rec: HostRecord):
+        if not rec.mac or rec.mac == "N/D":
+            QMessageBox.warning(
+                self,
+                "Wake-on-LAN",
+                f"O dispositivo {rec.ip} não possui endereço MAC identificado.\n"
+                f"O Wake-on-LAN exige o endereço MAC físico da placa para enviar o Magic Packet."
+            )
+            return
+        bcast = self.local_info.get("broadcast", "255.255.255.255")
+        ok = send_wake_on_lan(rec.mac, broadcast_ip=bcast)
+        if ok:
+            self.lbl_stats.setText(f"⚡ Magic Packet Wake-on-LAN enviado para {rec.mac} ({rec.ip})!")
+            QMessageBox.information(
+                self,
+                "Wake-on-LAN Enviado",
+                f"Magic Packet Wake-on-LAN enviado com sucesso!\n\n"
+                f"• Host: {rec.hostname or rec.ip}\n"
+                f"• Endereço MAC: {rec.mac}\n"
+                f"• Broadcast: {bcast}:9\n\n"
+                f"Se o recurso Wake-on-LAN estiver ativado na BIOS/placa de rede do dispositivo, ele será iniciado."
+            )
+        else:
+            QMessageBox.critical(self, "Erro WoL", f"Falha ao enviar pacote Wake-on-LAN para o MAC {rec.mac}.")
 
     def action_open_rtsp(self):
         ip = self.oscilloscope.current_ip
@@ -1781,20 +1982,228 @@ class MainWindow(QMainWindow):
             QApplication.clipboard().setText(ip)
             self.lbl_stats.setText(f"Endereço IP {ip} copiado para a área de transferência.")
 
+    def generate_executive_html_report(self, records: dict) -> str:
+        rec_list = list(records.values())
+        total = len(rec_list)
+        online = sum(1 for r in rec_list if r.alive)
+        offline = total - online
+        onvif_count = sum(1 for r in rec_list if r.onvif_url or 554 in r.open_ports or 8899 in r.open_ports)
+
+        vendors = {}
+        for r in rec_list:
+            v = r.vendor or "Desconhecido"
+            vendors[v] = vendors.get(v, 0) + 1
+        top_vendors = sorted(vendors.items(), key=lambda x: x[1], reverse=True)[:5]
+        top_vendors_html = " • ".join(f"<b>{v}</b> ({c})" for v, c in top_vendors) if top_vendors else "Nenhum"
+
+        now_str = time.strftime("%d/%m/%Y às %H:%M:%S")
+        iface_str = f"{self.local_info.get('name', 'eth0')} ({self.local_info.get('ip', '')}/{self.local_info.get('cidr', '24')})"
+        full_ver = get_full_version()
+
+        rows = []
+        for r in rec_list:
+            status_badge = '<span style="color:#059669; font-weight:bold;">● Online</span>' if r.alive else '<span style="color:#94a3b8;">○ Offline</span>'
+            ports_badges = "".join(f'<span style="background:#e0f2fe; color:#0369a1; padding:2px 6px; border-radius:4px; font-size:11px; margin-right:4px;">{p}</span>' for p in r.open_ports) or '<span style="color:#cbd5e1;">--</span>'
+            rows.append(f"""
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 12px;">{status_badge}</td>
+                <td style="padding: 10px 12px; font-weight: 600;">{r.hostname or '--'}</td>
+                <td style="padding: 10px 12px; font-family: monospace; color:#0969da; font-weight:bold;">{r.ip}</td>
+                <td style="padding: 10px 12px;">{r.vendor or '<span style="color:#94a3b8;">Desconhecido</span>'}</td>
+                <td style="padding: 10px 12px; font-family: monospace; color:#475569;">{r.mac or '--'}</td>
+                <td style="padding: 10px 12px;">{r.format_ping()}</td>
+                <td style="padding: 10px 12px;">{r.device_type or '--'}</td>
+                <td style="padding: 10px 12px;">{ports_badges}</td>
+            </tr>
+            """)
+
+        return f"""<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Relatório de Auditoria de Rede — IP Scan IGT</title>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+            margin: 0;
+            padding: 30px;
+        }}
+        .container {{
+            max-width: 1200px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+            padding: 32px;
+        }}
+        .header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 20px;
+            margin-bottom: 24px;
+        }}
+        .title h1 {{
+            margin: 0 0 6px 0;
+            font-size: 24px;
+            color: #0f172a;
+        }}
+        .title p {{
+            margin: 0;
+            color: #64748b;
+            font-size: 13px;
+        }}
+        .cards {{
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }}
+        .card {{
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+        }}
+        .card .value {{
+            font-size: 28px;
+            font-weight: bold;
+            color: #0969da;
+            margin-top: 4px;
+        }}
+        .card .label {{
+            font-size: 12px;
+            color: #64748b;
+            text-transform: uppercase;
+            font-weight: 600;
+        }}
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            text-align: left;
+        }}
+        th {{
+            background-color: #f1f5f9;
+            padding: 12px;
+            font-weight: 700;
+            color: #475569;
+            border-bottom: 2px solid #cbd5e1;
+        }}
+        .btn-print {{
+            background-color: #0969da;
+            color: #ffffff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 13px;
+        }}
+        .btn-print:hover {{
+            background-color: #0856b3;
+        }}
+        @media print {{
+            body {{ background: #ffffff; padding: 0; }}
+            .container {{ box-shadow: none; border-radius: 0; padding: 0; max-width: 100%; }}
+            .btn-print {{ display: none; }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="title">
+                <h1>🌐 IP Scan IGT — Relatório de Auditoria de Rede</h1>
+                <p>Gerado em: <b>{now_str}</b> • Interface: <b>{iface_str}</b> • Versão: <b>{full_ver}</b></p>
+            </div>
+            <div>
+                <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Salvar em PDF</button>
+            </div>
+        </div>
+
+        <div class="cards">
+            <div class="card">
+                <div class="label">Total Verificado</div>
+                <div class="value">{total}</div>
+            </div>
+            <div class="card">
+                <div class="label">Dispositivos Online</div>
+                <div class="value" style="color: #059669;">{online}</div>
+            </div>
+            <div class="card">
+                <div class="label">Dispositivos Offline</div>
+                <div class="value" style="color: #64748b;">{offline}</div>
+            </div>
+            <div class="card">
+                <div class="label">Câmeras / NVR ONVIF</div>
+                <div class="value" style="color: #7c3aed;">{onvif_count}</div>
+            </div>
+        </div>
+
+        <p style="font-size: 13px; color: #475569; margin-bottom: 16px;">
+            <b>Principais Fabricantes na Rede:</b> {top_vendors_html}
+        </p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Status</th>
+                    <th>Nome do Host</th>
+                    <th>Endereço IP</th>
+                    <th>Fabricante</th>
+                    <th>Endereço MAC</th>
+                    <th>Ping</th>
+                    <th>Tipo / SO</th>
+                    <th>Portas Abertas</th>
+                </tr>
+            </thead>
+            <tbody>
+                {''.join(rows)}
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>
+"""
+
     def export_results(self, fmt: str = "csv"):
         records_to_export = self.records if self.main_tabs.currentIndex() == 0 else self.fav_records
         if not records_to_export:
             QMessageBox.information(self, "Exportar", "Nenhum resultado para exportar.")
             return
 
-        filter_str = "Arquivo CSV (*.csv)" if fmt == "csv" else ("Arquivo JSON (*.json)" if fmt == "json" else "Arquivo TXT (*.txt)")
+        filter_str = (
+            "Relatório Executivo HTML (*.html);;"
+            "Arquivo CSV (*.csv);;"
+            "Arquivo JSON (*.json);;"
+            "Arquivo TXT (*.txt)"
+        )
+        if fmt == "html":
+            default_filter = "Relatório Executivo HTML (*.html)"
+        elif fmt == "csv":
+            default_filter = "Arquivo CSV (*.csv)"
+        elif fmt == "json":
+            default_filter = "Arquivo JSON (*.json)"
+        else:
+            default_filter = "Arquivo TXT (*.txt)"
+
         default_name = f"relatorio_rede.{fmt}"
-        path, _ = QFileDialog.getSaveFileName(self, "Exportar Resultados", os.path.expanduser(f"~/{default_name}"), filter_str)
+        path, _ = QFileDialog.getSaveFileName(self, "Exportar Resultados", os.path.expanduser(f"~/{default_name}"), filter_str, default_filter)
         if not path:
             return
 
         try:
-            if fmt == "json":
+            if fmt == "html" or path.endswith(".html"):
+                html_code = self.generate_executive_html_report(records_to_export)
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(html_code)
+                QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+            elif fmt == "json":
                 data = [dict(r.__dict__) for r in records_to_export.values()]
                 for d in data:
                     d.pop("resources", None)

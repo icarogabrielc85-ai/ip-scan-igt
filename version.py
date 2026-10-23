@@ -6,7 +6,7 @@ import os
 import subprocess
 
 # Versão Semântica Oficial (MAJOR.MINOR.PATCH)
-APP_VERSION = "2.2.0"
+APP_VERSION = "2.3.0"
 APP_RELEASE_DATE = "22/10/2026"
 
 
@@ -39,7 +39,7 @@ def get_git_info(repo_dir: str = None) -> tuple:
 def get_full_version(repo_dir: str = None) -> str:
     """
     Retorna a versão completa formatada:
-    Exemplo: v2.2.0 (Build 5 • 1d4540b)
+    Exemplo: v2.3.0 (Build 8 • 5dc18e1)
     """
     count, short_hash = get_git_info(repo_dir)
     if count and short_hash:
@@ -50,12 +50,25 @@ def get_full_version(repo_dir: str = None) -> str:
 def get_short_version() -> str:
     """
     Retorna a versão semântica simples:
-    Exemplo: v2.2.0
+    Exemplo: v2.3.0
     """
     return f"v{APP_VERSION}"
 
 
 VERSION_HISTORY = [
+    {
+        "version": "v2.3.0",
+        "date": "22/10/2026",
+        "title": "Integração RDP, SSH, Wake-on-LAN, Relatório HTML/PDF e OUI Online",
+        "changes": [
+            "Conexão nativa RDP (Área de Trabalho Remota) em 1 clique via Remmina/xfreerdp no Linux e mstsc no Windows.",
+            "Terminal SSH integrado disparando konsole / gnome-terminal / xterm automaticamente.",
+            "Wake-on-LAN (Magic Packet UDP 9) para ligar estações remotas a partir do endereço MAC.",
+            "Exportação de Relatório Executivo HTML Interativo com estatísticas de rede e modo de impressão para PDF.",
+            "Consulta Online OUI Fallback para identificar fabricantes recentes não presentes no banco offline.",
+            "Branding moderno com exibição da versão oficial e build diretamente ao lado do nome do programa.",
+        ],
+    },
     {
         "version": "v2.2.0",
         "date": "22/10/2026",

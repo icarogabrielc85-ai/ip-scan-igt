@@ -1,5 +1,5 @@
 # BLUEPRINT — IP SCAN IGT
-**Versão:** 2.2.0 (Edição Multiplataforma: Linux & Windows)  
+**Versão:** 2.3.0 (Edição Multiplataforma: Linux & Windows)  
 **Projeto:** IP Scan IGT  
 **Repositório GitHub:** [https://github.com/icarogabrielc85-ai/ip-scan-igt](https://github.com/icarogabrielc85-ai/ip-scan-igt)  
 **Diretório Local (PC):** `/home/icaro/linux-ipscan`  
@@ -193,4 +193,4 @@ flowchart TD
 - **`Ctrl + Q`**: Sair do Aplicativo
 
 ---
-*Blueprint oficial v2.1.0 aprovado e sincronizado com o repositório GitHub do projeto IP Scan IGT.*
+*Blueprint oficial v2.3.0 aprovado e sincronizado com o repositório GitHub do projeto IP Scan IGT.*

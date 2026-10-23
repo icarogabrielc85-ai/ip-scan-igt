@@ -460,6 +460,30 @@ def get_local_network_info(interface_name: Optional[str] = None) -> Dict[str, An
     }
 
 
+def send_wake_on_lan(mac_address: str, broadcast_ip: str = "255.255.255.255", port: int = 9) -> bool:
+    """
+    Envia Magic Packet padrão Wake-on-LAN (IEEE 802.3) para ligar computadores remotamente pela rede.
+    """
+    try:
+        clean_mac = re.sub(r"[^0-9a-fA-F]", "", mac_address)
+        if len(clean_mac) != 12:
+            return False
+        mac_bytes = bytes.fromhex(clean_mac)
+        magic_packet = b"\xff" * 6 + mac_bytes * 16
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            s.sendto(magic_packet, (broadcast_ip, port))
+            if broadcast_ip != "255.255.255.255":
+                try:
+                    s.sendto(magic_packet, ("255.255.255.255", port))
+                except Exception:
+                    pass
+        return True
+    except Exception as e:
+        print("Erro ao enviar Wake-on-LAN:", e)
+        return False
+
+
 def read_arp_table() -> Dict[str, str]:
     arp_map: Dict[str, str] = {}
     if IS_WINDOWS:
@@ -998,8 +1022,10 @@ def build_resources_for_host(rec: HostRecord) -> List[ResourceItem]:
         items.append(ResourceItem("📁", "Compartilhamento de Arquivos SMB / Windows", rec.netbios_domain or "Porta 445 Aberta", f"smb://{rec.ip}/"))
     if 21 in rec.open_ports:
         items.append(ResourceItem("📂", "Servidor de Arquivos FTP (Porta 21)", "Transferência de Arquivos", f"ftp://{rec.ip}/"))
+    if 3389 in rec.open_ports:
+        items.append(ResourceItem("🖥️", "Área de Trabalho Remota RDP (Porta 3389)", "Microsoft Remote Desktop Ativo", f"rdp://{rec.ip}"))
     if 22 in rec.open_ports or rec.ssh_banner:
-        items.append(ResourceItem("🐧", "Servidor SSH (Porta 22)", rec.ssh_banner or "Acesso Terminal SSH", ""))
+        items.append(ResourceItem("💻", "Servidor SSH (Porta 22)", rec.ssh_banner or "Acesso Terminal SSH Remoto", f"ssh://{rec.ip}"))
     if rec.mac or rec.vendor:
         items.append(ResourceItem("🏷️", "Hardware / Placa de Rede", f"MAC: {rec.mac or 'N/D'}  •  Fabricante: {rec.vendor or 'N/D'}", ""))
     if rec.open_ports:
@@ -1057,7 +1083,7 @@ def scan_single_ip(
             rec.mac = fresh_arp[ip]
 
     if rec.mac:
-        rec.vendor = OUI_DB.lookup(rec.mac)
+        rec.vendor = OUI_DB.lookup(rec.mac) or OUI_DB.lookup_online(rec.mac)
 
     # Scan TCP ports
     rec.open_ports = scan_host_ports(ip)
@@ -1076,7 +1102,7 @@ def scan_single_ip(
                     rec.rtsp_url = ov_uni["rtsp_url"]
                 if ov_uni.get("mac") and not rec.mac:
                     rec.mac = ov_uni["mac"]
-                    rec.vendor = OUI_DB.lookup(rec.mac)
+                    rec.vendor = OUI_DB.lookup(rec.mac) or OUI_DB.lookup_online(rec.mac)
                 if not rec.hostname or rec.hostname.startswith("Host ["):
                     rec.hostname = f"{rec.onvif_model} ({ip})"
 
@@ -1113,7 +1139,7 @@ def scan_single_ip(
     nb_comp, nb_group, nb_mac = resolve_netbios(ip)
     if nb_mac and not rec.mac:
         rec.mac = nb_mac
-        rec.vendor = OUI_DB.lookup(rec.mac)
+        rec.vendor = OUI_DB.lookup(rec.mac) or OUI_DB.lookup_online(rec.mac)
     if nb_group or nb_comp:
         rec.netbios_domain = f"{nb_group}\\{nb_comp}".strip("\\")
     if not rec.hostname and nb_comp:
