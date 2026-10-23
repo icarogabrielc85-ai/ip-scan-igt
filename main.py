@@ -118,6 +118,7 @@ from PyQt5.QtWidgets import (
     QTabWidget,
     QTableWidget,
     QTableWidgetItem,
+    QTextBrowser,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -141,6 +142,7 @@ from nmap_engine import is_nmap_available, get_nmap_path
 from nmap_dialog import NmapDialog
 from interface_dialog import NetworkInterfaceDialog
 from ui_theme import DARK_STYLESHEET, LIGHT_STYLESHEET, LivePingOscilloscope
+from version import APP_RELEASE_DATE, APP_VERSION, VERSION_HISTORY, get_full_version, get_short_version
 
 FAVORITES_FILE = os.path.expanduser("~/.config/linux-ipscan/favorites.json")
 
@@ -277,7 +279,8 @@ class AppUpdateWorker(QThread):
                 pass
 
             if is_git:
-                self.progress_status.emit("Consultando atualizações no GitHub...")
+                old_ver = get_full_version(self.repo_dir)
+                self.progress_status.emit(f"Versão atual instalada: {old_ver}\nConsultando atualizações no GitHub...")
                 fetch_res = subprocess.run(
                     ["git", "fetch", "origin", "main"],
                     cwd=self.repo_dir,
@@ -305,8 +308,14 @@ class AppUpdateWorker(QThread):
                         count = 0
 
                 if count == 0:
-                    self.progress_status.emit("O aplicativo já está na versão mais recente.")
-                    self.update_finished.emit(True, "O IP Scan IGT já está na versão mais recente!\nNenhuma nova atualização disponível no momento.", False)
+                    self.progress_status.emit(f"O aplicativo já está na versão mais recente: {old_ver}")
+                    self.update_finished.emit(
+                        True,
+                        f"O IP Scan IGT já está na versão mais recente!\n\n"
+                        f"• Versão Atual: {old_ver}\n"
+                        f"Nenhuma nova atualização disponível no momento.",
+                        False
+                    )
                     return
 
                 self.progress_status.emit(f"Baixando e aplicando {count} nova(s) atualização(ões)...")
@@ -341,11 +350,14 @@ class AppUpdateWorker(QThread):
                     except Exception:
                         pass
 
-                self.progress_status.emit("Atualização concluída com sucesso!")
+                new_ver = get_full_version(self.repo_dir)
+                self.progress_status.emit(f"Atualização concluída: {old_ver} ➔ {new_ver}")
                 self.update_finished.emit(
                     True,
-                    f"O IP Scan IGT foi atualizado com sucesso!\n"
-                    f"{count} melhoria(s) foram baixadas e integradas.\n\n"
+                    f"O IP Scan IGT foi atualizado com sucesso!\n\n"
+                    f"• Versão Anterior: {old_ver}\n"
+                    f"• Nova Versão Instalada: {new_ver}\n"
+                    f"• {count} melhoria(s) e alterações integradas.\n\n"
                     f"Deseja reiniciar o aplicativo agora para carregar a nova versão?",
                     True
                 )
@@ -432,7 +444,7 @@ class DeviceTreeWidgetItem(QTreeWidgetItem):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("IP Scan IGT")
+        self.setWindowTitle(f"IP Scan IGT — {get_full_version()}")
         primary = QApplication.primaryScreen()
         if primary:
             geo = primary.availableGeometry()
@@ -558,6 +570,10 @@ class MainWindow(QMainWindow):
         act_update = QAction("🔄 Verificar e Atualizar IP Scan IGT...", self)
         act_update.triggered.connect(self.check_and_apply_update)
         menu_help.addAction(act_update)
+
+        act_changelog = QAction("Histórico de Versões e Atualizações...", self)
+        act_changelog.triggered.connect(self.show_changelog_dialog)
+        menu_help.addAction(act_changelog)
         menu_help.addSeparator()
 
         act_about = QAction("Sobre o IP Scan IGT...", self)
@@ -691,6 +707,13 @@ class MainWindow(QMainWindow):
         self.btn_update.setToolTip("Verificar e aplicar atualizações do repositório em 1 clique")
         self.btn_update.clicked.connect(self.check_and_apply_update)
         top_layout.addWidget(self.btn_update)
+
+        # Version Badge Label
+        self.lbl_version_badge = QLabel(get_short_version())
+        self.lbl_version_badge.setObjectName("lblVersionBadge")
+        self.lbl_version_badge.setFixedHeight(28)
+        self.lbl_version_badge.setToolTip(f"Versão Instalada: {get_full_version()}\nClique em 'Atualizar' para checar novas versões.")
+        top_layout.addWidget(self.lbl_version_badge)
 
         main_layout.addWidget(top_bar)
 
@@ -1809,22 +1832,60 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+    def show_changelog_dialog(self):
+        dlg = QDialog(self)
+        dlg.setWindowTitle("IP Scan IGT — Histórico de Versões e Atualizações")
+        dlg.resize(680, 520)
+        vbox = QVBoxLayout(dlg)
+        vbox.setContentsMargins(18, 18, 18, 18)
+        vbox.setSpacing(12)
+
+        lbl_hdr = QLabel(f"<h2>Histórico de Versões do IP Scan IGT</h2><p style='color: #64748b; font-size: 13px;'>Versão ativa no sistema: <b>{get_full_version()}</b></p>")
+        vbox.addWidget(lbl_hdr)
+
+        text_edit = QTextBrowser()
+        text_edit.setOpenExternalLinks(True)
+        html = ["<div style='font-family: sans-serif; line-height: 1.5;'>"]
+        for item in VERSION_HISTORY:
+            html.append(f"<h3 style='color: #0969da; margin-bottom: 2px;'>{item['version']} — {item['title']}</h3>")
+            html.append(f"<p style='color: #64748b; font-size: 12px; margin-top: 0;'>Data de Lançamento: {item['date']}</p>")
+            html.append("<ul>")
+            for c in item["changes"]:
+                html.append(f"<li style='margin-bottom: 4px;'>{c}</li>")
+            html.append("</ul>")
+            html.append("<hr style='border: none; border-top: 1px solid #e2e8f0; margin: 15px 0;'>")
+        html.append("</div>")
+        text_edit.setHtml("".join(html))
+        vbox.addWidget(text_edit)
+
+        btn_close = QPushButton("Fechar")
+        btn_close.setFixedHeight(34)
+        btn_close.setFixedWidth(110)
+        btn_close.clicked.connect(dlg.accept)
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        btn_layout.addWidget(btn_close)
+        vbox.addLayout(btn_layout)
+
+        dlg.exec_()
+
     def show_about_dialog(self):
+        full_v = get_full_version()
         QMessageBox.about(
             self,
             "Sobre o IP Scan IGT",
-            "<b>IP Scan IGT — Edição Nativa Linux</b><br><br>"
-            "Scanner profissional de IP e dispositivos de rede de alta velocidade construído especificamente para Linux.<br><br>"
-            "<b>Principais Características:</b><br>"
-            "• Interface inspirada no clássico <i>Advanced IP Scanner</i> com abas [Resultados] e [Favoritos]<br>"
-            "• Descoberta de nomes via NetBIOS, mDNS, LLMNR, SMB2 NTLMSSP, HTTP e SSL/TLS<br>"
+            f"<h3>IP Scan IGT — {full_v}</h3>"
+            f"<b>Data de Lançamento:</b> {APP_RELEASE_DATE}<br><br>"
+            "Scanner profissional de IP e dispositivos de rede de alta velocidade construído para Linux e Windows.<br><br>"
+            "<b>Destaques do Versionamento:</b><br>"
+            f"• <b>Versão Ativa:</b> {full_v}<br>"
+            "• <b>Auto-Identificação de Máscaras:</b> Cálculo automático em tempo real de CIDR e notação decimal (/24 • 255.255.255.0)<br>"
+            "• <b>Atualização em 1 Clique:</b> Botão direto para buscar e sincronizar atualizações do GitHub<br>"
             "• <b>Suporte ONVIF & RTSP:</b> Detecção automática de câmeras de segurança e gravadores NVR com reprodução de vídeo via VLC/ffplay<br>"
             "• <b>Integração Nmap:</b> Auditoria profunda de portas e detecção de versões de serviços sem necessidade de sudo<br>"
-            "• <b>Classificação Dinâmica:</b> Ordenação em 1 clique (Crescente ▲ / Decrescente ▼) por IP numérico, Nome, Ping, MAC e Fabricante<br>"
+            "• <b>Classificação Dinâmica:</b> Ordenação em 1 clique por IP numérico, Nome, Ping, MAC e Fabricante<br>"
             "• <b>Seletor de Placas de Rede:</b> Detecção e preenchimento automático para Ethernet, Wi-Fi, VPN e Bridges<br>"
-            "• Expansão inline [+] para serviços HTTP, HTTPS, SSH, SMB e RTSP<br>"
-            "• Osciloscópio de Ping Instantâneo em tempo real com gráfico dinâmico<br>"
-            "• Motor multi-thread rápido e nativo com suporte a sub-milissegundos.",
+            "• <b>Osciloscópio de Ping:</b> Monitor dinâmico em tempo real com gráfico sub-milissegundo.",
         )
 
     def closeEvent(self, event):

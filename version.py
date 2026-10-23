@@ -1,0 +1,95 @@
+"""
+Módulo de Versionamento do IP Scan IGT
+Controla a versão semântica, numeração de compilação (build) e histórico de atualizações.
+"""
+import os
+import subprocess
+
+# Versão Semântica Oficial (MAJOR.MINOR.PATCH)
+APP_VERSION = "2.2.0"
+APP_RELEASE_DATE = "22/10/2026"
+
+
+def get_git_info(repo_dir: str = None) -> tuple:
+    """
+    Obtém a contagem total de commits e o hash curto do Git para compor o build do versionamento.
+    """
+    if not repo_dir:
+        repo_dir = os.path.dirname(os.path.abspath(__file__))
+    try:
+        count = subprocess.check_output(
+            ["git", "rev-list", "--count", "HEAD"],
+            cwd=repo_dir,
+            text=True,
+            stderr=subprocess.DEVNULL,
+            timeout=1.5,
+        ).strip()
+        short_hash = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=repo_dir,
+            text=True,
+            stderr=subprocess.DEVNULL,
+            timeout=1.5,
+        ).strip()
+        return count, short_hash
+    except Exception:
+        return "", ""
+
+
+def get_full_version(repo_dir: str = None) -> str:
+    """
+    Retorna a versão completa formatada:
+    Exemplo: v2.2.0 (Build 5 • 1d4540b)
+    """
+    count, short_hash = get_git_info(repo_dir)
+    if count and short_hash:
+        return f"v{APP_VERSION} (Build {count} • {short_hash})"
+    return f"v{APP_VERSION}"
+
+
+def get_short_version() -> str:
+    """
+    Retorna a versão semântica simples:
+    Exemplo: v2.2.0
+    """
+    return f"v{APP_VERSION}"
+
+
+VERSION_HISTORY = [
+    {
+        "version": "v2.2.0",
+        "date": "22/10/2026",
+        "title": "Auto-Identificação de Máscara de Rede e Auto-Atualização em 1 Clique",
+        "changes": [
+            "Identificação automática e inteligente da máscara de rede real da placa na inicialização.",
+            "Exibição clara de CIDR e máscara decimal (/24 • 255.255.255.0, /16 • 255.255.0.0, etc.).",
+            "Cálculo bidirecional em tempo real: ao digitar qualquer faixa de IP, a máscara é detectada.",
+            "Botão de 1 clique '🔄 Atualizar' com verificação direta no repositório GitHub.",
+            "Auto-reinicialização do aplicativo após atualizar com sucesso.",
+            "Sistema oficial de versionamento dinâmico com rastreamento de Build e Git Hash.",
+        ],
+    },
+    {
+        "version": "v2.1.0",
+        "date": "21/10/2026",
+        "title": "Edição Multiplataforma (Linux & Windows)",
+        "changes": [
+            "Compatibilidade nativa total com Windows 10/11 e distribuições Linux.",
+            "Descoberta automática de câmeras de segurança e gravadores via ONVIF (WS-Discovery).",
+            "Reprodução instantânea de streams RTSP via VLC / FFplay.",
+            "Integração profunda de auditoria de portas e serviços com Nmap em espaço de usuário.",
+            "Scripts de compilação automatizada (build_linux.sh e build_windows.bat).",
+        ],
+    },
+    {
+        "version": "v2.0.0",
+        "date": "20/10/2026",
+        "title": "Lançamento da Interface Moderna IP Scan IGT",
+        "changes": [
+            "Interface visual inspirada no clássico Advanced IP Scanner com abas [Resultados] e [Favoritos].",
+            "Osciloscópio de Ping Instantâneo em tempo real com gráfico dinâmico.",
+            "Resolução de nomes via NetBIOS, mDNS, SMB2 e certificados SSL.",
+            "Base de dados offline IEEE OUI com mais de 40.000 fabricantes de placas de rede.",
+        ],
+    },
+]

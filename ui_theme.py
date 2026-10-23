@@ -160,6 +160,16 @@ QPushButton#btnUpdate:hover {
     color: #0f172a;
 }
 
+QLabel#lblVersionBadge {
+    color: #94a3b8;
+    background-color: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 4px;
+    font-weight: bold;
+    font-size: 11px;
+    padding: 2px 8px;
+}
+
 QTreeWidget, QTableWidget {
     background-color: #111827;
     border: 1px solid #1f2937;
@@ -412,6 +422,16 @@ QPushButton#btnUpdate {
 
 QPushButton#btnUpdate:hover {
     background-color: #0369a1;
+}
+
+QLabel#lblVersionBadge {
+    color: #475569;
+    background-color: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    font-weight: bold;
+    font-size: 11px;
+    padding: 2px 8px;
 }
 
 /* Tree & Tables style (Advanced IP Scanner Look) */

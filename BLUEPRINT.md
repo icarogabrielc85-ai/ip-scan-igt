@@ -1,12 +1,12 @@
 # BLUEPRINT — IP SCAN IGT
-**Versão:** 2.1.0 (Edição Multiplataforma: Linux & Windows)  
+**Versão:** 2.2.0 (Edição Multiplataforma: Linux & Windows)  
 **Projeto:** IP Scan IGT  
 **Repositório GitHub:** [https://github.com/icarogabrielc85-ai/ip-scan-igt](https://github.com/icarogabrielc85-ai/ip-scan-igt)  
 **Diretório Local (PC):** `/home/icaro/linux-ipscan`  
 **Executável do Sistema (Linux):** `/home/icaro/.local/bin/ip-scan-igt`  
 **Atalho da Área de Trabalho:** `/home/icaro/Área de trabalho/ip-scan-igt.desktop`  
 **Atalho do Menu do Sistema:** `~/.local/share/applications/ip-scan-igt.desktop`  
-**Data da Última Atualização:** 21/10/2026  
+**Data da Última Atualização:** 22/10/2026  
 
 ---
 
