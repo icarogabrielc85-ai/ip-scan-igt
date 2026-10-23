@@ -12,20 +12,20 @@ from PyQt5.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 DARK_STYLESHEET = """
 QMainWindow, QDialog {
-    background-color: #0f141c;
-    color: #e2e8f0;
+    background-color: #0b0f17;
+    color: #f1f5f9;
 }
 
 QMenuBar {
-    background-color: #161f2e;
+    background-color: #111827;
     color: #e2e8f0;
-    border-bottom: 1px solid #243447;
+    border-bottom: 1px solid #1f2937;
     font-size: 12px;
 }
 
 QMenuBar::item {
     background: transparent;
-    padding: 5px 12px;
+    padding: 6px 12px;
     border-radius: 4px;
 }
 
@@ -35,19 +35,28 @@ QMenuBar::item:selected {
 }
 
 QWidget {
-    font-family: "Noto Sans", "Ubuntu", "DejaVu Sans", "Segoe UI", Roboto, sans-serif, "Noto Color Emoji";
+    font-family: "Segoe UI", "Noto Sans", "Ubuntu", -apple-system, Roboto, sans-serif, "Noto Color Emoji";
     font-size: 13px;
-    color: #e2e8f0;
+    color: #f1f5f9;
 }
 
+/* Tier 1 Header Toolbar */
 QFrame#topBar {
-    background-color: #161f2e;
-    border-bottom: 1px solid #243447;
-    padding: 6px 10px;
+    background-color: #111827;
+    border-bottom: 1px solid #1f2937;
+    padding: 6px 12px;
 }
 
+/* Tier 2 Ribbon Toolbar */
+QFrame#ribbonBar {
+    background-color: #162032;
+    border-bottom: 1px solid #1f2937;
+    padding: 4px 12px;
+}
+
+/* Bottom Collapsible Panel */
 QFrame#bottomPanel {
-    background-color: #111827;
+    background-color: #0e141f;
     border: 1px solid #1f2937;
     border-radius: 6px;
 }
@@ -55,15 +64,15 @@ QFrame#bottomPanel {
 QFrame#panelHeader {
     background-color: #162032;
     border-bottom: 1px solid #1f2937;
-    border-top-left-radius: 5px;
-    border-top-right-radius: 5px;
-    padding: 4px 8px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    padding: 5px 10px;
 }
 
 QGroupBox {
-    background-color: #161f2e;
-    border: 1px solid #243447;
-    border-radius: 8px;
+    background-color: #111827;
+    border: 1px solid #1f2937;
+    border-radius: 6px;
     margin-top: 18px;
     font-weight: bold;
     padding-top: 14px;
@@ -79,38 +88,59 @@ QGroupBox::title {
 QLineEdit, QComboBox, QSpinBox {
     background-color: #1e293b;
     border: 1px solid #334155;
-    border-radius: 4px;
-    padding: 6px 10px;
+    border-radius: 5px;
+    padding: 5px 10px;
     color: #f8fafc;
     selection-background-color: #0284c7;
 }
 
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus {
-    border: 1px solid #38bdf8;
+    border: 1.5px solid #38bdf8;
     background-color: #0f172a;
+}
+
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 22px;
+    border-left: 1px solid #334155;
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    selection-background-color: #0284c7;
+    selection-color: #ffffff;
+    padding: 4px;
 }
 
 QPushButton {
     background-color: #1e293b;
     border: 1px solid #334155;
-    border-radius: 4px;
-    padding: 6px 14px;
+    border-radius: 5px;
+    padding: 5px 12px;
     font-weight: 600;
-    color: #f1f5f9;
+    color: #e2e8f0;
 }
 
 QPushButton:hover {
     background-color: #334155;
     border-color: #475569;
+    color: #ffffff;
 }
 
 QPushButton:pressed {
     background-color: #0f172a;
 }
 
+/* Primary Start / Stop Scan Buttons */
 QPushButton#btnStart {
-    background-color: #059669;
-    border: 1px solid #10b981;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #10b981, stop:1 #059669);
+    border: 1px solid #047857;
+    border-radius: 6px;
     color: #ffffff;
     font-weight: bold;
     font-size: 13px;
@@ -118,13 +148,18 @@ QPushButton#btnStart {
 }
 
 QPushButton#btnStart:hover {
-    background-color: #10b981;
-    border-color: #34d399;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #34d399, stop:1 #10b981);
+    border-color: #059669;
+}
+
+QPushButton#btnStart:pressed {
+    background-color: #047857;
 }
 
 QPushButton#btnStop {
-    background-color: #dc2626;
-    border: 1px solid #ef4444;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ef4444, stop:1 #dc2626);
+    border: 1px solid #b91c1c;
+    border-radius: 6px;
     color: #ffffff;
     font-weight: bold;
     font-size: 13px;
@@ -132,12 +167,18 @@ QPushButton#btnStop {
 }
 
 QPushButton#btnStop:hover {
-    background-color: #ef4444;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f87171, stop:1 #ef4444);
 }
 
+QPushButton#btnStop:pressed {
+    background-color: #b91c1c;
+}
+
+/* Subnet Picker Button */
 QPushButton#btnSubnet {
     background-color: #0284c7;
     border: 1px solid #38bdf8;
+    border-radius: 6px;
     color: #ffffff;
     font-weight: bold;
 }
@@ -146,9 +187,11 @@ QPushButton#btnSubnet:hover {
     background-color: #0369a1;
 }
 
+/* 1-Click Update Button */
 QPushButton#btnUpdate {
-    background-color: #0284c7;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0284c7, stop:1 #0369a1);
     border: 1px solid #38bdf8;
+    border-radius: 6px;
     color: #ffffff;
     font-weight: bold;
     font-size: 12px;
@@ -156,24 +199,90 @@ QPushButton#btnUpdate {
 }
 
 QPushButton#btnUpdate:hover {
-    background-color: #38bdf8;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #38bdf8, stop:1 #0284c7);
     color: #0f172a;
 }
 
+/* Ribbon Tool Buttons */
+QPushButton#ribbonBtn {
+    background-color: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 5px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #cbd5e1;
+}
+
+QPushButton#ribbonBtn:hover {
+    background-color: #334155;
+    border-color: #475569;
+    color: #ffffff;
+}
+
+QPushButton#ribbonBtn:checked {
+    background-color: #0369a1;
+    border-color: #38bdf8;
+    color: #ffffff;
+}
+
+/* Inspector Action Buttons - Group Color Coding */
+QPushButton#btnActionWeb {
+    background-color: #0c4a6e;
+    border: 1px solid #0284c7;
+    color: #e0f2fe;
+    border-radius: 5px;
+    font-weight: 600;
+    padding: 5px 10px;
+}
+QPushButton#btnActionWeb:hover {
+    background-color: #0284c7;
+    color: #ffffff;
+}
+
+QPushButton#btnActionRemote {
+    background-color: #2e1065;
+    border: 1px solid #7c3aed;
+    color: #ede9fe;
+    border-radius: 5px;
+    font-weight: 600;
+    padding: 5px 10px;
+}
+QPushButton#btnActionRemote:hover {
+    background-color: #7c3aed;
+    color: #ffffff;
+}
+
+QPushButton#btnActionDiag {
+    background-color: #1e293b;
+    border: 1px solid #475569;
+    color: #f1f5f9;
+    border-radius: 5px;
+    font-weight: 600;
+    padding: 5px 10px;
+}
+QPushButton#btnActionDiag:hover {
+    background-color: #334155;
+    border-color: #64748b;
+    color: #ffffff;
+}
+
+/* Brand and Version Tag */
 QLabel#lblAppName {
     font-weight: 800;
     font-size: 14px;
-    color: #f1f5f9;
+    color: #f8fafc;
+    letter-spacing: 0.5px;
 }
 
 QLabel#lblVersionBadge {
     color: #38bdf8;
     background-color: #0c4a6e;
     border: 1px solid #0369a1;
-    border-radius: 4px;
+    border-radius: 12px;
     font-weight: bold;
     font-size: 11px;
-    padding: 2px 7px;
+    padding: 2px 9px;
 }
 
 QLabel#lblVersionBadge:hover {
@@ -181,18 +290,51 @@ QLabel#lblVersionBadge:hover {
     color: #e0f2fe;
 }
 
+/* Ribbon KPI Badges */
+QLabel#kpiOnline {
+    background-color: #064e3b;
+    color: #34d399;
+    border: 1px solid #059669;
+    border-radius: 12px;
+    padding: 3px 10px;
+    font-weight: bold;
+    font-size: 11px;
+}
+
+QLabel#kpiLatency {
+    background-color: #082f49;
+    color: #38bdf8;
+    border: 1px solid #0284c7;
+    border-radius: 12px;
+    padding: 3px 10px;
+    font-weight: bold;
+    font-size: 11px;
+}
+
+QLabel#kpiServices {
+    background-color: #451a03;
+    color: #fbbf24;
+    border: 1px solid #d97706;
+    border-radius: 12px;
+    padding: 3px 10px;
+    font-weight: bold;
+    font-size: 11px;
+}
+
+/* Device Tree & Tables */
 QTreeWidget, QTableWidget {
-    background-color: #111827;
+    background-color: #0e141f;
     border: 1px solid #1f2937;
-    border-radius: 4px;
-    alternate-background-color: #162032;
-    selection-background-color: #0369a1;
+    border-radius: 6px;
+    alternate-background-color: #141d2c;
+    selection-background-color: #0284c7;
     selection-color: #ffffff;
     gridline-color: #1f2937;
 }
 
 QTreeWidget::item {
-    padding: 4px 2px;
+    min-height: 28px;
+    padding: 5px 4px;
 }
 
 QTreeWidget::item:hover {
@@ -205,25 +347,25 @@ QTreeWidget::item:selected {
 }
 
 QHeaderView::section {
-    background-color: #1e293b;
+    background-color: #162032;
     color: #94a3b8;
-    padding: 7px 8px;
+    padding: 8px 10px;
     font-weight: bold;
     font-size: 12px;
     border: none;
-    border-right: 1px solid #334155;
-    border-bottom: 2px solid #334155;
+    border-right: 1px solid #243447;
+    border-bottom: 2px solid #243447;
 }
 
 QHeaderView::section:hover {
-    background-color: #334155;
+    background-color: #1e2d44;
     color: #38bdf8;
 }
 
 QProgressBar {
     background-color: #1e293b;
     border: 1px solid #334155;
-    border-radius: 4px;
+    border-radius: 5px;
     text-align: center;
     color: #f8fafc;
     font-weight: bold;
@@ -231,40 +373,42 @@ QProgressBar {
 
 QProgressBar::chunk {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0284c7, stop:1 #38bdf8);
-    border-radius: 3px;
+    border-radius: 4px;
 }
 
 QTabWidget::pane {
     border: 1px solid #1f2937;
-    background-color: #111827;
-    border-radius: 4px;
+    background-color: #0e141f;
+    border-radius: 6px;
 }
 
 QTabBar::tab {
     background-color: #162032;
     color: #94a3b8;
     padding: 8px 24px;
-    border-top-left-radius: 5px;
-    border-top-right-radius: 5px;
-    margin-right: 2px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    margin-right: 3px;
     font-weight: bold;
     font-size: 13px;
 }
 
 QTabBar::tab:selected {
-    background-color: #111827;
+    background-color: #0e141f;
     color: #38bdf8;
     border-top: 3px solid #38bdf8;
 }
 
 QStatusBar {
-    background-color: #0b0f17;
+    background-color: #080c14;
     color: #94a3b8;
-    border-top: 1px solid #1e293b;
+    border-top: 1px solid #1f2937;
+    padding: 3px 8px;
 }
 
 QSplitter::handle {
     background-color: #1f2937;
+    height: 4px;
 }
 
 QSplitter::handle:hover {
@@ -275,37 +419,86 @@ QMenu {
     background-color: #1e293b;
     color: #f8fafc;
     border: 1px solid #334155;
-    border-radius: 4px;
+    border-radius: 6px;
     padding: 4px;
 }
 
 QMenu::item {
-    padding: 6px 24px;
-    border-radius: 3px;
+    padding: 6px 20px;
+    border-radius: 4px;
 }
 
 QMenu::item:selected {
     background-color: #0284c7;
     color: #ffffff;
 }
+
+QMenu::separator {
+    height: 1px;
+    background-color: #334155;
+    margin: 4px 6px;
+}
+
+/* Modern slim scrollbars */
+QScrollBar:vertical {
+    background: transparent;
+    width: 8px;
+    margin: 0px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:vertical {
+    background: #334155;
+    min-height: 25px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #475569;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+QScrollBar:horizontal {
+    background: transparent;
+    height: 8px;
+    margin: 0px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:horizontal {
+    background: #334155;
+    min-width: 25px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background: #475569;
+}
+
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0px;
+}
 """
 
 LIGHT_STYLESHEET = """
 QMainWindow, QDialog {
-    background-color: #f0f2f5;
-    color: #1f2937;
+    background-color: #f8fafc;
+    color: #0f172a;
 }
 
 QMenuBar {
-    background-color: #f6f8fa;
+    background-color: #ffffff;
     color: #24292f;
-    border-bottom: 1px solid #d0d7de;
+    border-bottom: 1px solid #e2e8f0;
     font-size: 12px;
 }
 
 QMenuBar::item {
     background: transparent;
-    padding: 5px 12px;
+    padding: 6px 12px;
     border-radius: 4px;
 }
 
@@ -315,116 +508,147 @@ QMenuBar::item:selected {
 }
 
 QWidget {
-    font-family: "Noto Sans", "Ubuntu", "DejaVu Sans", "Segoe UI", Roboto, sans-serif, "Noto Color Emoji";
+    font-family: "Segoe UI", "Noto Sans", "Ubuntu", -apple-system, Roboto, sans-serif, "Noto Color Emoji";
     font-size: 13px;
-    color: #1f2937;
+    color: #0f172a;
 }
 
-/* Advanced IP Scanner classic Top Toolbar */
+/* Tier 1 Header Toolbar */
 QFrame#topBar {
-    background-color: #f6f8fa;
-    border-bottom: 1px solid #d0d7de;
-    padding: 6px 10px;
+    background-color: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 6px 12px;
 }
 
+/* Tier 2 Ribbon Toolbar */
+QFrame#ribbonBar {
+    background-color: #f1f5f9;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 4px 12px;
+}
+
+/* Bottom Collapsible Panel */
 QFrame#bottomPanel {
     background-color: #ffffff;
-    border: 1px solid #d0d7de;
+    border: 1px solid #cbd5e1;
     border-radius: 6px;
 }
 
 QFrame#panelHeader {
-    background-color: #f6f8fa;
-    border-bottom: 1px solid #d0d7de;
-    border-top-left-radius: 5px;
-    border-top-right-radius: 5px;
-    padding: 4px 8px;
+    background-color: #f1f5f9;
+    border-bottom: 1px solid #e2e8f0;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    padding: 5px 10px;
 }
 
 QLineEdit, QComboBox, QSpinBox {
     background-color: #ffffff;
-    border: 1px solid #d0d7de;
-    border-radius: 4px;
-    padding: 6px 10px;
-    color: #1f2937;
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    padding: 5px 10px;
+    color: #0f172a;
     font-weight: 500;
     selection-background-color: #0969da;
 }
 
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus {
     border: 1.5px solid #0969da;
+    background-color: #f0f9ff;
+}
+
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 22px;
+    border-left: 1px solid #cbd5e1;
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    selection-background-color: #0969da;
+    selection-color: #ffffff;
+    padding: 4px;
 }
 
 QPushButton {
-    background-color: #f6f8fa;
-    border: 1px solid #d0d7de;
-    border-radius: 4px;
-    padding: 6px 14px;
+    background-color: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    padding: 5px 12px;
     font-weight: 600;
-    color: #24292f;
+    color: #1e293b;
 }
 
 QPushButton:hover {
-    background-color: #f3f4f6;
-    border-color: #1b1f2426;
+    background-color: #f1f5f9;
+    border-color: #94a3b8;
 }
 
 QPushButton:pressed {
-    background-color: #ebecf0;
+    background-color: #e2e8f0;
 }
 
-/* Advanced IP Scanner signature green "Verificar" button */
+/* Primary Start / Stop Scan Buttons */
 QPushButton#btnStart {
-    background-color: #107c41;
-    border: 1px solid #0e6c38;
-    border-radius: 4px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #107c41, stop:1 #0c6334);
+    border: 1px solid #0a522b;
+    border-radius: 6px;
     color: #ffffff;
     font-weight: bold;
     font-size: 13px;
-    padding: 7px 20px;
+    padding: 7px 18px;
 }
 
 QPushButton#btnStart:hover {
-    background-color: #15803d;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #15803d, stop:1 #107c41);
 }
 
 QPushButton#btnStart:pressed {
-    background-color: #0d6535;
+    background-color: #094725;
 }
 
 QPushButton#btnStop {
-    background-color: #d13438;
-    border: 1px solid #b82d30;
-    border-radius: 4px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #d13438, stop:1 #b82d30);
+    border: 1px solid #9e2528;
+    border-radius: 6px;
     color: #ffffff;
     font-weight: bold;
     font-size: 13px;
-    padding: 7px 20px;
+    padding: 7px 18px;
 }
 
 QPushButton#btnStop:hover {
-    background-color: #b91c1c;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e11d48, stop:1 #be123c);
 }
 
-/* Advanced IP Scanner Subnet IP Button */
+QPushButton#btnStop:pressed {
+    background-color: #9e2528;
+}
+
+/* Subnet Picker Button */
 QPushButton#btnSubnet {
     background-color: #0969da;
     border: 1px solid #0860ca;
-    border-radius: 4px;
+    border-radius: 6px;
     color: #ffffff;
     font-weight: bold;
     font-size: 12px;
-    padding: 6px 14px;
 }
 
 QPushButton#btnSubnet:hover {
     background-color: #0860ca;
 }
 
+/* 1-Click Update Button */
 QPushButton#btnUpdate {
-    background-color: #0284c7;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0284c7, stop:1 #0369a1);
     border: 1px solid #0369a1;
-    border-radius: 4px;
+    border-radius: 6px;
     color: #ffffff;
     font-weight: bold;
     font-size: 12px;
@@ -432,23 +656,87 @@ QPushButton#btnUpdate {
 }
 
 QPushButton#btnUpdate:hover {
-    background-color: #0369a1;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0369a1, stop:1 #0284c7);
 }
 
+/* Ribbon Tool Buttons */
+QPushButton#ribbonBtn {
+    background-color: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #334155;
+}
+
+QPushButton#ribbonBtn:hover {
+    background-color: #e2e8f0;
+    border-color: #94a3b8;
+}
+
+QPushButton#ribbonBtn:checked {
+    background-color: #e0f2fe;
+    border-color: #0284c7;
+    color: #0369a1;
+}
+
+/* Inspector Action Buttons - Group Color Coding */
+QPushButton#btnActionWeb {
+    background-color: #f0f9ff;
+    border: 1px solid #bae6fd;
+    color: #0284c7;
+    border-radius: 5px;
+    font-weight: 600;
+    padding: 5px 10px;
+}
+QPushButton#btnActionWeb:hover {
+    background-color: #0284c7;
+    color: #ffffff;
+}
+
+QPushButton#btnActionRemote {
+    background-color: #faf5ff;
+    border: 1px solid #e9d5ff;
+    color: #7c3aed;
+    border-radius: 5px;
+    font-weight: 600;
+    padding: 5px 10px;
+}
+QPushButton#btnActionRemote:hover {
+    background-color: #7c3aed;
+    color: #ffffff;
+}
+
+QPushButton#btnActionDiag {
+    background-color: #f8fafc;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+    border-radius: 5px;
+    font-weight: 600;
+    padding: 5px 10px;
+}
+QPushButton#btnActionDiag:hover {
+    background-color: #e2e8f0;
+    border-color: #94a3b8;
+}
+
+/* Brand and Version Tag */
 QLabel#lblAppName {
     font-weight: 800;
     font-size: 14px;
     color: #0f172a;
+    letter-spacing: 0.5px;
 }
 
 QLabel#lblVersionBadge {
     color: #0284c7;
     background-color: #e0f2fe;
     border: 1px solid #bae6fd;
-    border-radius: 4px;
+    border-radius: 12px;
     font-weight: bold;
     font-size: 11px;
-    padding: 2px 7px;
+    padding: 2px 9px;
 }
 
 QLabel#lblVersionBadge:hover {
@@ -456,23 +744,55 @@ QLabel#lblVersionBadge:hover {
     color: #0369a1;
 }
 
-/* Tree & Tables style (Advanced IP Scanner Look) */
+/* Ribbon KPI Badges */
+QLabel#kpiOnline {
+    background-color: #ecfdf5;
+    color: #047857;
+    border: 1px solid #a7f3d0;
+    border-radius: 12px;
+    padding: 3px 10px;
+    font-weight: bold;
+    font-size: 11px;
+}
+
+QLabel#kpiLatency {
+    background-color: #f0f9ff;
+    color: #0369a1;
+    border: 1px solid #bae6fd;
+    border-radius: 12px;
+    padding: 3px 10px;
+    font-weight: bold;
+    font-size: 11px;
+}
+
+QLabel#kpiServices {
+    background-color: #fffbeb;
+    color: #b45309;
+    border: 1px solid #fde68a;
+    border-radius: 12px;
+    padding: 3px 10px;
+    font-weight: bold;
+    font-size: 11px;
+}
+
+/* Device Tree & Tables */
 QTreeWidget, QTableWidget {
     background-color: #ffffff;
-    border: 1px solid #d0d7de;
-    border-radius: 4px;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
     alternate-background-color: #f8fafc;
     selection-background-color: #0969da;
     selection-color: #ffffff;
-    gridline-color: #f0f2f5;
+    gridline-color: #f1f5f9;
 }
 
 QTreeWidget::item {
-    padding: 4px 2px;
+    min-height: 28px;
+    padding: 5px 4px;
 }
 
 QTreeWidget::item:hover {
-    background-color: #f0f4f9;
+    background-color: #f1f5f9;
 }
 
 QTreeWidget::item:selected {
@@ -481,38 +801,37 @@ QTreeWidget::item:selected {
 }
 
 QHeaderView::section {
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #fafbfc, stop:1 #edf2f7);
-    color: #24292f;
-    padding: 7px 8px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f1f5f9);
+    color: #334155;
+    padding: 8px 10px;
     font-weight: bold;
     font-size: 12px;
     border: none;
-    border-right: 1px solid #d0d7de;
+    border-right: 1px solid #e2e8f0;
     border-bottom: 2px solid #cbd5e1;
 }
 
 QHeaderView::section:hover {
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f0f4f9, stop:1 #e2e8f0);
+    background: #e2e8f0;
     color: #0969da;
 }
 
-/* Advanced IP Scanner Tabs: [Resultados] [Favoritos] */
 QTabWidget::pane {
-    border: 1px solid #d0d7de;
+    border: 1px solid #e2e8f0;
     background-color: #ffffff;
-    border-radius: 4px;
+    border-radius: 6px;
 }
 
 QTabBar::tab {
-    background-color: #e4e7eb;
-    color: #4b5563;
+    background-color: #e2e8f0;
+    color: #475569;
     padding: 8px 24px;
-    border-top-left-radius: 5px;
-    border-top-right-radius: 5px;
-    margin-right: 2px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    margin-right: 3px;
     font-weight: bold;
     font-size: 13px;
-    border: 1px solid #d0d7de;
+    border: 1px solid #cbd5e1;
     border-bottom: none;
 }
 
@@ -524,28 +843,28 @@ QTabBar::tab:selected {
 }
 
 QStatusBar {
-    background-color: #f3f4f6;
-    color: #4b5563;
-    border-top: 1px solid #d0d7de;
-    padding: 3px 6px;
+    background-color: #f1f5f9;
+    color: #475569;
+    border-top: 1px solid #e2e8f0;
+    padding: 3px 8px;
 }
 
 QProgressBar {
-    background-color: #e5e7eb;
-    border: 1px solid #d0d7de;
-    border-radius: 4px;
+    background-color: #e2e8f0;
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
     text-align: center;
-    color: #1f2937;
+    color: #0f172a;
     font-weight: bold;
 }
 
 QProgressBar::chunk {
     background-color: #107c41;
-    border-radius: 3px;
+    border-radius: 4px;
 }
 
 QSplitter::handle {
-    background-color: #d0d7de;
+    background-color: #e2e8f0;
     height: 4px;
 }
 
@@ -555,20 +874,69 @@ QSplitter::handle:hover {
 
 QMenu {
     background-color: #ffffff;
-    color: #1f2937;
-    border: 1px solid #d0d7de;
-    border-radius: 4px;
+    color: #0f172a;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
     padding: 4px;
 }
 
 QMenu::item {
-    padding: 6px 24px;
-    border-radius: 3px;
+    padding: 6px 20px;
+    border-radius: 4px;
 }
 
 QMenu::item:selected {
     background-color: #0969da;
     color: #ffffff;
+}
+
+QMenu::separator {
+    height: 1px;
+    background-color: #e2e8f0;
+    margin: 4px 6px;
+}
+
+/* Modern slim scrollbars */
+QScrollBar:vertical {
+    background: transparent;
+    width: 8px;
+    margin: 0px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:vertical {
+    background: #cbd5e1;
+    min-height: 25px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #94a3b8;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+QScrollBar:horizontal {
+    background: transparent;
+    height: 8px;
+    margin: 0px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:horizontal {
+    background: #cbd5e1;
+    min-width: 25px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background: #94a3b8;
+}
+
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0px;
 }
 """
 
@@ -634,7 +1002,7 @@ class LivePingOscilloscope(QWidget):
     """
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumHeight(80)
+        self.setMinimumHeight(95)
         self.samples = []
         self.max_samples = 45
         self.current_ip = ""
@@ -645,7 +1013,7 @@ class LivePingOscilloscope(QWidget):
         self.ttl = -1
         self.method = ""
         self.loss_pct = 0
-        self.is_dark = True
+        self.is_dark = False
 
     def add_sample(self, rtt: float, ttl: int = -1, method: str = ""):
         self.current_rtt = rtt
@@ -685,27 +1053,27 @@ class LivePingOscilloscope(QWidget):
         h = self.height()
 
         # Background
-        bg_col = QColor(15, 23, 42) if self.is_dark else QColor(255, 255, 255)
-        border_col = QColor(36, 52, 71) if self.is_dark else QColor(208, 215, 222)
+        bg_col = QColor(14, 20, 31) if self.is_dark else QColor(255, 255, 255)
+        border_col = QColor(31, 41, 55) if self.is_dark else QColor(226, 232, 240)
         painter.setBrush(QBrush(bg_col))
         painter.setPen(QPen(border_col, 1))
         painter.drawRoundedRect(QRectF(1, 1, w - 2, h - 2), 6, 6)
 
-        # Grid lines
-        grid_col = QColor(30, 41, 59) if self.is_dark else QColor(240, 243, 246)
+        # Subtle Grid lines
+        grid_col = QColor(30, 41, 59) if self.is_dark else QColor(241, 245, 249)
         painter.setPen(QPen(grid_col, 1, Qt.DashLine))
-        painter.drawLine(10, int(h * 0.35), w - 10, int(h * 0.35))
-        painter.drawLine(10, int(h * 0.70), w - 10, int(h * 0.70))
+        painter.drawLine(10, int(h * 0.40), w - 10, int(h * 0.40))
+        painter.drawLine(10, int(h * 0.72), w - 10, int(h * 0.72))
 
-        # Metrics text
-        text_col = QColor(226, 232, 240) if self.is_dark else QColor(36, 41, 47)
-        dim_col = QColor(148, 163, 184) if self.is_dark else QColor(87, 96, 106)
-        font = QFont("Noto Sans", 9)
+        # Typography
+        text_col = QColor(241, 245, 249) if self.is_dark else QColor(15, 23, 42)
+        dim_col = QColor(148, 163, 184) if self.is_dark else QColor(100, 116, 139)
+        font = QFont("Segoe UI", 9)
         painter.setFont(font)
 
         if not self.current_ip:
             painter.setPen(dim_col)
-            painter.drawText(QRectF(12, 10, w - 24, h - 20), Qt.AlignCenter | Qt.TextWordWrap, "Selecione um dispositivo para monitorar o Ping Dinâmico Instantâneo em tempo real")
+            painter.drawText(QRectF(12, 10, w - 24, h - 20), Qt.AlignCenter | Qt.TextWordWrap, "Selecione um dispositivo da lista para monitorar o Ping Dinâmico Instantâneo em tempo real")
             return
 
         # Header metrics
@@ -713,20 +1081,20 @@ class LivePingOscilloscope(QWidget):
         ip_header = f"● Monitorando: {self.current_ip}"
         painter.drawText(12, 18, ip_header)
 
-        accent_color = QColor(56, 189, 248) if self.is_dark else QColor(9, 105, 218)
+        accent_color = QColor(56, 189, 248) if self.is_dark else QColor(2, 132, 199)
         if self.current_rtt >= 0:
-            status_text = f"Agora: {self.current_rtt:.2f} ms  |  Mín: {self.min_rtt:.2f} ms  •  Méd: {self.avg_rtt:.2f} ms  •  Máx: {self.max_rtt:.2f} ms"
+            status_text = f"Agora: {self.current_rtt:.2f} ms   |   Mín: {self.min_rtt:.2f} ms  •  Méd: {self.avg_rtt:.2f} ms  •  Máx: {self.max_rtt:.2f} ms"
             if self.ttl > 0:
-                status_text += f"  •  TTL: {self.ttl}"
+                status_text += f"   •   TTL: {self.ttl}"
             if self.method:
                 status_text += f" ({self.method})"
             painter.setPen(accent_color)
             painter.drawText(12, 34, status_text)
         else:
-            painter.setPen(QColor(239, 68, 68) if self.is_dark else QColor(207, 34, 46))
-            painter.drawText(12, 34, "● Sem resposta no momento")
+            painter.setPen(QColor(239, 68, 68) if self.is_dark else QColor(220, 38, 38))
+            painter.drawText(12, 34, "● Sem resposta no momento (Offline / Timeout)")
 
-        # Plot latency waveform
+        # Latency Waveform
         if not self.samples or w < 40 or h < 55:
             return
 
@@ -761,23 +1129,23 @@ class LivePingOscilloscope(QWidget):
             grad = QLinearGradient(0, plot_top, 0, plot_bottom)
             if self.is_dark:
                 grad.setColorAt(0, QColor(56, 189, 248, 120))
-                grad.setColorAt(1, QColor(2, 132, 199, 10))
+                grad.setColorAt(1, QColor(2, 132, 199, 8))
             else:
-                grad.setColorAt(0, QColor(9, 105, 218, 70))
-                grad.setColorAt(1, QColor(9, 105, 218, 5))
+                grad.setColorAt(0, QColor(2, 132, 199, 80))
+                grad.setColorAt(1, QColor(2, 132, 199, 5))
             painter.fillPath(fill_path, QBrush(grad))
 
             # Waveform stroke
-            stroke_col = QColor(56, 189, 248) if self.is_dark else QColor(9, 105, 218)
+            stroke_col = QColor(56, 189, 248) if self.is_dark else QColor(2, 132, 199)
             stroke_pen = QPen(stroke_col, 2)
             painter.setPen(stroke_pen)
             for i in range(len(points) - 1):
                 painter.drawLine(points[i], points[i + 1])
 
-            # Draw glowing dot on the last point
+            # Draw glowing pulse dot on the last sample
             last_p = points[-1]
-            dot_brush = QColor(52, 211, 153) if self.is_dark else QColor(16, 124, 65)
-            dot_pen = QColor(16, 185, 129) if self.is_dark else QColor(21, 128, 61)
+            dot_brush = QColor(52, 211, 153) if self.is_dark else QColor(16, 185, 129)
+            dot_pen = QColor(16, 185, 129) if self.is_dark else QColor(5, 150, 105)
             painter.setBrush(QBrush(dot_brush))
             painter.setPen(QPen(dot_pen, 2))
             painter.drawEllipse(last_p, 4, 4)

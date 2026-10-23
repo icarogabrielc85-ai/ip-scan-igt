@@ -29,12 +29,13 @@ Inspirado na usabilidade ágil e visual clássico do consagrado *Advanced IP Sca
 
 ```mermaid
 flowchart TD
-    subgraph UI_Layer["Camada de Apresentação (PyQt5)"]
+    subgraph UI_Layer["Camada de Apresentação (PyQt5 Modern 2-Tier Ribbon)"]
         MW["MainWindow (IP Scan IGT)"]
-        TB["Barra de Ferramentas (Verificar, IP ▾, Faixa, Máscara, Filtro, ONVIF, Nmap)"]
+        TB1["Tier 1 Header: Brand, Scan ▶, Seletor IP ▾, Faixa IP, Máscara, Busca, Atualizar 🔄"]
+        TB2["Tier 2 Ribbon: Expandir/Recolher, ONVIF, Nmap, Relatório Executivo ▾, Tema, KPIs Dinâmicos"]
         TABS["Abas: [Resultados] & [Favoritos]"]
-        TREE["QTreeWidget com DeviceTreeWidgetItem (Ordenação Numérica IP / Ping)"]
-        BP["Painel Inferior: Osciloscópio Live Ping & Inspetor de Propriedades"]
+        TREE["QTreeWidget com DeviceTreeWidgetItem (Ordenação Numérica IP / Ping, Orbes de Status)"]
+        BP["Painel Inferior: Osciloscópio Live Ping & Ações Categorizadas (Web, RDP, SSH, WoL, RTSP)"]
         NMAP_DLG["NmapDialog (Relatório Estruturado & Terminal Nmap)"]
         IFACE_DLG["NetworkInterfaceDialog (Seletor Detalhado de Placas de Rede)"]
     end
@@ -67,7 +68,8 @@ flowchart TD
         end
     end
 
-    MW --> TB
+    MW --> TB1
+    MW --> TB2
     MW --> TABS
     TABS --> TREE
     MW --> BP

@@ -664,18 +664,20 @@ class MainWindow(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # --- 1. TOP TOOLBAR (Advanced IP Scanner classic style) ---
+        # =========================================================================
+        # 1. TIER 1 - MAIN HEADER BAR (Brand, Scan, IP Range, Mask, Search, Update)
+        # =========================================================================
         top_bar = QFrame()
         top_bar.setObjectName("topBar")
         top_layout = QHBoxLayout(top_bar)
-        top_layout.setContentsMargins(10, 8, 10, 8)
+        top_layout.setContentsMargins(12, 6, 12, 6)
         top_layout.setSpacing(8)
 
         # Brand logo + Program Name + Version Tag
         brand_frame = QFrame()
         brand_frame.setObjectName("brandFrame")
         brand_layout = QHBoxLayout(brand_frame)
-        brand_layout.setContentsMargins(2, 0, 8, 0)
+        brand_layout.setContentsMargins(0, 0, 4, 0)
         brand_layout.setSpacing(6)
 
         icon_lbl = QLabel()
@@ -691,7 +693,7 @@ class MainWindow(QMainWindow):
 
         self.lbl_version_badge = QLabel(get_short_version())
         self.lbl_version_badge.setObjectName("lblVersionBadge")
-        self.lbl_version_badge.setFixedHeight(24)
+        self.lbl_version_badge.setFixedHeight(22)
         self.lbl_version_badge.setToolTip(f"Versão Instalada: {get_full_version()}\nClique para ver o histórico completo de atualizações.")
         self.lbl_version_badge.setCursor(Qt.PointingHandCursor)
         self.lbl_version_badge.mousePressEvent = lambda e: self.show_changelog_dialog()
@@ -703,52 +705,52 @@ class MainWindow(QMainWindow):
         sep_brand = QFrame()
         sep_brand.setFrameShape(QFrame.VLine)
         sep_brand.setFrameShadow(QFrame.Sunken)
-        sep_brand.setStyleSheet("color: #cbd5e1; margin: 4px 2px;")
+        sep_brand.setStyleSheet("color: #475569; margin: 4px 2px;")
         top_layout.addWidget(sep_brand)
 
         # Big "Verificar" green button
         self.btn_start = QPushButton("▶  Verificar")
         self.btn_start.setObjectName("btnStart")
-        self.btn_start.setMinimumHeight(38)
+        self.btn_start.setMinimumHeight(34)
         self.btn_start.setMinimumWidth(115)
         self.btn_start.clicked.connect(self.toggle_scan)
         top_layout.addWidget(self.btn_start)
 
         # "IP" button with network interface picker
-        self.btn_subnet = QPushButton("IP ▾")
+        self.btn_subnet = QPushButton("🖧 IP ▾")
         self.btn_subnet.setObjectName("btnSubnet")
-        self.btn_subnet.setMinimumHeight(38)
-        self.btn_subnet.setMinimumWidth(54)
+        self.btn_subnet.setMinimumHeight(34)
+        self.btn_subnet.setMinimumWidth(60)
         self.btn_subnet.setToolTip("Preencher faixa IP e selecionar Placa de Rede")
         self.btn_subnet.clicked.connect(self.show_interface_menu)
         top_layout.addWidget(self.btn_subnet)
 
         # Range inputs
         lbl_from = QLabel("De:")
-        lbl_from.setStyleSheet("font-weight: 500;")
+        lbl_from.setStyleSheet("font-weight: 600; font-size: 12px;")
         top_layout.addWidget(lbl_from)
 
         self.txt_start_ip = QLineEdit(self.local_info.get("start_ip", "192.168.1.1"))
         self.txt_start_ip.setFixedWidth(120)
-        self.txt_start_ip.setFixedHeight(32)
+        self.txt_start_ip.setFixedHeight(30)
         top_layout.addWidget(self.txt_start_ip)
 
-        lbl_sep = QLabel("-")
-        lbl_sep.setStyleSheet("font-weight: bold; font-size: 14px;")
+        lbl_sep = QLabel("➔")
+        lbl_sep.setStyleSheet("font-weight: bold; font-size: 13px; color: #64748b;")
         top_layout.addWidget(lbl_sep)
 
         self.txt_end_ip = QLineEdit(self.local_info.get("end_ip", "192.168.1.254"))
         self.txt_end_ip.setFixedWidth(120)
-        self.txt_end_ip.setFixedHeight(32)
+        self.txt_end_ip.setFixedHeight(30)
         top_layout.addWidget(self.txt_end_ip)
 
         lbl_mask = QLabel("Máscara:")
-        lbl_mask.setStyleSheet("font-weight: 500;")
+        lbl_mask.setStyleSheet("font-weight: 600; font-size: 12px;")
         top_layout.addWidget(lbl_mask)
 
         self.combo_mask = QComboBox()
-        self.combo_mask.setMinimumWidth(190)
-        self.combo_mask.setFixedHeight(32)
+        self.combo_mask.setMinimumWidth(185)
+        self.combo_mask.setFixedHeight(30)
         self.combo_mask.setToolTip("Máscara de sub-rede / Prefixo CIDR da rede")
         self.populate_mask_combo()
         self.set_mask_cidr(self.local_info.get("cidr", 24))
@@ -758,59 +760,13 @@ class MainWindow(QMainWindow):
         self.txt_start_ip.textChanged.connect(self.auto_detect_mask_from_inputs)
         self.txt_end_ip.textChanged.connect(self.auto_detect_mask_from_inputs)
 
-        top_layout.addSpacing(6)
-
-        # Quick Expand/Collapse buttons
-        btn_expand = QPushButton("+ Expandir")
-        btn_expand.setFixedHeight(32)
-        btn_expand.setToolTip("Expandir todos os serviços e recursos [+]")
-        btn_expand.clicked.connect(self.expand_all_results)
-        top_layout.addWidget(btn_expand)
-
-        btn_collapse = QPushButton("- Recolher")
-        btn_collapse.setFixedHeight(32)
-        btn_collapse.setToolTip("Recolher todos os dispositivos [-]")
-        btn_collapse.clicked.connect(self.collapse_all_results)
-        top_layout.addWidget(btn_collapse)
-
         # Search filter
         self.txt_search = QLineEdit()
-        self.txt_search.setPlaceholderText("Filtrar por nome, IP, MAC...")
+        self.txt_search.setPlaceholderText("🔍 Filtrar por nome, IP, MAC, fabricante...")
         self.txt_search.setClearButtonEnabled(True)
-        self.txt_search.setFixedHeight(32)
+        self.txt_search.setFixedHeight(30)
         self.txt_search.textChanged.connect(self.filter_current_tree)
-        top_layout.addWidget(self.txt_search)
-
-        # ONVIF auto-discovery toggle
-        self.chk_onvif = QCheckBox("🎥 ONVIF")
-        self.chk_onvif.setChecked(True)
-        self.chk_onvif.setFixedHeight(32)
-        self.chk_onvif.setStyleSheet("font-weight: 600; padding: 0 4px;")
-        self.chk_onvif.setToolTip("Descobrir câmeras IP e gravadores NVR via protocolo ONVIF (WS-Discovery)")
-        top_layout.addWidget(self.chk_onvif)
-
-        # Nmap Scanner tool button
-        self.btn_nmap = QPushButton("🔍 Nmap")
-        self.btn_nmap.setFixedHeight(32)
-        self.btn_nmap.setToolTip("Abrir console de auditoria profunda com Nmap")
-        self.btn_nmap.clicked.connect(self.action_open_nmap)
-        top_layout.addWidget(self.btn_nmap)
-
-        # Bottom panel toggle button
-        self.btn_panel_toggle = QPushButton("▲ Ping & Detalhes")
-        self.btn_panel_toggle.setFixedHeight(32)
-        self.btn_panel_toggle.setCheckable(True)
-        self.btn_panel_toggle.setChecked(True)
-        self.btn_panel_toggle.setToolTip("Exibir ou ocultar o painel inferior de osciloscópio e detalhes")
-        self.btn_panel_toggle.clicked.connect(self.toggle_bottom_panel)
-        top_layout.addWidget(self.btn_panel_toggle)
-
-        # Quick Theme button
-        self.btn_theme = QPushButton("Modo Escuro")
-        self.btn_theme.setFixedHeight(32)
-        self.btn_theme.setToolTip("Alternar Tema Claro / Escuro")
-        self.btn_theme.clicked.connect(self.toggle_theme)
-        top_layout.addWidget(self.btn_theme)
+        top_layout.addWidget(self.txt_search, 1)
 
         # 1-Click Update Button
         self.btn_update = QPushButton("🔄 Atualizar")
@@ -821,6 +777,107 @@ class MainWindow(QMainWindow):
         top_layout.addWidget(self.btn_update)
 
         main_layout.addWidget(top_bar)
+
+        # =========================================================================
+        # 2. TIER 2 - RIBBON UTILITY BAR (Expand/Collapse, ONVIF, Nmap, Reports, KPIs)
+        # =========================================================================
+        ribbon_bar = QFrame()
+        ribbon_bar.setObjectName("ribbonBar")
+        ribbon_layout = QHBoxLayout(ribbon_bar)
+        ribbon_layout.setContentsMargins(12, 4, 12, 4)
+        ribbon_layout.setSpacing(6)
+
+        # Quick Expand/Collapse buttons
+        btn_expand = QPushButton("⊞ Expandir Tudo")
+        btn_expand.setObjectName("ribbonBtn")
+        btn_expand.setFixedHeight(28)
+        btn_expand.setToolTip("Expandir todos os serviços e recursos de todos os hosts [+] (Ctrl+E)")
+        btn_expand.clicked.connect(self.expand_all_results)
+        ribbon_layout.addWidget(btn_expand)
+
+        btn_collapse = QPushButton("⊟ Recolher Tudo")
+        btn_collapse.setObjectName("ribbonBtn")
+        btn_collapse.setFixedHeight(28)
+        btn_collapse.setToolTip("Recolher todos os dispositivos [-] (Ctrl+R)")
+        btn_collapse.clicked.connect(self.collapse_all_results)
+        ribbon_layout.addWidget(btn_collapse)
+
+        # Divider
+        sep_r1 = QFrame()
+        sep_r1.setFrameShape(QFrame.VLine)
+        sep_r1.setFrameShadow(QFrame.Sunken)
+        sep_r1.setStyleSheet("color: #475569; margin: 3px 2px;")
+        ribbon_layout.addWidget(sep_r1)
+
+        # ONVIF auto-discovery toggle
+        self.chk_onvif = QCheckBox("🎥 ONVIF")
+        self.chk_onvif.setChecked(True)
+        self.chk_onvif.setFixedHeight(28)
+        self.chk_onvif.setStyleSheet("font-weight: 600; padding: 0 4px;")
+        self.chk_onvif.setToolTip("Descobrir câmeras IP e gravadores NVR via protocolo ONVIF (WS-Discovery)")
+        ribbon_layout.addWidget(self.chk_onvif)
+
+        # Nmap Scanner tool button
+        self.btn_nmap = QPushButton("🔍 Nmap")
+        self.btn_nmap.setObjectName("ribbonBtn")
+        self.btn_nmap.setFixedHeight(28)
+        self.btn_nmap.setToolTip("Abrir console de auditoria profunda com Nmap (Ctrl+N)")
+        self.btn_nmap.clicked.connect(self.action_open_nmap)
+        ribbon_layout.addWidget(self.btn_nmap)
+
+        # Executive Report Export Menu button
+        self.btn_report = QPushButton("📑 Relatório Executivo ▾")
+        self.btn_report.setObjectName("ribbonBtn")
+        self.btn_report.setFixedHeight(28)
+        self.btn_report.setToolTip("Gerar relatório executivo profissional em HTML/PDF, planilha CSV, JSON ou TXT")
+        self.btn_report.clicked.connect(self.show_report_menu)
+        ribbon_layout.addWidget(self.btn_report)
+
+        # Divider
+        sep_r2 = QFrame()
+        sep_r2.setFrameShape(QFrame.VLine)
+        sep_r2.setFrameShadow(QFrame.Sunken)
+        sep_r2.setStyleSheet("color: #475569; margin: 3px 2px;")
+        ribbon_layout.addWidget(sep_r2)
+
+        # Bottom panel toggle button
+        self.btn_panel_toggle = QPushButton("📈 Monitor & Detalhes")
+        self.btn_panel_toggle.setObjectName("ribbonBtn")
+        self.btn_panel_toggle.setFixedHeight(28)
+        self.btn_panel_toggle.setCheckable(True)
+        self.btn_panel_toggle.setChecked(True)
+        self.btn_panel_toggle.setToolTip("Exibir ou ocultar o painel inferior de osciloscópio e detalhes (Ctrl+P)")
+        self.btn_panel_toggle.clicked.connect(self.toggle_bottom_panel)
+        ribbon_layout.addWidget(self.btn_panel_toggle)
+
+        # Quick Theme button
+        self.btn_theme = QPushButton("Modo Escuro")
+        self.btn_theme.setObjectName("ribbonBtn")
+        self.btn_theme.setFixedHeight(28)
+        self.btn_theme.setToolTip("Alternar Tema Claro / Escuro (Ctrl+T)")
+        self.btn_theme.clicked.connect(self.toggle_theme)
+        ribbon_layout.addWidget(self.btn_theme)
+
+        # Stretch spacer
+        ribbon_layout.addStretch()
+
+        # Real-time KPI Dashboard Badges
+        self.kpi_online = QLabel("● 0 Online")
+        self.kpi_online.setObjectName("kpiOnline")
+        self.kpi_online.setFixedHeight(24)
+        ribbon_layout.addWidget(self.kpi_online)
+
+        self.kpi_latency = QLabel("⚡ -- ms")
+        self.kpi_latency.setObjectName("kpiLatency")
+        self.kpi_latency.setFixedHeight(24)
+        ribbon_layout.addWidget(self.kpi_latency)
+
+        self.kpi_services = QLabel("🛡️ 0 Serviços")
+        self.kpi_services.setObjectName("kpiServices")
+        self.kpi_services.setFixedHeight(24)
+        ribbon_layout.addWidget(self.kpi_services)
+
+        main_layout.addWidget(ribbon_bar)
 
         # --- 2. MAIN CENTRAL SPLITTER (Vertical) ---
         self.main_splitter = QSplitter(Qt.Vertical)
@@ -923,30 +980,56 @@ class MainWindow(QMainWindow):
         self.details_table.setAlternatingRowColors(True)
         right_box.addWidget(self.details_table)
 
-        # Action buttons
+        # Categorized action buttons
         actions_box = QHBoxLayout()
         actions_box.setSpacing(6)
+
+        # Web category
         btn_open_http = QPushButton("🌐 HTTP")
+        btn_open_http.setObjectName("btnActionWeb")
+        btn_open_http.setToolTip("Abrir página Web HTTP do dispositivo no navegador padrão")
         btn_open_http.clicked.connect(self.action_open_http)
+
         btn_open_https = QPushButton("🔒 HTTPS")
+        btn_open_https.setObjectName("btnActionWeb")
+        btn_open_https.setToolTip("Abrir painel seguro HTTPS do dispositivo no navegador")
         btn_open_https.clicked.connect(self.action_open_https)
+
+        # Remote Access category
         btn_open_smb = QPushButton("📁 SMB")
+        btn_open_smb.setObjectName("btnActionRemote")
+        btn_open_smb.setToolTip("Acessar compartilhamento de arquivos Windows / Samba da máquina")
         btn_open_smb.clicked.connect(self.action_open_smb)
+
         btn_rdp = QPushButton("🖥️ RDP")
-        btn_rdp.setToolTip("Conectar via Área de Trabalho Remota (mstsc / Remmina / xfreerdp)")
+        btn_rdp.setObjectName("btnActionRemote")
+        btn_rdp.setToolTip("Conectar via Área de Trabalho Remota (Remmina / xfreerdp / mstsc)")
         btn_rdp.clicked.connect(self.action_open_rdp)
+
         btn_ssh = QPushButton("💻 SSH")
-        btn_ssh.setToolTip("Abrir sessão SSH em novo terminal")
+        btn_ssh.setObjectName("btnActionRemote")
+        btn_ssh.setToolTip("Abrir console de terminal SSH remoto (Konsole / GNOME Terminal / CMD)")
         btn_ssh.clicked.connect(self.action_open_ssh)
+
         btn_wol = QPushButton("⚡ WoL")
+        btn_wol.setObjectName("btnActionRemote")
         btn_wol.setToolTip("Enviar Magic Packet Wake-on-LAN para ligar o computador pelo MAC")
         btn_wol.clicked.connect(self.action_open_wol)
-        btn_rtsp = QPushButton("🎬 Vídeo")
+
+        # Diagnostic & Multimedia category
+        btn_rtsp = QPushButton("🎬 RTSP")
+        btn_rtsp.setObjectName("btnActionDiag")
         btn_rtsp.setToolTip("Assistir transmissão de vídeo em tempo real da câmera (RTSP / ONVIF)")
         btn_rtsp.clicked.connect(self.action_open_rtsp)
+
         btn_nmap_bottom = QPushButton("🔍 Nmap")
+        btn_nmap_bottom.setObjectName("btnActionDiag")
+        btn_nmap_bottom.setToolTip("Executar auditoria profunda de portas com Nmap neste host")
         btn_nmap_bottom.clicked.connect(self.action_open_nmap)
-        btn_copy_ip = QPushButton("Copiar IP")
+
+        btn_copy_ip = QPushButton("📋 Copiar IP")
+        btn_copy_ip.setObjectName("btnActionDiag")
+        btn_copy_ip.setToolTip("Copiar endereço IP para a área de transferência")
         btn_copy_ip.clicked.connect(self.action_copy_current_ip)
 
         actions_box.addWidget(btn_open_http)
@@ -993,7 +1076,7 @@ class MainWindow(QMainWindow):
         tree.setHeaderLabels([
             "Status",
             "Nome",
-            "IP",
+            "Endereço IP",
             "Fabricante",
             "Endereço MAC",
             "Ping",
@@ -1009,19 +1092,31 @@ class MainWindow(QMainWindow):
         tree.header().sectionClicked.connect(lambda col, t=tree: self.on_tree_header_clicked(t, col))
 
         tree.header().setSectionResizeMode(0, QHeaderView.Fixed)
-        tree.header().resizeSection(0, 55)
+        tree.header().resizeSection(0, 56)
         tree.header().setSectionResizeMode(1, QHeaderView.Interactive)
-        tree.header().resizeSection(1, 280)
+        tree.header().resizeSection(1, 260)
         tree.header().setSectionResizeMode(2, QHeaderView.Interactive)
-        tree.header().resizeSection(2, 135)
+        tree.header().resizeSection(2, 140)
         tree.header().setSectionResizeMode(3, QHeaderView.Interactive)
-        tree.header().resizeSection(3, 190)
+        tree.header().resizeSection(3, 200)
         tree.header().setSectionResizeMode(4, QHeaderView.Interactive)
-        tree.header().resizeSection(4, 140)
+        tree.header().resizeSection(4, 145)
         tree.header().setSectionResizeMode(5, QHeaderView.Interactive)
         tree.header().resizeSection(5, 85)
         tree.header().setSectionResizeMode(6, QHeaderView.Stretch)
         return tree
+
+    def show_report_menu(self):
+        menu = QMenu(self)
+        act_html = menu.addAction("📑  Relatório Executivo HTML / PDF (Ctrl+H)")
+        act_html.triggered.connect(lambda: self.export_results("html"))
+        act_csv = menu.addAction("📊  Exportar Tabela CSV (Ctrl+S)")
+        act_csv.triggered.connect(lambda: self.export_results("csv"))
+        act_json = menu.addAction("🗄️  Exportar Dados JSON")
+        act_json.triggered.connect(lambda: self.export_results("json"))
+        act_txt = menu.addAction("📝  Exportar Resumo TXT")
+        act_txt.triggered.connect(lambda: self.export_results("txt"))
+        menu.exec_(self.btn_report.mapToGlobal(QPoint(0, self.btn_report.height() + 2)))
 
     def on_tree_header_clicked(self, tree: QTreeWidget, col: int):
         order = tree.header().sortIndicatorOrder()
@@ -1088,22 +1183,6 @@ class MainWindow(QMainWindow):
             return
 
         menu = QMenu(self)
-        menu.setStyleSheet("""
-            QMenu {
-                background-color: #ffffff;
-                border: 1px solid #cbd5e1;
-                border-radius: 6px;
-                padding: 4px;
-            }
-            QMenu::item {
-                padding: 6px 16px;
-                font-size: 12px;
-            }
-            QMenu::item:selected {
-                background-color: #e0f2fe;
-                color: #0369a1;
-            }
-        """)
 
         hdr = menu.addAction("── Placas de Rede Disponíveis ──")
         hdr.setEnabled(False)
@@ -1367,7 +1446,9 @@ class MainWindow(QMainWindow):
         if running:
             self.btn_start.setText("⏹  Parar")
             self.btn_start.setObjectName("btnStop")
-            self.btn_start.setStyle(self.btn_start.style())
+            self.btn_start.style().unpolish(self.btn_start)
+            self.btn_start.style().polish(self.btn_start)
+            self.btn_start.update()
             self.act_scan.setEnabled(False)
             self.act_stop.setEnabled(True)
             self.prog_bar.setMaximum(total)
@@ -1376,7 +1457,9 @@ class MainWindow(QMainWindow):
         else:
             self.btn_start.setText("▶  Verificar")
             self.btn_start.setObjectName("btnStart")
-            self.btn_start.setStyle(self.btn_start.style())
+            self.btn_start.style().unpolish(self.btn_start)
+            self.btn_start.style().polish(self.btn_start)
+            self.btn_start.update()
             self.act_scan.setEnabled(True)
             self.act_stop.setEnabled(False)
             self.prog_bar.setVisible(False)
@@ -1421,11 +1504,12 @@ class MainWindow(QMainWindow):
         parent_item.setData(2, Qt.UserRole, rec.ip)
         parent_item.setData(5, Qt.UserRole, rec.rtt_ms)
 
-        # Col 0: Status Orb (Green circle for online, gray for offline)
+        # Col 0: Status Orb (Green circle for online, muted circle for offline)
         parent_item.setText(0, "●" if rec.alive else "○")
         parent_item.setTextAlignment(0, Qt.AlignCenter)
-        parent_item.setForeground(0, QColor("#16a34a") if rec.alive else QColor("#94a3b8"))
-        font_status = QFont("Noto Sans", 14, QFont.Bold)
+        orb_col = QColor("#10b981") if rec.alive else (QColor("#64748b") if self.is_dark_mode else QColor("#94a3b8"))
+        parent_item.setForeground(0, orb_col)
+        font_status = QFont("Segoe UI", 12, QFont.Bold)
         parent_item.setFont(0, font_status)
 
         # Col 1: Nome (Hostname or device type)
@@ -1445,11 +1529,11 @@ class MainWindow(QMainWindow):
         parent_item.setText(5, rec.format_ping())
         if rec.rtt_ms >= 0:
             if rec.rtt_ms < 2.0:
-                parent_item.setForeground(5, QColor("#107c41") if not self.is_dark_mode else QColor("#10b981"))
-            elif rec.rtt_ms < 20.0:
-                parent_item.setForeground(5, QColor("#0969da") if not self.is_dark_mode else QColor("#38bdf8"))
+                parent_item.setForeground(5, QColor("#10b981") if self.is_dark_mode else QColor("#059669"))
+            elif rec.rtt_ms < 25.0:
+                parent_item.setForeground(5, QColor("#38bdf8") if self.is_dark_mode else QColor("#0284c7"))
             else:
-                parent_item.setForeground(5, QColor("#b45309") if not self.is_dark_mode else QColor("#f59e0b"))
+                parent_item.setForeground(5, QColor("#fbbf24") if self.is_dark_mode else QColor("#d97706"))
 
         # Col 6: Comentários / Serviços
         comment_parts = []
@@ -1497,13 +1581,19 @@ class MainWindow(QMainWindow):
 
         services_count = sum(1 for r in records_pool.values() if r.open_ports)
         rtts = [r.rtt_ms for r in records_pool.values() if r.rtt_ms >= 0]
-        avg_rtt = f"{sum(rtts)/len(rtts):.2f} ms" if rtts else "--"
+        avg_rtt = f"{sum(rtts)/len(rtts):.2f} ms" if rtts else "-- ms"
 
         self.lbl_stats.setText(
             f"Resultados: {online_count} dispositivo(s) online  |  "
             f"{services_count} com serviços  |  "
             f"Latência média: {avg_rtt}"
         )
+        if hasattr(self, "kpi_online"):
+            self.kpi_online.setText(f"● {online_count} Online")
+        if hasattr(self, "kpi_latency"):
+            self.kpi_latency.setText(f"⚡ {avg_rtt}")
+        if hasattr(self, "kpi_services"):
+            self.kpi_services.setText(f"🛡️ {services_count} Serviços")
 
     def on_tree_selection_changed(self, tree: QTreeWidget):
         items = tree.selectedItems()
@@ -2272,25 +2362,30 @@ class MainWindow(QMainWindow):
     def show_changelog_dialog(self):
         dlg = QDialog(self)
         dlg.setWindowTitle("IP Scan IGT — Histórico de Versões e Atualizações")
-        dlg.resize(680, 520)
+        dlg.resize(700, 540)
         vbox = QVBoxLayout(dlg)
         vbox.setContentsMargins(18, 18, 18, 18)
         vbox.setSpacing(12)
 
-        lbl_hdr = QLabel(f"<h2>Histórico de Versões do IP Scan IGT</h2><p style='color: #64748b; font-size: 13px;'>Versão ativa no sistema: <b>{get_full_version()}</b></p>")
+        title_color = "#38bdf8" if self.is_dark_mode else "#0969da"
+        sub_color = "#94a3b8" if self.is_dark_mode else "#64748b"
+        border_color = "#334155" if self.is_dark_mode else "#e2e8f0"
+        body_color = "#f1f5f9" if self.is_dark_mode else "#1e293b"
+
+        lbl_hdr = QLabel(f"<h2>Histórico de Versões do IP Scan IGT</h2><p style='color: {sub_color}; font-size: 13px;'>Versão ativa no sistema: <b style='color: {title_color};'>{get_full_version()}</b></p>")
         vbox.addWidget(lbl_hdr)
 
         text_edit = QTextBrowser()
         text_edit.setOpenExternalLinks(True)
-        html = ["<div style='font-family: sans-serif; line-height: 1.5;'>"]
+        html = [f"<div style='font-family: Segoe UI, Noto Sans, sans-serif; line-height: 1.6; color: {body_color};'>"]
         for item in VERSION_HISTORY:
-            html.append(f"<h3 style='color: #0969da; margin-bottom: 2px;'>{item['version']} — {item['title']}</h3>")
-            html.append(f"<p style='color: #64748b; font-size: 12px; margin-top: 0;'>Data de Lançamento: {item['date']}</p>")
-            html.append("<ul>")
+            html.append(f"<h3 style='color: {title_color}; margin-bottom: 2px;'>{item['version']} — {item['title']}</h3>")
+            html.append(f"<p style='color: {sub_color}; font-size: 12px; margin-top: 0;'>Data de Lançamento: {item['date']}</p>")
+            html.append("<ul style='margin-top: 4px;'>")
             for c in item["changes"]:
-                html.append(f"<li style='margin-bottom: 4px;'>{c}</li>")
+                html.append(f"<li style='margin-bottom: 5px;'>{c}</li>")
             html.append("</ul>")
-            html.append("<hr style='border: none; border-top: 1px solid #e2e8f0; margin: 15px 0;'>")
+            html.append(f"<hr style='border: none; border-top: 1px solid {border_color}; margin: 15px 0;'>")
         html.append("</div>")
         text_edit.setHtml("".join(html))
         vbox.addWidget(text_edit)
