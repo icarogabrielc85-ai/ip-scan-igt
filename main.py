@@ -93,7 +93,7 @@ def open_terminal_ping(ip: str):
         subprocess.Popen(["xterm", "-e", f"ping {ip}"])
 
 from PyQt5.QtCore import QObject, QPoint, QProcess, QSize, Qt, QThread, QTimer, QUrl, pyqtSignal, pyqtSlot
-from PyQt5.QtGui import QColor, QDesktopServices, QFont, QIcon
+from PyQt5.QtGui import QColor, QDesktopServices, QFont, QIcon, QPixmap
 from PyQt5.QtWidgets import (
     QAction,
     QApplication,
@@ -594,6 +594,41 @@ class MainWindow(QMainWindow):
         top_layout.setContentsMargins(10, 8, 10, 8)
         top_layout.setSpacing(8)
 
+        # Brand logo + Program Name + Version Tag
+        brand_frame = QFrame()
+        brand_frame.setObjectName("brandFrame")
+        brand_layout = QHBoxLayout(brand_frame)
+        brand_layout.setContentsMargins(2, 0, 8, 0)
+        brand_layout.setSpacing(6)
+
+        icon_lbl = QLabel()
+        icon_path = get_resource_path("icon.png")
+        if os.path.exists(icon_path):
+            pix = QPixmap(icon_path).scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            icon_lbl.setPixmap(pix)
+        brand_layout.addWidget(icon_lbl)
+
+        lbl_app_name = QLabel("IP Scan IGT")
+        lbl_app_name.setObjectName("lblAppName")
+        brand_layout.addWidget(lbl_app_name)
+
+        self.lbl_version_badge = QLabel(get_short_version())
+        self.lbl_version_badge.setObjectName("lblVersionBadge")
+        self.lbl_version_badge.setFixedHeight(24)
+        self.lbl_version_badge.setToolTip(f"Versão Instalada: {get_full_version()}\nClique para ver o histórico completo de atualizações.")
+        self.lbl_version_badge.setCursor(Qt.PointingHandCursor)
+        self.lbl_version_badge.mousePressEvent = lambda e: self.show_changelog_dialog()
+        brand_layout.addWidget(self.lbl_version_badge)
+
+        top_layout.addWidget(brand_frame)
+
+        # Subtle vertical separator line
+        sep_brand = QFrame()
+        sep_brand.setFrameShape(QFrame.VLine)
+        sep_brand.setFrameShadow(QFrame.Sunken)
+        sep_brand.setStyleSheet("color: #cbd5e1; margin: 4px 2px;")
+        top_layout.addWidget(sep_brand)
+
         # Big "Verificar" green button
         self.btn_start = QPushButton("▶  Verificar")
         self.btn_start.setObjectName("btnStart")
@@ -707,13 +742,6 @@ class MainWindow(QMainWindow):
         self.btn_update.setToolTip("Verificar e aplicar atualizações do repositório em 1 clique")
         self.btn_update.clicked.connect(self.check_and_apply_update)
         top_layout.addWidget(self.btn_update)
-
-        # Version Badge Label
-        self.lbl_version_badge = QLabel(get_short_version())
-        self.lbl_version_badge.setObjectName("lblVersionBadge")
-        self.lbl_version_badge.setFixedHeight(28)
-        self.lbl_version_badge.setToolTip(f"Versão Instalada: {get_full_version()}\nClique em 'Atualizar' para checar novas versões.")
-        top_layout.addWidget(self.lbl_version_badge)
 
         main_layout.addWidget(top_bar)
 

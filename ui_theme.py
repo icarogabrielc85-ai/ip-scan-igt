@@ -160,14 +160,25 @@ QPushButton#btnUpdate:hover {
     color: #0f172a;
 }
 
+QLabel#lblAppName {
+    font-weight: 800;
+    font-size: 14px;
+    color: #f1f5f9;
+}
+
 QLabel#lblVersionBadge {
-    color: #94a3b8;
-    background-color: #1e293b;
-    border: 1px solid #334155;
+    color: #38bdf8;
+    background-color: #0c4a6e;
+    border: 1px solid #0369a1;
     border-radius: 4px;
     font-weight: bold;
     font-size: 11px;
-    padding: 2px 8px;
+    padding: 2px 7px;
+}
+
+QLabel#lblVersionBadge:hover {
+    background-color: #075985;
+    color: #e0f2fe;
 }
 
 QTreeWidget, QTableWidget {
@@ -424,14 +435,25 @@ QPushButton#btnUpdate:hover {
     background-color: #0369a1;
 }
 
+QLabel#lblAppName {
+    font-weight: 800;
+    font-size: 14px;
+    color: #0f172a;
+}
+
 QLabel#lblVersionBadge {
-    color: #475569;
-    background-color: #f1f5f9;
-    border: 1px solid #cbd5e1;
+    color: #0284c7;
+    background-color: #e0f2fe;
+    border: 1px solid #bae6fd;
     border-radius: 4px;
     font-weight: bold;
     font-size: 11px;
-    padding: 2px 8px;
+    padding: 2px 7px;
+}
+
+QLabel#lblVersionBadge:hover {
+    background-color: #bae6fd;
+    color: #0369a1;
 }
 
 /* Tree & Tables style (Advanced IP Scanner Look) */
