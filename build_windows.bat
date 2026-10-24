@@ -73,6 +73,12 @@ if exist "dist\IPScanIGT.exe" (
     echo [SUCESSO] Compilacao concluida com exito!
     echo Executavel gerado em: dist\IPScanIGT.exe
     echo ======================================================================
+
+    if exist "C:\Program Files (x86)\Inno Setup 6\iscc.exe" (
+        echo.
+        echo [*] Gerando instalador de configuracao IPScanIGT-Setup.exe...
+        "C:\Program Files (x86)\Inno Setup 6\iscc.exe" ipscan_windows.iss
+    )
     echo.
     echo Abrindo a pasta dist...
     explorer dist

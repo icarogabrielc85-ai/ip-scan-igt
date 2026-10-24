@@ -54,7 +54,23 @@ executar_windows.bat
 
 ---
 
-## 📦 Como Compilar Executáveis Autônomos
+## 📦 Downloads Oficiais Pré-Compilados (.deb, .msi, .exe)
+
+Você pode baixar os instaladores prontos para uso direto na aba **[Releases](https://github.com/icarogabrielc85-ai/ip-scan-igt/releases)** do repositório:
+
+### 🐧 Para Linux (Ubuntu, Debian, Linux Mint, Pop!_OS, Kali):
+- **`ipscan-igt_2.5.0_amd64.deb`** — Pacote Debian oficial. Instale dando duplo-clique ou pelo terminal:
+  ```bash
+  sudo apt install ./ipscan-igt_2.5.0_amd64.deb
+  ```
+- **`IPScanIGT`** — Executável binário portátil x64 para qualquer distribuição Linux.
+
+### 🪟 Para Windows 10 e Windows 11:
+- **`IPScanIGT.msi`** — Instalador MSI corporativo com registro no Painel de Controle e Menu Iniciar.
+- **`IPScanIGT-Setup-2.5.0.exe`** — Instalador assistente completo com atalho na Área de Trabalho e desinstalador limpo.
+- **`IPScanIGT.exe`** — Executável portátil autônomo (não necessita instalação).
+
+---
 
 ### 🪟 No Windows (Gerar `IPScanIGT.exe`)
 Basta dar um duplo-clique no arquivo:

@@ -61,6 +61,8 @@ VERSION_HISTORY = [
         "date": "24/10/2026",
         "title": "Doutor de Aptidão do Sistema, Auto-Instalador de Dependências & Resolução 800x600",
         "changes": [
+            "Geração oficial de pacotes pré-compilados: pacote Debian (.deb) para Linux e instaladores .msi e .exe (Inno Setup) para Windows.",
+            "Pipeline de compilação contínua no GitHub Actions publicando automaticamente os instaladores (.deb, .msi, .exe) na aba Releases.",
             "Script inteligente de instalação e resolução automática de dependências para Linux (instalar_linux.sh) e Windows (instalar_windows.bat).",
             "Módulo de Diagnóstico e Aptidão do Sistema (System Doctor) integrado diretamente na interface gráfica.",
             "Detecção em tempo real e comando de instalação em 1 clique para pacotes ausentes (FFplay, VLC, Nmap, Remmina, OpenSSH).",

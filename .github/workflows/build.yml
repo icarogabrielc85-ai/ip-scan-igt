@@ -1,4 +1,4 @@
-name: Build IP Scan IGT (Linux & Windows)
+name: Build & Package IP Scan IGT (Linux .deb & Windows .msi / .exe)
 
 on:
   push:
@@ -7,9 +7,12 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
-    name: Build Windows Executable (.exe)
+    name: Build Windows (.exe, Setup & .msi)
     runs-on: windows-latest
     steps:
       - name: Check out repository
@@ -26,19 +29,42 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Build Windows Executable
+      - name: Build Windows Standalone Executable (.exe)
         run: |
           pyinstaller --clean ipscan_windows.spec
 
-      - name: Upload Windows Artifact
+      - name: Build Windows Inno Setup Installer (.exe)
+        run: |
+          choco install innosetup -y
+          & "C:\Program Files (x86)\Inno Setup 6\iscc.exe" ipscan_windows.iss
+
+      - name: Build Windows MSI Package (.msi)
+        run: |
+          $wixBin = "C:\Program Files (x86)\WiX Toolset v3.11\bin"
+          if (Test-Path "$wixBin\candle.exe") {
+            & "$wixBin\candle.exe" -arch x64 ipscan_windows.wxs -out dist\ipscan_windows.wixobj
+            & "$wixBin\light.exe" -ext WixUIExtension dist\ipscan_windows.wixobj -out dist\IPScanIGT.msi
+          }
+
+      - name: Stage Windows Output Files
+        run: |
+          if (Test-Path "Output\IPScanIGT-Setup-*.exe") {
+            Copy-Item "Output\IPScanIGT-Setup-*.exe" -Destination "dist\"
+          }
+          Get-ChildItem -Path dist\
+
+      - name: Upload Windows Artifacts (.exe and .msi)
         uses: actions/upload-artifact@v4
         with:
           name: IPScanIGT-Windows-x64
-          path: dist/IPScanIGT.exe
-          if-no-files-found: error
+          path: |
+            dist/IPScanIGT.exe
+            dist/IPScanIGT-Setup-*.exe
+            dist/*.msi
+          if-no-files-found: warn
 
   build-linux:
-    name: Build Linux Executable (Binary)
+    name: Build Linux Binary & Debian Package (.deb)
     runs-on: ubuntu-22.04
     steps:
       - name: Check out repository
@@ -47,7 +73,7 @@ jobs:
       - name: Install system libraries
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-glx libegl1 libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 libxcb-shape0
+          sudo apt-get install -y libgl1-mesa-glx libegl1 libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 libxcb-shape0 dpkg-dev
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -60,13 +86,66 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Build Linux Executable
+      - name: Build Linux Standalone Executable
         run: |
           pyinstaller --clean ipscan_linux.spec
 
-      - name: Upload Linux Artifact
+      - name: Build Debian Package (.deb)
+        run: |
+          chmod +x build_deb.sh
+          ./build_deb.sh
+
+      - name: Upload Linux Artifacts (Binary & .deb)
         uses: actions/upload-artifact@v4
         with:
           name: IPScanIGT-Linux-x64
-          path: dist/IPScanIGT
+          path: |
+            dist/IPScanIGT
+            dist/*.deb
           if-no-files-found: error
+
+  release:
+    name: Publicar Release Oficial (.deb, .msi, .exe)
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release_files
+          find artifacts -type f \( -name "*.deb" -o -name "*.msi" -o -name "*.exe" -o -name "IPScanIGT" \) -exec cp {} release_files/ \;
+          ls -la release_files/
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v2.5.0
+          name: "IP Scan IGT v2.5.0 — Pacotes .deb (Linux), .msi e .exe (Windows)"
+          body: |
+            ## 📦 Downloads Oficiais do IP Scan IGT (v2.5.0)
+
+            Selecione o pacote compatível com seu sistema operacional:
+
+            ### 🐧 Linux (Ubuntu, Debian, Pop!_OS, Linux Mint, Kali):
+            - **Pacote Debian (.deb):** `ipscan-igt_2.5.0_amd64.deb`  
+              *(Instale dando duplo-clique ou pelo terminal: `sudo apt install ./ipscan-igt_2.5.0_amd64.deb`)*
+            - **Binário Portátil:** `IPScanIGT`
+
+            ### 🪟 Windows 10 e Windows 11:
+            - **Instalador MSI (.msi):** `IPScanIGT.msi`  
+              *(Instalação padrão corporativa do Windows)*
+            - **Instalador Assistente (.exe):** `IPScanIGT-Setup-2.5.0.exe`  
+              *(Instala o programa e cria o atalho oficial na Área de Trabalho)*
+            - **Executável Portátil (.exe):** `IPScanIGT.exe`  
+              *(Executa direto com duplo-clique sem precisar instalar)*
+          files: |
+            release_files/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
