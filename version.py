@@ -13,6 +13,7 @@ APP_RELEASE_DATE = "24/10/2026"
 def get_git_info(repo_dir: str = None) -> tuple:
     """
     Obtém a contagem total de commits e o hash curto do Git para compor o build do versionamento.
+    Suporta fallback para metadados de instalação ZIP (.version_meta.json) quando o Git não estiver disponível.
     """
     if not repo_dir:
         repo_dir = os.path.dirname(os.path.abspath(__file__))
@@ -31,9 +32,25 @@ def get_git_info(repo_dir: str = None) -> tuple:
             stderr=subprocess.DEVNULL,
             timeout=1.5,
         ).strip()
-        return count, short_hash
+        if count and short_hash:
+            return count, short_hash
     except Exception:
-        return "", ""
+        pass
+
+    # Fallback to .version_meta.json for non-git / manual zip installations
+    try:
+        meta_file = os.path.join(repo_dir, ".version_meta.json")
+        if os.path.exists(meta_file):
+            import json
+            with open(meta_file, "r", encoding="utf-8") as f:
+                d = json.load(f)
+                sha = d.get("commit_sha", "").strip()
+                if sha:
+                    return "Release", sha
+    except Exception:
+        pass
+
+    return "", ""
 
 
 def get_full_version(repo_dir: str = None) -> str:

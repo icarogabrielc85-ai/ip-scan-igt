@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import concurrent.futures
 import csv
+import io
 import ipaddress
 import json
 import os
@@ -9,6 +10,8 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.request
+import zipfile
 from typing import Dict, List, Optional
 
 # Ensure package directory is in sys.path
@@ -294,7 +297,7 @@ class AppUpdateWorker(QThread):
 
     def run(self):
         try:
-            self.progress_status.emit("Verificando repositório Git...")
+            self.progress_status.emit("Verificando ambiente de instalação...")
             is_git = False
             try:
                 res = subprocess.run(
@@ -307,99 +310,257 @@ class AppUpdateWorker(QThread):
                 if res.returncode == 0 and "true" in res.stdout:
                     is_git = True
             except Exception:
-                pass
+                is_git = False
 
             if is_git:
-                old_ver = get_full_version(self.repo_dir)
-                self.progress_status.emit(f"Versão atual instalada: {old_ver}\nConsultando atualizações no GitHub...")
-                fetch_res = subprocess.run(
-                    ["git", "fetch", "origin", "main"],
-                    cwd=self.repo_dir,
-                    capture_output=True,
-                    text=True,
-                    timeout=15
-                )
-                if fetch_res.returncode != 0:
-                    err_msg = fetch_res.stderr.strip() or fetch_res.stdout.strip()
-                    self.update_finished.emit(False, f"Não foi possível conectar ao GitHub:\n{err_msg}", False)
-                    return
-
-                rev_res = subprocess.run(
-                    ["git", "rev-list", "HEAD..origin/main", "--count"],
-                    cwd=self.repo_dir,
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
-                count = 0
-                if rev_res.returncode == 0:
-                    try:
-                        count = int(rev_res.stdout.strip())
-                    except ValueError:
-                        count = 0
-
-                if count == 0:
-                    self.progress_status.emit(f"O aplicativo já está na versão mais recente: {old_ver}")
-                    self.update_finished.emit(
-                        True,
-                        f"O IP Scan IGT já está na versão mais recente!\n\n"
-                        f"• Versão Atual: {old_ver}\n"
-                        f"Nenhuma nova atualização disponível no momento.",
-                        False
-                    )
-                    return
-
-                self.progress_status.emit(f"Baixando e aplicando {count} nova(s) atualização(ões)...")
-                pull_res = subprocess.run(
-                    ["git", "pull", "--rebase", "origin", "main"],
-                    cwd=self.repo_dir,
-                    capture_output=True,
-                    text=True,
-                    timeout=25
-                )
-                if pull_res.returncode != 0:
-                    pull_res = subprocess.run(
-                        ["git", "pull", "origin", "main"],
-                        cwd=self.repo_dir,
-                        capture_output=True,
-                        text=True,
-                        timeout=25
-                    )
-                    if pull_res.returncode != 0:
-                        err_str = pull_res.stderr.strip() or pull_res.stdout.strip()
-                        self.update_finished.emit(False, f"Erro ao aplicar atualizações via git pull:\n{err_str}", False)
-                        return
-
-                self.progress_status.emit("Verificando dependências Python...")
-                req_file = os.path.join(self.repo_dir, "requirements.txt")
-                if os.path.exists(req_file):
-                    try:
-                        pip_args = [sys.executable, "-m", "pip", "install", "-r", req_file, "--quiet"]
-                        if not IS_WINDOWS:
-                            pip_args.extend(["--break-system-packages", "--user"])
-                        subprocess.run(pip_args, cwd=self.repo_dir, timeout=30)
-                    except Exception:
-                        pass
-
-                new_ver = get_full_version(self.repo_dir)
-                self.progress_status.emit(f"Atualização concluída: {old_ver} ➔ {new_ver}")
-                self.update_finished.emit(
-                    True,
-                    f"O IP Scan IGT foi atualizado com sucesso!\n\n"
-                    f"• Versão Anterior: {old_ver}\n"
-                    f"• Nova Versão Instalada: {new_ver}\n"
-                    f"• {count} melhoria(s) e alterações integradas.\n\n"
-                    f"Deseja reiniciar o aplicativo agora para carregar a nova versão?",
-                    True
-                )
+                self._update_via_git()
             else:
-                self.update_finished.emit(
-                    False,
-                    "Modo de instalação manual: o diretório local não é um repositório Git rastreável para auto-atualização.",
-                    False
-                )
+                self._update_via_http_zip()
         except Exception as e:
             self.update_finished.emit(False, f"Erro durante o processo de atualização:\n{str(e)}", False)
+
+    def _update_via_git(self):
+        old_ver = get_full_version(self.repo_dir)
+        self.progress_status.emit(f"Versão atual instalada: {old_ver}\nConsultando atualizações no GitHub...")
+        fetch_res = subprocess.run(
+            ["git", "fetch", "origin", "main"],
+            cwd=self.repo_dir,
+            capture_output=True,
+            text=True,
+            timeout=15
+        )
+        if fetch_res.returncode != 0:
+            err_msg = fetch_res.stderr.strip() or fetch_res.stdout.strip()
+            self.update_finished.emit(False, f"Não foi possível conectar ao GitHub:\n{err_msg}", False)
+            return
+
+        rev_res = subprocess.run(
+            ["git", "rev-list", "HEAD..origin/main", "--count"],
+            cwd=self.repo_dir,
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        count = 0
+        if rev_res.returncode == 0:
+            try:
+                count = int(rev_res.stdout.strip())
+            except ValueError:
+                count = 0
+
+        if count == 0:
+            self.progress_status.emit(f"O aplicativo já está na versão mais recente: {old_ver}")
+            self.update_finished.emit(
+                True,
+                f"O IP Scan IGT já está na versão mais recente!\n\n"
+                f"• Versão Atual: {old_ver}\n"
+                f"Nenhuma nova atualização disponível no momento.",
+                False
+            )
+            return
+
+        self.progress_status.emit(f"Baixando e aplicando {count} nova(s) atualização(ões)...")
+        pull_res = subprocess.run(
+            ["git", "pull", "--rebase", "origin", "main"],
+            cwd=self.repo_dir,
+            capture_output=True,
+            text=True,
+            timeout=25
+        )
+        if pull_res.returncode != 0:
+            pull_res = subprocess.run(
+                ["git", "pull", "origin", "main"],
+                cwd=self.repo_dir,
+                capture_output=True,
+                text=True,
+                timeout=25
+            )
+            if pull_res.returncode != 0:
+                err_str = pull_res.stderr.strip() or pull_res.stdout.strip()
+                self.update_finished.emit(False, f"Erro ao aplicar atualizações via git pull:\n{err_str}", False)
+                return
+
+        self._update_python_dependencies()
+
+        new_ver = get_full_version(self.repo_dir)
+        self.progress_status.emit(f"Atualização concluída: {old_ver} ➔ {new_ver}")
+        self.update_finished.emit(
+            True,
+            f"O IP Scan IGT foi atualizado com sucesso!\n\n"
+            f"• Versão Anterior: {old_ver}\n"
+            f"• Nova Versão Instalada: {new_ver}\n"
+            f"• {count} melhoria(s) e alterações integradas.\n\n"
+            f"Deseja reiniciar o aplicativo agora para carregar a nova versão?",
+            True
+        )
+
+    def _update_via_http_zip(self):
+        old_ver = get_full_version(self.repo_dir)
+        self.progress_status.emit(f"Versão atual instalada: {old_ver}\nConsultando atualizações no GitHub...")
+
+        # 1. Se for aplicativo compilado (.exe / PyInstaller)
+        is_frozen = getattr(sys, "frozen", False)
+        if is_frozen:
+            self.progress_status.emit("Consultando versões compiladas no GitHub Releases...")
+            try:
+                rel_url = "https://api.github.com/repos/icarogabrielc85-ai/ip-scan-igt/releases/latest"
+                req = urllib.request.Request(rel_url, headers={"User-Agent": "IPScanIGT-Updater"})
+                with urllib.request.urlopen(req, timeout=8) as resp:
+                    rel_data = json.loads(resp.read().decode("utf-8"))
+                    latest_tag = rel_data.get("tag_name", "").lstrip("v")
+                    html_url = rel_data.get("html_url", "https://github.com/icarogabrielc85-ai/ip-scan-igt/releases")
+
+                    from version import APP_VERSION
+                    if latest_tag and latest_tag != APP_VERSION:
+                        self.update_finished.emit(
+                            True,
+                            f"Nova versão compilada disponível: v{latest_tag}!\n\n"
+                            f"• Versão Atual: v{APP_VERSION}\n"
+                            f"• Nova Versão: v{latest_tag}\n\n"
+                            f"Clique em OK para abrir a página oficial de download no navegador.",
+                            False
+                        )
+                        QDesktopServices.openUrl(QUrl(html_url))
+                        return
+                    else:
+                        self.update_finished.emit(
+                            True,
+                            f"O IP Scan IGT já está na versão compilada mais recente (v{APP_VERSION})!",
+                            False
+                        )
+                        return
+            except Exception as e:
+                self.update_finished.emit(
+                    False,
+                    f"Não foi possível consultar os lançamentos no GitHub Releases:\n{str(e)}\n\n"
+                    f"Acesse diretamente: https://github.com/icarogabrielc85-ai/ip-scan-igt/releases",
+                    False
+                )
+                return
+
+        # 2. Instalação de código-fonte (Windows ou Linux sem Git)
+        self.progress_status.emit("Consultando último commit no repositório GitHub...")
+        meta_file = os.path.join(self.repo_dir, ".version_meta.json")
+        local_sha = ""
+        if os.path.exists(meta_file):
+            try:
+                with open(meta_file, "r", encoding="utf-8") as mf:
+                    local_sha = json.load(mf).get("commit_sha", "").strip()
+            except Exception:
+                pass
+
+        latest_sha = ""
+        latest_msg = ""
+        commit_date = ""
+
+        try:
+            api_url = "https://api.github.com/repos/icarogabrielc85-ai/ip-scan-igt/commits/main"
+            req = urllib.request.Request(api_url, headers={"User-Agent": "IPScanIGT-Updater"})
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                c_data = json.loads(resp.read().decode("utf-8"))
+                latest_sha = c_data.get("sha", "")[:7]
+                latest_msg = c_data.get("commit", {}).get("message", "").split("\n")[0]
+                commit_date = c_data.get("commit", {}).get("author", {}).get("date", "")
+        except Exception:
+            pass
+
+        # Se já temos o commit_sha registrado e é igual ao mais recente
+        if local_sha and latest_sha and local_sha == latest_sha:
+            self.progress_status.emit(f"O aplicativo já está na versão mais recente: {old_ver}")
+            self.update_finished.emit(
+                True,
+                f"O IP Scan IGT já está na versão mais recente!\n\n"
+                f"• Versão Atual: {old_ver}\n"
+                f"Nenhuma nova atualização disponível no momento.",
+                False
+            )
+            return
+
+        # 3. Baixar pacote ZIP com o repositório completo do GitHub
+        self.progress_status.emit("Baixando pacote de atualização do GitHub...")
+        zip_url = "https://github.com/icarogabrielc85-ai/ip-scan-igt/archive/refs/heads/main.zip"
+        req = urllib.request.Request(zip_url, headers={"User-Agent": "IPScanIGT-Updater"})
+        try:
+            with urllib.request.urlopen(req, timeout=35) as resp:
+                zip_data = resp.read()
+        except Exception as e:
+            self.update_finished.emit(
+                False,
+                f"Falha ao baixar o arquivo de atualização do GitHub:\n{str(e)}\n\n"
+                f"Verifique sua conexão com a internet.",
+                False
+            )
+            return
+
+        # 4. Extrair e sobrescrever arquivos da aplicação
+        self.progress_status.emit("Extraindo e aplicando arquivos da nova versão...")
+        try:
+            count_files = 0
+            with zipfile.ZipFile(io.BytesIO(zip_data)) as z:
+                namelist = z.namelist()
+                prefix = namelist[0].split("/")[0] + "/" if namelist and "/" in namelist[0] else "ip-scan-igt-main/"
+                for member in z.infolist():
+                    if not member.filename.startswith(prefix):
+                        continue
+                    rel_path = member.filename[len(prefix):]
+                    if not rel_path or rel_path.endswith("/"):
+                        continue
+
+                    target_path = os.path.join(self.repo_dir, rel_path)
+                    os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                    with z.open(member) as src_file, open(target_path, "wb") as dst_file:
+                        dst_file.write(src_file.read())
+                    count_files += 1
+
+            if latest_sha:
+                try:
+                    with open(meta_file, "w", encoding="utf-8") as mf:
+                        json.dump(
+                            {
+                                "commit_sha": latest_sha,
+                                "date": commit_date,
+                                "message": latest_msg,
+                            },
+                            mf,
+                            indent=2
+                        )
+                except Exception:
+                    pass
+        except Exception as e:
+            self.update_finished.emit(
+                False,
+                f"Falha ao extrair os arquivos da atualização:\n{str(e)}",
+                False
+            )
+            return
+
+        # 5. Atualizar dependências Python se houver requirements
+        self._update_python_dependencies()
+
+        new_ver = get_full_version(self.repo_dir)
+        self.progress_status.emit(f"Atualização concluída: {new_ver}")
+        self.update_finished.emit(
+            True,
+            f"O IP Scan IGT foi atualizado com sucesso via download direto!\n\n"
+            f"• Versão Anterior: {old_ver}\n"
+            f"• Nova Versão Instalada: {new_ver}\n"
+            f"• {count_files} arquivo(s) atualizado(s) diretamente do GitHub.\n"
+            + (f"• Último commit: {latest_sha} — {latest_msg}\n\n" if latest_sha else "\n") +
+            f"Deseja reiniciar o aplicativo agora para carregar a nova versão?",
+            True
+        )
+
+    def _update_python_dependencies(self):
+        self.progress_status.emit("Verificando dependências Python...")
+        req_file = os.path.join(self.repo_dir, "requirements.txt")
+        if os.path.exists(req_file):
+            try:
+                pip_args = [sys.executable, "-m", "pip", "install", "-r", req_file, "--quiet"]
+                if not IS_WINDOWS:
+                    pip_args.extend(["--break-system-packages", "--user"])
+                subprocess.run(pip_args, cwd=self.repo_dir, timeout=30)
+            except Exception:
+                pass
 
 
 def ip_sort_tuple(ip_str: str) -> tuple:
@@ -1411,8 +1572,11 @@ class MainWindow(QMainWindow):
                     QMessageBox.Yes
                 )
                 if reply == QMessageBox.Yes:
-                    main_py = os.path.abspath(__file__)
-                    QProcess.startDetached(sys.executable, [main_py])
+                    if getattr(sys, "frozen", False):
+                        QProcess.startDetached(sys.executable, [])
+                    else:
+                        main_py = os.path.abspath(__file__)
+                        QProcess.startDetached(sys.executable, [main_py])
                     QApplication.quit()
             else:
                 QMessageBox.information(self, "IP Scan IGT Atualizado", message)
