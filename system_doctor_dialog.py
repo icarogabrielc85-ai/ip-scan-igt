@@ -10,7 +10,7 @@ import platform
 import shutil
 import subprocess
 import sys
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QFont
@@ -380,29 +380,63 @@ class SystemDoctorDialog(QDialog):
     """
     Modern modal dialog presenting a complete health check of the host system,
     with 1-click command copy and automated terminal package installation.
+    Fully adaptive to Light and Dark modes.
     """
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, is_dark: Optional[bool] = None):
         super().__init__(parent)
+        if is_dark is None:
+            self.is_dark = getattr(parent, "is_dark_mode", False)
+        else:
+            self.is_dark = is_dark
+
         self.setWindowTitle("Diagnóstico de Aptidão do Sistema — IP Scan IGT")
-        self.resize(680, 560)
+        self.resize(700, 580)
+        self.init_palette()
         self.init_ui()
         self.refresh_diagnosis()
+
+    def init_palette(self):
+        if self.is_dark:
+            self.c_bg = "#0f172a"
+            self.c_card_bg = "#1e293b"
+            self.c_border = "#334155"
+            self.c_text_main = "#f8fafc"
+            self.c_text_sub = "#94a3b8"
+            self.c_row_bg = "#131c2e"
+            self.c_scroll_bg = "#0b1120"
+            self.c_accent = "#38bdf8"
+        else:
+            self.c_bg = "#f8fafc"
+            self.c_card_bg = "#ffffff"
+            self.c_border = "#cbd5e1"
+            self.c_text_main = "#0f172a"
+            self.c_text_sub = "#64748b"
+            self.c_row_bg = "#ffffff"
+            self.c_scroll_bg = "#f1f5f9"
+            self.c_accent = "#0284c7"
 
     def init_ui(self):
         vbox = QVBoxLayout(self)
         vbox.setContentsMargins(18, 16, 18, 16)
         vbox.setSpacing(12)
 
+        self.setStyleSheet(f"""
+            QDialog {{
+                background-color: {self.c_bg};
+                color: {self.c_text_main};
+            }}
+        """)
+
         # Header card
         self.header_frame = QFrame()
         self.header_frame.setObjectName("docHeader")
-        self.header_frame.setStyleSheet("""
-            QFrame#docHeader {
-                background-color: #162032;
-                border: 1px solid #1f2937;
+        self.header_frame.setStyleSheet(f"""
+            QFrame#docHeader {{
+                background-color: {self.c_card_bg};
+                border: 1px solid {self.c_border};
                 border-radius: 8px;
                 padding: 10px;
-            }
+            }}
         """)
         h_layout = QHBoxLayout(self.header_frame)
         h_layout.setContentsMargins(6, 4, 6, 4)
@@ -415,9 +449,9 @@ class SystemDoctorDialog(QDialog):
         info_box = QVBoxLayout()
         info_box.setSpacing(2)
         self.lbl_title = QLabel("Verificador de Dependências & Aptidão do Sistema")
-        self.lbl_title.setStyleSheet("font-weight: bold; font-size: 15px; color: #38bdf8;")
+        self.lbl_title.setStyleSheet(f"font-weight: bold; font-size: 15px; color: {self.c_accent};")
         self.lbl_sub = QLabel("Analisando componentes de rede, reprodutores multimídia e bibliotecas gráficas...")
-        self.lbl_sub.setStyleSheet("font-size: 12px; color: #94a3b8;")
+        self.lbl_sub.setStyleSheet(f"font-size: 12px; color: {self.c_text_sub};")
         info_box.addWidget(self.lbl_title)
         info_box.addWidget(self.lbl_sub)
         h_layout.addLayout(info_box)
@@ -435,7 +469,7 @@ class SystemDoctorDialog(QDialog):
         # Scroll Area for Components Checklist
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("QScrollArea { border: 1px solid #1e293b; border-radius: 6px; background-color: #0b1120; }")
+        scroll.setStyleSheet(f"QScrollArea {{ border: 1px solid {self.c_border}; border-radius: 6px; background-color: {self.c_scroll_bg}; }}")
 
         self.items_container = QWidget()
         self.items_layout = QVBoxLayout(self.items_container)
@@ -446,8 +480,21 @@ class SystemDoctorDialog(QDialog):
 
         # Recommendation Card (Install command box)
         self.rec_frame = QFrame()
-        self.rec_frame.setStyleSheet("background-color: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 8px;")
+        self.rec_frame.setStyleSheet(f"background-color: {self.c_card_bg}; border: 1px solid {self.c_border}; border-left: 4px solid {self.c_accent}; border-radius: 6px; padding: 8px;")
         rec_layout = QVBoxLayout(self.rec_frame)
+        rec_layout.setContentsMargins(8, 8, 8, 8)
+        rec_layout.setSpacing(6)
+
+        self.lbl_rec_title = QLabel("Comando para Instalação Automática dos Recursos Ausentes:")
+        self.lbl_rec_title.setStyleSheet(f"font-weight: 600; font-size: 12px; color: {self.c_text_main};")
+        rec_layout.addWidget(self.lbl_rec_title)
+
+        self.txt_cmd = QTextEdit()
+        self.txt_cmd.setReadOnly(True)
+        self.txt_cmd.setFixedHeight(44)
+        cmd_bg = "#020617" if self.is_dark else "#f1f5f9"
+        self.txt_cmd.setStyleSheet(f"font-family: monospace; font-size: 11px; color: {self.c_accent}; background: {cmd_bg}; border: 1px solid {self.c_border}; border-radius: 4px; padding: 4px;")
+        rec_layout.addWidget(self.txt_cmd)
         rec_layout.setContentsMargins(8, 8, 8, 8)
         rec_layout.setSpacing(6)
 
@@ -518,7 +565,7 @@ class SystemDoctorDialog(QDialog):
         # Populate Items
         for it in diag["items"]:
             row = QFrame()
-            row.setStyleSheet("background-color: #131c2e; border: 1px solid #1e293b; border-radius: 6px; padding: 6px;")
+            row.setStyleSheet(f"background-color: {self.c_row_bg}; border: 1px solid {self.c_border}; border-radius: 6px; padding: 6px;")
             r_box = QHBoxLayout(row)
             r_box.setContentsMargins(8, 4, 8, 4)
             r_box.setSpacing(10)
@@ -537,21 +584,21 @@ class SystemDoctorDialog(QDialog):
 
             header_line = QHBoxLayout()
             lbl_name = QLabel(it["name"])
-            lbl_name.setStyleSheet("font-weight: 600; font-size: 12px; color: #f1f5f9;")
+            lbl_name.setStyleSheet(f"font-weight: 600; font-size: 12px; color: {self.c_text_main};")
             lbl_cat = QLabel(f"[{it['category']}]")
-            lbl_cat.setStyleSheet("font-size: 11px; color: #64748b; font-weight: normal;")
+            lbl_cat.setStyleSheet(f"font-size: 11px; color: {self.c_text_sub}; font-weight: normal;")
             header_line.addWidget(lbl_name)
             header_line.addWidget(lbl_cat)
             header_line.addStretch()
             t_box.addLayout(header_line)
 
             lbl_sum = QLabel(it["summary"])
-            lbl_sum.setStyleSheet("font-size: 11px; color: #94a3b8;")
+            lbl_sum.setStyleSheet(f"font-size: 11px; color: {self.c_text_sub};")
             t_box.addWidget(lbl_sum)
 
             if it.get("path") and it["path"] != "Ausente":
                 lbl_path = QLabel(f"Caminho: {it['path']}")
-                lbl_path.setStyleSheet("font-family: monospace; font-size: 10px; color: #64748b;")
+                lbl_path.setStyleSheet(f"font-family: monospace; font-size: 10px; color: {self.c_text_sub};")
                 t_box.addWidget(lbl_path)
 
             r_box.addLayout(t_box, 1)

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
 Internet Health, Latency & DNS Benchmark Diagnostic Dialog for IP Scan IGT.
-Measures gateway ping, network interface DNS servers, and benchmark major public DNS providers
+Measures gateway ping, network interface DNS servers, and benchmarks major public DNS providers
 (Cloudflare, Google, OpenDNS, Quad9, AdGuard) with packet loss, jitter, and DNS resolution latency.
+Fully adaptive to both Dark Mode and Light Mode with high-contrast, modern UI/UX ergonomics.
 """
 
 import concurrent.futures
@@ -19,7 +20,7 @@ import urllib.request
 from typing import Dict, List, Optional, Tuple
 
 from PyQt5.QtCore import QObject, QPoint, QSize, Qt, QThread, pyqtSignal
-from PyQt5.QtGui import QColor, QFont, QIcon
+from PyQt5.QtGui import QBrush, QColor, QFont, QIcon
 from PyQt5.QtWidgets import (
     QApplication,
     QDialog,
@@ -42,49 +43,57 @@ PUBLIC_DNS_TARGETS = [
         "provider": "Cloudflare DNS (Primário)",
         "ip": "1.1.1.1",
         "category": "Público Global",
-        "feature": "Ultra Rápido / Foco em Privacidade",
+        "feature": "Ultra Baixa Latência / Foco em Privacidade",
+        "icon": "⚡",
     },
     {
         "provider": "Cloudflare DNS (Secundário)",
         "ip": "1.0.0.1",
         "category": "Público Global",
-        "feature": "Ultra Rápido / Backup Cloudflare",
+        "feature": "Ultra Baixa Latência / Backup Cloudflare",
+        "icon": "⚡",
     },
     {
         "provider": "Google Public DNS (Primário)",
         "ip": "8.8.8.8",
         "category": "Público Global",
         "feature": "Alta Confiabilidade & Anycast Global",
+        "icon": "🔍",
     },
     {
         "provider": "Google Public DNS (Secundário)",
         "ip": "8.8.4.4",
         "category": "Público Global",
         "feature": "Alta Confiabilidade / Backup Google",
+        "icon": "🔍",
     },
     {
         "provider": "OpenDNS Cisco (Primário)",
         "ip": "208.67.222.222",
         "category": "Segurança & Filtro",
-        "feature": "Proteção Phishing & Bloqueio Malware",
+        "feature": "Proteção Antiphishing & Bloqueio de Malware",
+        "icon": "🛡️",
     },
     {
         "provider": "OpenDNS Cisco (Secundário)",
         "ip": "208.67.220.220",
         "category": "Segurança & Filtro",
-        "feature": "Proteção Phishing / Backup Cisco",
+        "feature": "Proteção Antiphishing / Backup Cisco",
+        "icon": "🛡️",
     },
     {
         "provider": "Quad9 DNS (Primário)",
         "ip": "9.9.9.9",
         "category": "Segurança & Privacidade",
-        "feature": "Bloqueio de Ameaças Cibernéticas",
+        "feature": "Filtro Ativo contra Ameaças e Botnets",
+        "icon": "🔒",
     },
     {
         "provider": "AdGuard DNS (Público)",
         "ip": "94.140.14.14",
         "category": "Privacidade & Anti-Ad",
-        "feature": "Filtro de Anúncios e Rastreadores",
+        "feature": "Bloqueio de Anúncios e Rastreadores",
+        "icon": "🚫",
     },
 ]
 
@@ -260,6 +269,7 @@ class InternetTestWorker(QThread):
                 "ip": self.gateway_ip,
                 "category": "Rede Local",
                 "feature": "Ponto de Saída da LAN",
+                "icon": "🏠",
                 "is_dns": False,
             })
 
@@ -271,12 +281,12 @@ class InternetTestWorker(QThread):
                 "ip": d_ip,
                 "category": "DNS Local Ativo",
                 "feature": "Configurado na Interface de Rede",
+                "icon": "🛡️",
                 "is_dns": True,
             })
 
         # Public DNS providers
         for p in PUBLIC_DNS_TARGETS:
-            # avoid duplicate if already in local_dns
             if not any(t["ip"] == p["ip"] for t in targets):
                 p_copy = dict(p)
                 p_copy["is_dns"] = True
@@ -301,23 +311,23 @@ class InternetTestWorker(QThread):
             # ICMP Ping stats
             p_min, p_avg, p_max, loss = ping_target_stats(ip, count=3, timeout_sec=1)
 
-            # Rating
+            # Rating logic
             ref_latency = dns_rtt if (is_dns and dns_rtt is not None) else p_avg
             if loss == 100 or (ref_latency is None and not dns_ok):
                 rating = "Inacessível"
-                color = "#ef4444"
+                badge_type = "danger"
             elif ref_latency is not None and ref_latency < 20.0:
                 rating = "Excelente"
-                color = "#10b981"
+                badge_type = "success"
             elif ref_latency is not None and ref_latency < 50.0:
                 rating = "Bom"
-                color = "#38bdf8"
+                badge_type = "info"
             elif ref_latency is not None and ref_latency < 100.0:
                 rating = "Aceitável"
-                color = "#f59e0b"
+                badge_type = "warning"
             else:
                 rating = "Lento"
-                color = "#f97316"
+                badge_type = "orange"
 
             res = {
                 **item,
@@ -328,7 +338,7 @@ class InternetTestWorker(QThread):
                 "ping_max": p_max,
                 "packet_loss": loss,
                 "rating": rating,
-                "color": color,
+                "badge_type": badge_type,
                 "score_latency": ref_latency if ref_latency is not None else 9999.0,
             }
             return res
@@ -368,62 +378,109 @@ class InternetQualityDialog(QDialog):
     """
     Modern modal dialog for evaluating Internet Health, Gateway, Local DNS,
     and Global Public DNS benchmarks with live metrics and recommendations.
+    Dynamically styled for both Dark Mode and Light Mode with high-contrast UI/UX.
     """
-    def __init__(self, parent=None, gateway_ip: str = ""):
+    def __init__(self, parent=None, gateway_ip: str = "", is_dark: Optional[bool] = None):
         super().__init__(parent)
         self.gateway_ip = gateway_ip.strip()
         self.worker = None
         self.results_list = []
 
-        self.setWindowTitle("Diagnóstico de Qualidade da Internet & Benchmark de DNS")
-        self.resize(840, 580)
+        if is_dark is None:
+            self.is_dark = getattr(parent, "is_dark_mode", False)
+        else:
+            self.is_dark = is_dark
+
+        self.setWindowTitle("Diagnóstico de Conexão com a Internet & Benchmark de DNS")
+        self.resize(860, 600)
+        self.init_palette_and_styles()
         self.init_ui()
         self.start_test()
 
+    def init_palette_and_styles(self):
+        """Sets up high-contrast design tokens matching the active theme."""
+        if self.is_dark:
+            self.c_bg = "#0f172a"          # Slate 900
+            self.c_card_bg = "#1e293b"     # Slate 800
+            self.c_card_hover = "#243248"
+            self.c_border = "#334155"       # Slate 700
+            self.c_text_main = "#f8fafc"    # Slate 50 (sharp white)
+            self.c_text_sub = "#94a3b8"     # Slate 400
+            self.c_table_bg = "#0b1120"     # Slate 950
+            self.c_table_alt = "#131d31"
+            self.c_header_bg = "#1e293b"
+            self.c_header_text = "#cbd5e1"
+            self.c_accent = "#38bdf8"       # Sky Blue
+            self.c_rec_bg = "#162032"
+            self.c_rec_border = "#38bdf8"
+            self.c_rec_text = "#f1f5f9"
+        else:
+            self.c_bg = "#f8fafc"          # Slate 50
+            self.c_card_bg = "#ffffff"     # Pure White
+            self.c_card_hover = "#f1f5f9"
+            self.c_border = "#cbd5e1"       # Slate 300
+            self.c_text_main = "#0f172a"    # Slate 900 (deep black-slate)
+            self.c_text_sub = "#64748b"     # Slate 500
+            self.c_table_bg = "#ffffff"
+            self.c_table_alt = "#f8fafc"
+            self.c_header_bg = "#f1f5f9"
+            self.c_header_text = "#334155"
+            self.c_accent = "#0284c7"       # Vibrant Blue
+            self.c_rec_bg = "#f0f9ff"       # Light Sky
+            self.c_rec_border = "#0284c7"
+            self.c_rec_text = "#0c4a6e"
+
     def init_ui(self):
         vbox = QVBoxLayout(self)
-        vbox.setContentsMargins(16, 14, 16, 14)
-        vbox.setSpacing(10)
+        vbox.setContentsMargins(18, 16, 18, 16)
+        vbox.setSpacing(12)
 
-        # Header card
-        hdr = QFrame()
-        hdr.setObjectName("netTestHdr")
-        hdr.setStyleSheet("""
-            QFrame#netTestHdr {
-                background-color: #162032;
-                border: 1px solid #1f2937;
+        self.setStyleSheet(f"""
+            QDialog {{
+                background-color: {self.c_bg};
+                color: {self.c_text_main};
+            }}
+        """)
+
+        # 1. Header card
+        self.hdr = QFrame()
+        self.hdr.setObjectName("netTestHdr")
+        self.hdr.setStyleSheet(f"""
+            QFrame#netTestHdr {{
+                background-color: {self.c_card_bg};
+                border: 1px solid {self.c_border};
                 border-radius: 8px;
                 padding: 10px;
-            }
+            }}
         """)
-        h_layout = QHBoxLayout(hdr)
-        h_layout.setContentsMargins(6, 4, 6, 4)
-        h_layout.setSpacing(12)
+        h_layout = QHBoxLayout(self.hdr)
+        h_layout.setContentsMargins(8, 6, 8, 6)
+        h_layout.setSpacing(14)
 
         lbl_icon = QLabel("🌐")
-        lbl_icon.setStyleSheet("font-size: 32px;")
+        lbl_icon.setStyleSheet("font-size: 34px;")
         h_layout.addWidget(lbl_icon)
 
         info_box = QVBoxLayout()
-        info_box.setSpacing(2)
+        info_box.setSpacing(3)
         lbl_title = QLabel("Teste de Conexão com a Internet & Benchmark de DNS")
-        lbl_title.setStyleSheet("font-weight: bold; font-size: 15px; color: #38bdf8;")
-        lbl_sub = QLabel("Mede latência ICMP, tempo de resolução DNS UDP 53 e perda de pacotes dos principais provedores.")
-        lbl_sub.setStyleSheet("font-size: 12px; color: #94a3b8;")
+        lbl_title.setStyleSheet(f"font-weight: bold; font-size: 15px; color: {self.c_accent};")
+        lbl_sub = QLabel("Avalia em tempo real a rota do Gateway, DNS configurado na placa e os 5 maiores provedores mundiais.")
+        lbl_sub.setStyleSheet(f"font-size: 12px; color: {self.c_text_sub};")
         info_box.addWidget(lbl_title)
         info_box.addWidget(lbl_sub)
         h_layout.addLayout(info_box, 1)
 
-        vbox.addWidget(hdr)
+        vbox.addWidget(self.hdr)
 
-        # KPI Badges Summary Row
+        # 2. KPI Badges Summary Row (4 spacious cards)
         kpi_row = QHBoxLayout()
-        kpi_row.setSpacing(8)
+        kpi_row.setSpacing(10)
 
-        self.card_wan = self._create_kpi_card("IP Público (WAN)", "Detectando...", "#38bdf8")
-        self.card_gw = self._create_kpi_card("Gateway Local", self.gateway_ip or "Detectando...", "#10b981")
-        self.card_dns = self._create_kpi_card("DNS da Placa", "Detectando...", "#a855f7")
-        self.card_fastest = self._create_kpi_card("🏆 Mais Rápido", "Aguardando...", "#eab308")
+        self.card_wan = self._create_kpi_card("🌐 IP Público (WAN)", "Identificando...", "#0284c7" if not self.is_dark else "#38bdf8")
+        self.card_gw = self._create_kpi_card("🏠 Gateway Local", self.gateway_ip or "Testando...", "#10b981")
+        self.card_dns = self._create_kpi_card("🛡️ DNS da Placa", "Testando...", "#9333ea" if not self.is_dark else "#c084fc")
+        self.card_fastest = self._create_kpi_card("🏆 Mais Rápido", "Aguardando...", "#d97706" if not self.is_dark else "#facc15")
 
         kpi_row.addWidget(self.card_wan)
         kpi_row.addWidget(self.card_gw)
@@ -431,39 +488,43 @@ class InternetQualityDialog(QDialog):
         kpi_row.addWidget(self.card_fastest)
         vbox.addLayout(kpi_row)
 
-        # Progress bar
+        # 3. Progress bar with status label
+        prog_box = QVBoxLayout()
+        prog_box.setSpacing(4)
+
+        self.lbl_status = QLabel("Iniciando diagnósticos de rede e consultas DNS...")
+        self.lbl_status.setStyleSheet(f"font-size: 12px; font-weight: 500; color: {self.c_text_sub}; margin-left: 2px;")
+        prog_box.addWidget(self.lbl_status)
+
         self.prog_bar = QProgressBar()
         self.prog_bar.setFixedHeight(8)
         self.prog_bar.setTextVisible(False)
         self.prog_bar.setRange(0, 100)
         self.prog_bar.setValue(0)
-        self.prog_bar.setStyleSheet("""
-            QProgressBar {
-                background-color: #1e293b;
-                border: none;
+        self.prog_bar.setStyleSheet(f"""
+            QProgressBar {{
+                background-color: {self.c_card_bg};
+                border: 1px solid {self.c_border};
                 border-radius: 4px;
-            }
-            QProgressBar::chunk {
+            }}
+            QProgressBar::chunk {{
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0284c7, stop:1 #38bdf8);
-                border-radius: 4px;
-            }
+                border-radius: 3px;
+            }}
         """)
-        vbox.addWidget(self.prog_bar)
+        prog_box.addWidget(self.prog_bar)
+        vbox.addLayout(prog_box)
 
-        self.lbl_status = QLabel("Iniciando diagnósticos de rede...")
-        self.lbl_status.setStyleSheet("font-size: 11px; color: #94a3b8; margin-left: 2px;")
-        vbox.addWidget(self.lbl_status)
-
-        # Table Widget
+        # 4. Table Widget (High contrast, clearly bordered cells)
         self.table = QTableWidget()
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
             "Provedor / Alvo",
             "Endereço IP",
             "Ping ICMP (Médio)",
-            "Resolução DNS",
+            "Query DNS UDP 53",
             "Perda de Pacotes",
-            "Classificação",
+            "Qualidade",
             "Destaque",
         ])
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
@@ -475,46 +536,76 @@ class InternetQualityDialog(QDialog):
         self.table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeToContents)
         self.table.verticalHeader().setVisible(False)
         self.table.setAlternatingRowColors(True)
-        self.table.setStyleSheet("""
-            QTableWidget {
-                background-color: #0b1120;
-                border: 1px solid #1e293b;
+        self.table.setShowGrid(True)
+
+        self.table.setStyleSheet(f"""
+            QTableWidget {{
+                background-color: {self.c_table_bg};
+                alternate-background-color: {self.c_table_alt};
+                border: 1px solid {self.c_border};
                 border-radius: 6px;
-                gridline-color: #1e293b;
-            }
+                gridline-color: {self.c_border};
+                color: {self.c_text_main};
+                font-size: 12px;
+                selection-background-color: #0284c7;
+                selection-color: #ffffff;
+            }}
+            QHeaderView::section {{
+                background-color: {self.c_header_bg};
+                color: {self.c_header_text};
+                padding: 7px 6px;
+                border: none;
+                border-bottom: 2px solid {self.c_border};
+                border-right: 1px solid {self.c_border};
+                font-weight: bold;
+                font-size: 11px;
+            }}
+            QTableWidget::item {{
+                padding: 6px 8px;
+            }}
         """)
         vbox.addWidget(self.table, 1)
 
-        # Recommendation banner card
+        # 5. Recommendation banner card
         self.rec_card = QFrame()
-        self.rec_card.setStyleSheet("background-color: #0f172a; border: 1px solid #1e293b; border-radius: 6px; padding: 6px;")
+        self.rec_card.setStyleSheet(f"""
+            QFrame {{
+                background-color: {self.c_rec_bg};
+                border: 1px solid {self.c_border};
+                border-left: 4px solid {self.c_rec_border};
+                border-radius: 6px;
+                padding: 8px;
+            }}
+        """)
         rec_box = QHBoxLayout(self.rec_card)
-        rec_box.setContentsMargins(8, 4, 8, 4)
-        rec_box.setSpacing(8)
+        rec_box.setContentsMargins(10, 6, 10, 6)
+        rec_box.setSpacing(10)
 
         self.lbl_rec_icon = QLabel("💡")
-        self.lbl_rec_icon.setStyleSheet("font-size: 16px;")
+        self.lbl_rec_icon.setStyleSheet("font-size: 20px;")
         rec_box.addWidget(self.lbl_rec_icon)
 
-        self.lbl_recommendation = QLabel("Aguardando conclusão do teste para gerar recomendações...")
-        self.lbl_recommendation.setStyleSheet("font-size: 12px; color: #cbd5e1;")
+        self.lbl_recommendation = QLabel("Aguardando conclusão do teste para formular recomendação de desempenho...")
+        self.lbl_recommendation.setStyleSheet(f"font-size: 12px; font-weight: 500; color: {self.c_rec_text};")
         self.lbl_recommendation.setWordWrap(True)
         rec_box.addWidget(self.lbl_recommendation, 1)
         vbox.addWidget(self.rec_card)
 
-        # Bottom Action Buttons
+        # 6. Bottom Action Buttons
         btn_box = QHBoxLayout()
         btn_box.setSpacing(10)
 
         self.btn_restart = QPushButton("▶  Novo Teste")
         self.btn_restart.setObjectName("btnStart")
         self.btn_restart.setFixedHeight(34)
-        self.btn_restart.setFixedWidth(120)
+        self.btn_restart.setFixedWidth(125)
+        self.btn_restart.setCursor(Qt.PointingHandCursor)
         self.btn_restart.clicked.connect(self.start_test)
         btn_box.addWidget(self.btn_restart)
 
         self.btn_copy = QPushButton("📋 Copiar Relatório")
         self.btn_copy.setFixedHeight(34)
+        self.btn_copy.setCursor(Qt.PointingHandCursor)
         self.btn_copy.clicked.connect(self.copy_report)
         btn_box.addWidget(self.btn_copy)
 
@@ -523,6 +614,7 @@ class InternetQualityDialog(QDialog):
         btn_close = QPushButton("Fechar")
         btn_close.setFixedHeight(34)
         btn_close.setFixedWidth(100)
+        btn_close.setCursor(Qt.PointingHandCursor)
         btn_close.clicked.connect(self.accept)
         btn_box.addWidget(btn_close)
 
@@ -532,31 +624,33 @@ class InternetQualityDialog(QDialog):
         card = QFrame()
         card.setStyleSheet(f"""
             QFrame {{
-                background-color: #0f172a;
-                border: 1px solid #1e293b;
+                background-color: {self.c_card_bg};
+                border: 1px solid {self.c_border};
                 border-top: 3px solid {accent_color};
                 border-radius: 6px;
                 padding: 4px;
             }}
         """)
         box = QVBoxLayout(card)
-        box.setContentsMargins(8, 6, 8, 6)
-        box.setSpacing(2)
+        box.setContentsMargins(10, 8, 10, 8)
+        box.setSpacing(3)
 
         lbl_t = QLabel(title)
-        lbl_t.setStyleSheet("font-size: 10px; color: #94a3b8; font-weight: 600; text-transform: uppercase;")
+        lbl_t.setStyleSheet(f"font-size: 11px; color: {self.c_text_sub}; font-weight: 600;")
         lbl_v = QLabel(default_val)
-        lbl_v.setStyleSheet(f"font-size: 13px; font-weight: bold; color: {accent_color};")
+        lbl_v.setStyleSheet(f"font-size: 13px; font-weight: bold; color: {self.c_text_main};")
         lbl_v.setObjectName("val")
 
         box.addWidget(lbl_t)
         box.addWidget(lbl_v)
         return card
 
-    def _set_kpi_val(self, card: QFrame, text: str):
+    def _set_kpi_val(self, card: QFrame, text: str, custom_color: str = ""):
         lbl = card.findChild(QLabel, "val")
         if lbl:
             lbl.setText(text)
+            if custom_color:
+                lbl.setStyleSheet(f"font-size: 13px; font-weight: bold; color: {custom_color};")
 
     def start_test(self):
         if self.worker and self.worker.isRunning():
@@ -568,8 +662,8 @@ class InternetQualityDialog(QDialog):
         self.prog_bar.setValue(0)
         self.btn_restart.setEnabled(False)
         self.btn_restart.setText("Testando...")
-        self.lbl_status.setText("Testando conexão de gateway e servidores DNS...")
-        self.lbl_recommendation.setText("Executando baterias de ping e queries DNS em paralelo...")
+        self.lbl_status.setText("Disparando testes simultâneos de latência ICMP e queries DNS UDP 53...")
+        self.lbl_recommendation.setText("Aguardando finalização das medições para calcular o melhor provedor...")
 
         self.worker = InternetTestWorker(gateway_ip=self.gateway_ip)
         self.worker.progress.connect(self.on_progress)
@@ -580,76 +674,133 @@ class InternetQualityDialog(QDialog):
     def on_progress(self, current: int, total: int, target_name: str):
         pct = int((current / total) * 100) if total > 0 else 0
         self.prog_bar.setValue(pct)
-        self.lbl_status.setText(f"Verificando [{current}/{total}]: {target_name}...")
+        self.lbl_status.setText(f"Avaliando alvo [{current}/{total}]: {target_name}...")
 
     def on_target_tested(self, res: dict):
         self.results_list.append(res)
         row = self.table.rowCount()
         self.table.insertRow(row)
 
-        # 0. Provider name
-        item_prov = QTableWidgetItem(res["provider"])
+        # 0. Provider name with icon
+        icon = res.get("icon", "🌐")
+        item_prov = QTableWidgetItem(f"{icon}  {res['provider']}")
         item_prov.setFont(QFont("", -1, QFont.Bold))
+        item_prov.setForeground(QColor(self.c_text_main))
         self.table.setItem(row, 0, item_prov)
 
-        # 1. IP
+        # 1. IP (Monospace)
         item_ip = QTableWidgetItem(res["ip"])
         item_ip.setTextAlignment(Qt.AlignCenter)
+        font_mono = QFont("JetBrains Mono", -1)
+        font_mono.setStyleHint(QFont.Monospace)
+        item_ip.setFont(font_mono)
+        item_ip.setForeground(QColor(self.c_accent))
         self.table.setItem(row, 1, item_ip)
 
         # 2. Ping ICMP Avg
         if res.get("ping_avg") is not None:
-            ping_str = f"{res['ping_avg']:.1f} ms"
+            p_val = res["ping_avg"]
+            ping_str = f"{p_val:.1f} ms"
+            if p_val < 20.0:
+                p_color = "#10b981" if self.is_dark else "#16a34a"
+            elif p_val < 50.0:
+                p_color = "#38bdf8" if self.is_dark else "#0284c7"
+            elif p_val < 100.0:
+                p_color = "#f59e0b" if self.is_dark else "#d97706"
+            else:
+                p_color = "#ef4444" if self.is_dark else "#dc2626"
         else:
             ping_str = "Sem resposta" if res["packet_loss"] == 100 else "N/D"
+            p_color = "#ef4444" if self.is_dark else "#dc2626"
+
         item_ping = QTableWidgetItem(ping_str)
         item_ping.setTextAlignment(Qt.AlignCenter)
+        item_ping.setFont(QFont("", -1, QFont.Bold))
+        item_ping.setForeground(QColor(p_color))
         self.table.setItem(row, 2, item_ping)
 
         # 3. DNS Query RTT
         if res.get("dns_rtt") is not None:
-            dns_str = f"{res['dns_rtt']:.1f} ms"
+            d_val = res["dns_rtt"]
+            dns_str = f"{d_val:.1f} ms"
+            if d_val < 20.0:
+                d_color = "#10b981" if self.is_dark else "#16a34a"
+            elif d_val < 50.0:
+                d_color = "#38bdf8" if self.is_dark else "#0284c7"
+            else:
+                d_color = "#f59e0b" if self.is_dark else "#d97706"
         elif not res.get("is_dns"):
             dns_str = "— (Gateway)"
+            d_color = self.c_text_sub
         else:
             dns_str = "Falhou"
+            d_color = "#ef4444" if self.is_dark else "#dc2626"
+
         item_dns = QTableWidgetItem(dns_str)
         item_dns.setTextAlignment(Qt.AlignCenter)
+        item_dns.setFont(QFont("", -1, QFont.Bold))
+        item_dns.setForeground(QColor(d_color))
         self.table.setItem(row, 3, item_dns)
 
         # 4. Packet Loss
         loss = res.get("packet_loss", 0)
         item_loss = QTableWidgetItem(f"{loss}%")
         item_loss.setTextAlignment(Qt.AlignCenter)
+        item_loss.setFont(QFont("", -1, QFont.Bold))
         if loss > 0:
-            item_loss.setForeground(QColor("#ef4444"))
+            item_loss.setForeground(QColor("#ef4444" if self.is_dark else "#dc2626"))
+            # Soft red tint on packet loss cell
+            item_loss.setBackground(QColor(239, 68, 68, 30 if self.is_dark else 25))
         else:
-            item_loss.setForeground(QColor("#10b981"))
+            item_loss.setForeground(QColor("#10b981" if self.is_dark else "#16a34a"))
         self.table.setItem(row, 4, item_loss)
 
-        # 5. Rating badge
-        item_rating = QTableWidgetItem(res["rating"])
+        # 5. Rating badge (High contrast colored pill style)
+        b_type = res.get("badge_type", "info")
+        if b_type == "success":
+            badge_fg = "#34d399" if self.is_dark else "#15803d"
+            badge_bg = QColor(16, 185, 129, 35) if self.is_dark else QColor(220, 252, 231)
+            bullet = "🟢"
+        elif b_type == "info":
+            badge_fg = "#38bdf8" if self.is_dark else "#0369a1"
+            badge_bg = QColor(56, 189, 248, 35) if self.is_dark else QColor(224, 242, 254)
+            bullet = "🔵"
+        elif b_type == "warning":
+            badge_fg = "#fbbf24" if self.is_dark else "#b45309"
+            badge_bg = QColor(245, 158, 11, 35) if self.is_dark else QColor(254, 243, 199)
+            bullet = "🟡"
+        elif b_type == "orange":
+            badge_fg = "#fb923c" if self.is_dark else "#c2410c"
+            badge_bg = QColor(249, 115, 22, 35) if self.is_dark else QColor(255, 237, 213)
+            bullet = "🟠"
+        else:
+            badge_fg = "#f87171" if self.is_dark else "#b91c1c"
+            badge_bg = QColor(239, 68, 68, 35) if self.is_dark else QColor(254, 226, 226)
+            bullet = "🔴"
+
+        item_rating = QTableWidgetItem(f"{bullet} {res['rating']}")
         item_rating.setTextAlignment(Qt.AlignCenter)
         item_rating.setFont(QFont("", -1, QFont.Bold))
-        item_rating.setForeground(QColor(res["color"]))
+        item_rating.setForeground(QColor(badge_fg))
+        item_rating.setBackground(badge_bg)
         self.table.setItem(row, 5, item_rating)
 
         # 6. Feature/Highlight
         badge = "🛡️ Placa de Rede" if "Placa" in res["provider"] else ("🏠 Gateway" if "Gateway" in res["provider"] else "")
         item_feat = QTableWidgetItem(badge or res.get("feature", ""))
         item_feat.setTextAlignment(Qt.AlignCenter)
-        item_feat.setForeground(QColor("#94a3b8"))
+        item_feat.setForeground(QColor(self.c_text_sub))
         self.table.setItem(row, 6, item_feat)
 
     def on_finished(self, summary: dict):
         self.prog_bar.setValue(100)
         self.btn_restart.setEnabled(True)
         self.btn_restart.setText("▶  Novo Teste")
-        self.lbl_status.setText(f"Diagnóstico concluído: {summary['total_tested']} alvos testados com sucesso.")
+        self.lbl_status.setText(f"Diagnóstico concluído: {summary['total_tested']} alvos aferidos com sucesso.")
 
         # Update WAN KPI
         wan_ip = summary.get("public_ip", "Indisponível")
-        self._set_kpi_val(self.card_wan, wan_ip)
+        self._set_kpi_val(self.card_wan, wan_ip, self.c_accent)
 
         # Update Local DNS KPI
         local_dns = [r for r in self.results_list if "Placa" in r.get("provider", "")]
@@ -658,48 +809,56 @@ class InternetQualityDialog(QDialog):
             d_ms = f"{d_best['score_latency']:.1f} ms" if d_best['score_latency'] < 9999 else "Offline"
             self._set_kpi_val(self.card_dns, f"{d_best['ip']} ({d_ms})")
         else:
-            self._set_kpi_val(self.card_dns, "Automático / Router")
+            self._set_kpi_val(self.card_dns, "Router / DHCP")
 
         # Update Gateway KPI
         gw_res = next((r for r in self.results_list if "Gateway" in r.get("provider", "")), None)
         if gw_res and gw_res.get("ping_avg") is not None:
-            self._set_kpi_val(self.card_gw, f"{gw_res['ip']} ({gw_res['ping_avg']:.1f} ms)")
+            self._set_kpi_val(self.card_gw, f"{gw_res['ip']} ({gw_res['ping_avg']:.1f} ms)", "#10b981")
         elif self.gateway_ip:
             self._set_kpi_val(self.card_gw, self.gateway_ip)
 
         # Update Fastest DNS KPI & Table highlight
         fastest = summary.get("fastest_dns")
         if fastest:
-            self._set_kpi_val(self.card_fastest, f"{fastest['provider'].split()[0]} ({fastest['score_latency']:.1f} ms)")
+            prov_short = fastest["provider"].split()[0]
+            self._set_kpi_val(
+                self.card_fastest,
+                f"{prov_short} ({fastest['score_latency']:.1f} ms)",
+                "#eab308" if self.is_dark else "#ca8a04"
+            )
 
-            # Highlight row in table
+            # Highlight champion row in table
             for r in range(self.table.rowCount()):
                 if self.table.item(r, 1) and self.table.item(r, 1).text() == fastest["ip"]:
                     item_dest = self.table.item(r, 6)
                     if item_dest:
                         item_dest.setText("🏆 Mais Rápido!")
                         item_dest.setFont(QFont("", -1, QFont.Bold))
-                        item_dest.setForeground(QColor("#eab308"))
+                        gold_fg = "#facc15" if self.is_dark else "#854d0e"
+                        gold_bg = QColor(234, 179, 8, 45) if self.is_dark else QColor(254, 249, 195)
+                        item_dest.setForeground(QColor(gold_fg))
+                        item_dest.setBackground(gold_bg)
 
             # Formulate recommendation
             local_dns_item = next((r for r in local_dns if r.get("score_latency", 9999) < 9999), None)
             if local_dns_item and local_dns_item["ip"] == fastest["ip"]:
                 self.lbl_recommendation.setText(
-                    f"✔ Excelente configuração! O DNS configurado na sua placa de rede ({fastest['ip']}) é o mais rápido ({fastest['score_latency']:.1f} ms) para sua conexão."
+                    f"✔ Excelente configuração! O DNS configurado na sua placa de rede ({fastest['ip']}) é o mais rápido ({fastest['score_latency']:.1f} ms) para sua rota de internet."
                 )
             elif local_dns_item and local_dns_item["score_latency"] > (fastest["score_latency"] + 15):
                 diff = local_dns_item["score_latency"] - fastest["score_latency"]
                 self.lbl_recommendation.setText(
-                    f"💡 O provedor {fastest['provider']} ({fastest['ip']}) respondeu em {fastest['score_latency']:.1f} ms ({diff:.1f} ms mais rápido que o DNS da placa de rede). Considere utilizá-lo para otimizar a navegação!"
+                    f"💡 Dica de Otimização: O servidor {fastest['provider']} ({fastest['ip']}) respondeu em {fastest['score_latency']:.1f} ms ({diff:.1f} ms mais veloz que o DNS da sua placa). Considere configurá-lo para acelerar o carregamento de sites!"
                 )
             else:
                 self.lbl_recommendation.setText(
-                    f"✔ Conexão com a Internet estável. O provedor mais veloz no teste foi {fastest['provider']} ({fastest['ip']}) com {fastest['score_latency']:.1f} ms."
+                    f"✔ Conexão com a Internet estável e funcional. O servidor com menor tempo de resposta no benchmark foi {fastest['provider']} ({fastest['ip']}) com {fastest['score_latency']:.1f} ms."
                 )
         else:
-            self._set_kpi_val(self.card_fastest, "Sem resposta DNS")
+            self._set_kpi_val(self.card_fastest, "Sem resposta DNS", "#ef4444")
             self.lbl_recommendation.setText(
-                "⚠️ Não foi possível resolver consultas DNS públicas. Verifique seu roteador, firewall ou conexão com o provedor de internet."
+                "⚠️ Não foi possível resolver consultas DNS externas. Verifique sua conexão com o roteador ou firewall de rede."
             )
 
     def copy_report(self):
@@ -717,7 +876,7 @@ class InternetQualityDialog(QDialog):
             f"• DNS da Placa:      {self.card_dns.findChild(QLabel, 'val').text()}",
             f"• DNS Mais Rápido:   {self.card_fastest.findChild(QLabel, 'val').text()}",
             "------------------------------------------------------------------",
-            f"{'Alvo':<34} | {'IP':<15} | {'Ping Méd':<10} | {'DNS RTT':<10} | {'Perda':<6} | {'Classif.'}",
+            f"{'Alvo':<34} | {'IP':<15} | {'Ping Méd':<10} | {'DNS RTT':<10} | {'Perda':<6} | {'Classificação'}",
             "------------------------------------------------------------------",
         ]
         for r in self.results_list:

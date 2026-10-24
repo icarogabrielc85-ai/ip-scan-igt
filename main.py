@@ -2037,13 +2037,13 @@ class MainWindow(QMainWindow):
 
     def open_system_doctor_dialog(self):
         from system_doctor_dialog import SystemDoctorDialog
-        dlg = SystemDoctorDialog(self)
+        dlg = SystemDoctorDialog(self, is_dark=self.is_dark_mode)
         dlg.exec_()
 
     def open_internet_test_dialog(self):
         from internet_test_dialog import InternetQualityDialog
         gw = self.local_info.get("gateway", "")
-        dlg = InternetQualityDialog(self, gateway_ip=gw)
+        dlg = InternetQualityDialog(self, gateway_ip=gw, is_dark=self.is_dark_mode)
         dlg.exec_()
 
     def action_open_rdp(self):
