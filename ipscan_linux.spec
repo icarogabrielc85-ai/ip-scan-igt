@@ -25,6 +25,7 @@ a = Analysis(
         'ssh_dialog',
         'video_config_dialog',
         'system_doctor_dialog',
+        'internet_test_dialog',
         'onvif_engine',
         'oui_db',
         'version',

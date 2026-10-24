@@ -6,7 +6,7 @@ import os
 import subprocess
 
 # Versão Semântica Oficial (MAJOR.MINOR.PATCH)
-APP_VERSION = "2.5.0"
+APP_VERSION = "2.6.0"
 APP_RELEASE_DATE = "24/10/2026"
 
 
@@ -56,6 +56,20 @@ def get_short_version() -> str:
 
 
 VERSION_HISTORY = [
+    {
+        "version": "v2.6.0",
+        "date": "24/10/2026",
+        "title": "Diagnóstico de Saúde da Internet & Benchmark de Servidores DNS Mundiais",
+        "changes": [
+            "Botão dedicado '🌐 Testar Internet' no Ribbon e no menu Ações/Ajuda para auditoria completa de conexão WAN.",
+            "Teste de latência e integridade do Gateway local e de todos os servidores DNS configurados na placa de rede.",
+            "Benchmark comparativo em paralelo dos principais DNS globais (Cloudflare 1.1.1.1, Google 8.8.8.8, OpenDNS Cisco, Quad9 e AdGuard).",
+            "Medição precisa de RTT via query DNS RFC 1035 UDP 53, ping ICMP (mín/méd/máx) e porcentagem de perda de pacotes.",
+            "Detecção automática de IP Público (WAN) e exibição de badges com classificação colorida.",
+            "Recomendação inteligente destacando o provedor DNS mais veloz (🏆) para a rota do usuário.",
+            "Função de exportação com 1 clique do relatório técnico de diagnóstico de conexão para o Clipboard.",
+        ],
+    },
     {
         "version": "v2.5.0",
         "date": "24/10/2026",

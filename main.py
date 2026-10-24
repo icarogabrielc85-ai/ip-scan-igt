@@ -607,6 +607,10 @@ class MainWindow(QMainWindow):
         act_doctor_act.triggered.connect(self.open_system_doctor_dialog)
         menu_actions.addAction(act_doctor_act)
 
+        act_net_test = QAction("🌐 Testar Qualidade e Conexão da Internet...", self)
+        act_net_test.triggered.connect(self.open_internet_test_dialog)
+        menu_actions.addAction(act_net_test)
+
         # 3. Exibir
         menu_view = menu_bar.addMenu("&Exibir")
         self.act_toggle_bottom = QAction("Painel Inferior de Ping & Detalhes", self)
@@ -624,6 +628,10 @@ class MainWindow(QMainWindow):
 
         # 4. Ajuda
         menu_help = menu_bar.addMenu("&Ajuda")
+        act_net_test_help = QAction("🌐 Teste de Conexão & Benchmark de DNS...", self)
+        act_net_test_help.triggered.connect(self.open_internet_test_dialog)
+        menu_help.addAction(act_net_test_help)
+
         act_doctor = QAction("🩺 Diagnóstico e Aptidão do Sistema...", self)
         act_doctor.triggered.connect(self.open_system_doctor_dialog)
         menu_help.addAction(act_doctor)
@@ -825,6 +833,14 @@ class MainWindow(QMainWindow):
         self.btn_nmap.setToolTip("Abrir console de auditoria profunda com Nmap (Ctrl+N)")
         self.btn_nmap.clicked.connect(self.action_open_nmap)
         ribbon_layout.addWidget(self.btn_nmap)
+
+        # Internet Health & DNS Quality Test button
+        self.btn_net_test = QPushButton("🌐 Testar Internet")
+        self.btn_net_test.setObjectName("ribbonBtn")
+        self.btn_net_test.setFixedHeight(28)
+        self.btn_net_test.setToolTip("Testar conexão de internet, gateway, DNS da placa e benchmark dos principais servidores DNS mundiais")
+        self.btn_net_test.clicked.connect(self.open_internet_test_dialog)
+        ribbon_layout.addWidget(self.btn_net_test)
 
         # Executive Report Export Menu button
         self.btn_report = QPushButton("📑 Relatório ▾")
@@ -2022,6 +2038,12 @@ class MainWindow(QMainWindow):
     def open_system_doctor_dialog(self):
         from system_doctor_dialog import SystemDoctorDialog
         dlg = SystemDoctorDialog(self)
+        dlg.exec_()
+
+    def open_internet_test_dialog(self):
+        from internet_test_dialog import InternetQualityDialog
+        gw = self.local_info.get("gateway", "")
+        dlg = InternetQualityDialog(self, gateway_ip=gw)
         dlg.exec_()
 
     def action_open_rdp(self):

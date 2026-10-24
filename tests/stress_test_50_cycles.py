@@ -92,11 +92,13 @@ class StressTestRunner:
         # 6. Mock external OS system launchers in main
         import main
         import ssh_dialog
+        import internet_test_dialog
         main.open_rdp = lambda ip: True
         main.open_terminal_ssh = lambda *args, **kwargs: True
         ssh_dialog.open_terminal_ssh = lambda *args, **kwargs: True
         main.open_smb = lambda ip: True
         main.send_wake_on_lan = lambda mac, broadcast_ip="255.255.255.255", port=9: True
+        internet_test_dialog.InternetQualityDialog.start_test = lambda self: None
 
     def _mock_msgbox(self, parent, title, text, *args, **kwargs):
         self.intercepted_dialogs.append((title, text[:60] if text else ""))
@@ -452,7 +454,8 @@ class StressTestRunner:
         w.show_about_dialog()
         w.open_camera_config_dialog()
         w.open_system_doctor_dialog()
-        self.total_actions += 6
+        w.open_internet_test_dialog()
+        self.total_actions += 7
 
         # Medição de tempo e memória
         elapsed = time.perf_counter() - cycle_start

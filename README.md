@@ -14,6 +14,7 @@
 - **Identificação de Fabricante OUI:** Base offline com mais de 40.000 fabricantes (IEEE OUI).
 - **Seletor de Placas de Rede:** Preenchimento automático para placas cabeadas (Ethernet), Wi-Fi, VPNs (WireGuard, OpenVPN) e Bridges virtuais (Docker/Hyper-V).
 - **Ações Rápidas:** Abertura direta de HTTP, HTTPS, SMB (Compartilhamento de pastas), terminal de ping contínuo e favoritos.
+- **Diagnóstico da Internet & Benchmark de DNS:** Teste de latência do Gateway, DNS da placa de rede e benchmark dos principais provedores mundiais (Google, Cloudflare, OpenDNS, Quad9, AdGuard).
 - **Temas Claro e Escuro:** Interface moderna com tema claro inspirado no Advanced IP Scanner e Dark Mode para ambientes com pouca luz.
 
 ---
@@ -59,15 +60,15 @@ executar_windows.bat
 Você pode baixar os instaladores prontos para uso direto na aba **[Releases](https://github.com/icarogabrielc85-ai/ip-scan-igt/releases)** do repositório:
 
 ### 🐧 Para Linux (Ubuntu, Debian, Linux Mint, Pop!_OS, Kali):
-- **`ipscan-igt_2.5.0_amd64.deb`** — Pacote Debian oficial. Instale dando duplo-clique ou pelo terminal:
+- **`ipscan-igt_2.6.0_amd64.deb`** — Pacote Debian oficial. Instale dando duplo-clique ou pelo terminal:
   ```bash
-  sudo apt install ./ipscan-igt_2.5.0_amd64.deb
+  sudo apt install ./ipscan-igt_2.6.0_amd64.deb
   ```
 - **`IPScanIGT`** — Executável binário portátil x64 para qualquer distribuição Linux.
 
 ### 🪟 Para Windows 10 e Windows 11:
 - **`IPScanIGT.msi`** — Instalador MSI corporativo com registro no Painel de Controle e Menu Iniciar.
-- **`IPScanIGT-Setup-2.5.0.exe`** — Instalador assistente completo com atalho na Área de Trabalho e desinstalador limpo.
+- **`IPScanIGT-Setup-2.6.0.exe`** — Instalador assistente completo com atalho na Área de Trabalho e desinstalador limpo.
 - **`IPScanIGT.exe`** — Executável portátil autônomo (não necessita instalação).
 
 ---
