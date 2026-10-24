@@ -19,8 +19,11 @@ echo "          🔍 IP SCAN IGT — INSTALADOR & VERIFICADOR DE APTIDÃO DO SIS
 echo "=============================================================================="
 echo -e "${RESET}"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+if [ -z "$SCRIPT_DIR" ] || [ ! -f "$SCRIPT_DIR/main.py" ]; then
+    INSTALL_DIR="$HOME/.local/share/ip-scan-igt"
+    SCRIPT_DIR="$INSTALL_DIR"
+fi
 
 # 1. Identificar Distribuição Linux
 DISTRO="generic"
@@ -57,7 +60,7 @@ case "$DISTRO" in
         echo -e "[*] Atualizando repositórios APT e instalando dependências essenciais..."
         run_sudo apt-get update -y
         run_sudo apt-get install -y --no-install-recommends \
-            python3 python3-pip python3-venv \
+            git curl python3 python3-pip python3-venv \
             ffmpeg vlc nmap remmina openssh-client \
             libgl1 libegl1 libxcb-xinerama0 libxcb-cursor0 \
             || true
@@ -74,6 +77,18 @@ case "$DISTRO" in
         echo -e "${YELLOW}[!] Distribuição genérica detectada. Verifique se Python3 e Qt5 estão disponíveis.${RESET}"
         ;;
 esac
+
+# 2.1 Garantir código do repositório em disco (para execução remota via curl | bash)
+if [ ! -f "$SCRIPT_DIR/main.py" ]; then
+    echo -e "\n[*] Baixando a versão oficial mais recente do IP Scan IGT do GitHub..."
+    mkdir -p "$SCRIPT_DIR"
+    if [ -d "$SCRIPT_DIR/.git" ]; then
+        git -C "$SCRIPT_DIR" pull --rebase
+    else
+        git clone https://github.com/icarogabrielc85-ai/ip-scan-igt.git "$SCRIPT_DIR"
+    fi
+fi
+cd "$SCRIPT_DIR"
 
 # 3. Verificação do Python e Bibliotecas PIP
 echo -e "\n[*] ${BOLD}Etapa 2/4: Verificando ambiente Python e bibliotecas necessárias...${RESET}"
@@ -157,11 +172,16 @@ echo -e "  1. Pelo terminal digitando: ${CYAN}ipscan-igt${RESET}"
 echo -e "  2. Pelo menu de aplicativos do seu Linux: buscando por ${CYAN}IP Scan IGT${RESET}"
 echo -e "  3. Executando diretamente nesta pasta: ${CYAN}./executar_linux.sh${RESET}\n"
 
-read -p "Deseja iniciar o IP Scan IGT agora? [S/n]: " -n 1 -r
-echo
+if [ -e /dev/tty ]; then
+    read -p "Deseja iniciar o IP Scan IGT agora? [S/n]: " -n 1 -r < /dev/tty || REPLY="s"
+    echo
+else
+    REPLY="s"
+fi
+
 if [[ $REPLY =~ ^[Nn]$ ]]; then
-    echo "Inicialização cancelada. Tenha um ótimo dia!"
+    echo "Instalação concluída com sucesso! Para abrir mais tarde, digite: ipscan-igt"
 else
     echo "[*] Iniciando IP Scan IGT..."
-    python3 main.py &
+    nohup python3 "$SCRIPT_DIR/main.py" >/dev/null 2>&1 &
 fi

@@ -20,9 +20,14 @@
 
 ## 🚀 Instalação e Execução Inteligente (Com Resolução de Dependências)
 
-### 🐧 No Linux (Instalação Automática de Dependências)
-Basta rodar o instalador inteligente que analisa a aptidão do seu sistema, instala ferramentas ausentes (`ffmpeg`, `vlc`, `nmap`, `remmina`, `PyQt5`, `psutil`), cria o atalho no menu de aplicativos e configura o comando global `ipscan-igt`:
+### 🐧 No Linux (Instalação Direta em 1 Comando via Terminal)
+Abra o terminal e execute o comando abaixo. Ele faz tudo sozinho: baixa o código do GitHub, resolve e instala todas as dependências necessárias (`PyQt5`, `psutil`, `FFplay`, `VLC`, `Nmap`, `Remmina`), cria o atalho no menu de aplicativos e configura o comando global `ipscan-igt`:
 
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/icarogabrielc85-ai/ip-scan-igt/main/instalar_linux.sh)"
+```
+
+Ou, se preferir clonar manualmente pelo Git:
 ```bash
 git clone https://github.com/icarogabrielc85-ai/ip-scan-igt.git
 cd ip-scan-igt
