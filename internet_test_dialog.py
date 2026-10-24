@@ -21,6 +21,7 @@ import urllib.request
 from typing import Dict, List, Optional, Tuple
 
 from scanner_engine import robust_urlopen
+from i18n import tr
 
 from PyQt5.QtCore import QObject, QPoint, QSize, Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QBrush, QColor, QFont, QIcon
@@ -32,6 +33,8 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
+    QMenu,
     QMessageBox,
     QProgressBar,
     QPushButton,
@@ -42,7 +45,7 @@ from PyQt5.QtWidgets import (
 
 IS_WINDOWS = sys.platform.startswith("win") or os.name == "nt"
 
-PUBLIC_DNS_TARGETS = [
+DEFAULT_PUBLIC_DNS_TARGETS = [
     # Cloudflare
     {
         "provider": "Cloudflare DNS (Primário)",
@@ -270,6 +273,200 @@ PUBLIC_DNS_TARGETS = [
     },
 ]
 
+PUBLIC_DNS_TARGETS = DEFAULT_PUBLIC_DNS_TARGETS
+DNS_TARGETS_FILE = os.path.expanduser("~/.config/linux-ipscan/dns_targets.json")
+
+
+def load_dns_targets() -> List[Dict[str, str]]:
+    """Carrega lista de servidores DNS personalizados ou os 30 padrões de fábrica."""
+    if os.path.exists(DNS_TARGETS_FILE):
+        try:
+            with open(DNS_TARGETS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list) and len(data) > 0:
+                    return data
+        except Exception as e:
+            print("Erro ao carregar dns_targets.json:", e)
+    return [dict(x) for x in DEFAULT_PUBLIC_DNS_TARGETS]
+
+
+def save_dns_targets(targets: List[Dict[str, str]]) -> bool:
+    """Salva a lista de servidores DNS no disco para persistência contínua."""
+    try:
+        os.makedirs(os.path.dirname(DNS_TARGETS_FILE), exist_ok=True)
+        with open(DNS_TARGETS_FILE, "w", encoding="utf-8") as f:
+            json.dump(targets, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print("Erro ao salvar dns_targets.json:", e)
+        return False
+
+
+def reset_dns_targets() -> List[Dict[str, str]]:
+    """Restaura a lista para os alvos padrão de fábrica e salva."""
+    targets = [dict(x) for x in DEFAULT_PUBLIC_DNS_TARGETS]
+    save_dns_targets(targets)
+    return targets
+
+
+class DnsEntryDialog(QDialog):
+    """
+    Diálogo modal moderno para adicionar ou editar servidores DNS na lista de benchmark.
+    """
+    def __init__(self, parent=None, entry: Optional[Dict[str, str]] = None, is_dark: bool = False):
+        super().__init__(parent)
+        self.entry = entry
+        self.is_edit = entry is not None
+        self.is_dark = is_dark
+        self.result_entry: Optional[Dict[str, str]] = None
+
+        title = tr("dns_dialog_edit_title") if self.is_edit else tr("dns_dialog_add_title")
+        self.setWindowTitle(title)
+        self.setFixedSize(480, 390)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+
+        c_bg = "#0f172a" if self.is_dark else "#f8fafc"
+        c_card = "#1e293b" if self.is_dark else "#ffffff"
+        c_text = "#f8fafc" if self.is_dark else "#0f172a"
+        c_sub = "#94a3b8" if self.is_dark else "#64748b"
+        c_border = "#334155" if self.is_dark else "#cbd5e1"
+        c_accent = "#38bdf8" if self.is_dark else "#0284c7"
+
+        self.setStyleSheet(f"""
+            QDialog {{ background-color: {c_bg}; color: {c_text}; }}
+            QLabel {{ font-size: 12px; font-weight: bold; color: {c_text}; }}
+            QLineEdit, QComboBox {{
+                background-color: {c_card};
+                color: {c_text};
+                border: 1px solid {c_border};
+                border-radius: 5px;
+                padding: 6px 10px;
+                font-size: 12px;
+            }}
+            QPushButton {{
+                border-radius: 5px;
+                padding: 7px 16px;
+                font-size: 12px;
+                font-weight: bold;
+            }}
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+        layout.setContentsMargins(20, 18, 20, 18)
+
+        # Name
+        layout.addWidget(QLabel(tr("dns_field_name")))
+        self.txt_name = QLineEdit()
+        self.txt_name.setPlaceholderText("Ex: NextDNS (Primário) ou Cisco Umbrella")
+        if self.is_edit:
+            self.txt_name.setText(self.entry.get("provider", ""))
+        layout.addWidget(self.txt_name)
+
+        # IP
+        layout.addWidget(QLabel(tr("dns_field_ip")))
+        self.txt_ip = QLineEdit()
+        self.txt_ip.setPlaceholderText("Ex: 45.90.28.0")
+        if self.is_edit:
+            self.txt_ip.setText(self.entry.get("ip", ""))
+        layout.addWidget(self.txt_ip)
+
+        # Category
+        layout.addWidget(QLabel(tr("dns_field_category")))
+        self.combo_cat = QComboBox()
+        self.combo_cat.setEditable(True)
+        common_cats = [
+            "Público Global",
+            "Segurança & Filtro",
+            "Bloqueio de Anúncios",
+            "Privacidade Estrita",
+            "Brasil / Latência Otimizada",
+            "Velocidade & Neutro",
+            "Infraestrutura Backbone",
+            "Filtro de Conteúdo",
+            "Rede Local / Corporativo",
+        ]
+        for c in common_cats:
+            self.combo_cat.addItem(c)
+        if self.is_edit:
+            self.combo_cat.setCurrentText(self.entry.get("category", "Público Global"))
+        layout.addWidget(self.combo_cat)
+
+        # Feature
+        layout.addWidget(QLabel(tr("dns_field_feature")))
+        self.txt_feat = QLineEdit()
+        self.txt_feat.setPlaceholderText("Ex: Ultra Baixa Latência / Foco em Privacidade")
+        if self.is_edit:
+            self.txt_feat.setText(self.entry.get("feature", ""))
+        layout.addWidget(self.txt_feat)
+
+        # Icon
+        layout.addWidget(QLabel(tr("dns_field_icon")))
+        self.combo_icon = QComboBox()
+        icons = ["⚡", "🔍", "🛡️", "🔒", "🚫", "🌐", "🇧🇷", "🏢", "🕵️", "🚀", "🏠"]
+        for ic in icons:
+            self.combo_icon.addItem(ic)
+        if self.is_edit and self.entry.get("icon") in icons:
+            self.combo_icon.setCurrentText(self.entry.get("icon"))
+        layout.addWidget(self.combo_icon)
+
+        layout.addSpacing(8)
+
+        # Buttons
+        btn_box = QHBoxLayout()
+        btn_box.addStretch()
+
+        self.btn_cancel = QPushButton(tr("btn_cancel"))
+        self.btn_cancel.setCursor(Qt.PointingHandCursor)
+        self.btn_cancel.setStyleSheet(f"background-color: {c_card}; border: 1px solid {c_border}; color: {c_text};")
+        self.btn_cancel.clicked.connect(self.reject)
+        btn_box.addWidget(self.btn_cancel)
+
+        self.btn_save = QPushButton(tr("btn_save"))
+        self.btn_save.setCursor(Qt.PointingHandCursor)
+        self.btn_save.setStyleSheet(f"background-color: {c_accent}; color: #ffffff; border: none;")
+        self.btn_save.clicked.connect(self.save_entry)
+        btn_box.addWidget(self.btn_save)
+
+        layout.addLayout(btn_box)
+
+    def save_entry(self):
+        name = self.txt_name.text().strip()
+        ip = self.txt_ip.text().strip()
+        cat = self.combo_cat.currentText().strip() or "Público Global"
+        feat = self.txt_feat.text().strip() or name
+        icon = self.combo_icon.currentText() or "🌐"
+
+        if not name:
+            QMessageBox.warning(self, "Aviso", "Por favor, informe o nome do provedor DNS.")
+            self.txt_name.setFocus()
+            return
+
+        parts = ip.split(".")
+        if len(parts) != 4:
+            QMessageBox.warning(self, "IP Inválido", tr("dns_invalid_ip"))
+            self.txt_ip.setFocus()
+            return
+        try:
+            for p in parts:
+                v = int(p)
+                if v < 0 or v > 255:
+                    raise ValueError()
+        except Exception:
+            QMessageBox.warning(self, "IP Inválido", tr("dns_invalid_ip"))
+            self.txt_ip.setFocus()
+            return
+
+        self.result_entry = {
+            "provider": name,
+            "ip": ip,
+            "category": cat,
+            "feature": feat,
+            "icon": icon,
+        }
+        self.accept()
+
+
 
 def get_interface_configured_dns() -> List[str]:
     """Retrieves DNS server IPs configured on active local network interfaces."""
@@ -471,9 +668,10 @@ class InternetTestWorker(QThread):
     target_tested = pyqtSignal(dict)
     finished = pyqtSignal(dict)
 
-    def __init__(self, gateway_ip: str = ""):
+    def __init__(self, gateway_ip: str = "", dns_targets: Optional[List[Dict]] = None):
         super().__init__()
         self.gateway_ip = gateway_ip.strip()
+        self.dns_targets = dns_targets
         self._is_cancelled = False
 
     def cancel(self):
@@ -487,7 +685,8 @@ class InternetTestWorker(QThread):
 
         # 2. Assemble test targets list strictly for public DNS benchmark
         targets = []
-        for p in PUBLIC_DNS_TARGETS:
+        active_targets = self.dns_targets if self.dns_targets is not None else load_dns_targets()
+        for p in active_targets:
             p_copy = dict(p)
             p_copy["is_dns"] = True
             targets.append(p_copy)
@@ -630,13 +829,14 @@ class InternetQualityDialog(QDialog):
         self.gateway_ip = gateway_ip.strip()
         self.worker = None
         self.results_list = []
+        self.dns_targets = load_dns_targets()
 
         if is_dark is None:
             self.is_dark = getattr(parent, "is_dark_mode", False)
         else:
             self.is_dark = is_dark
 
-        self.setWindowTitle("Diagnóstico de Conexão com a Internet & Benchmark de DNS")
+        self.setWindowTitle(tr("net_test_title"))
         # Permitir maximizar, restaurar e fechar com botões nativos no título da janela
         self.setWindowFlags(self.windowFlags() | Qt.WindowMinMaxButtonsHint | Qt.WindowCloseButtonHint)
 
@@ -723,9 +923,9 @@ class InternetQualityDialog(QDialog):
 
         info_box = QVBoxLayout()
         info_box.setSpacing(3)
-        lbl_title = QLabel("Teste de Conexão com a Internet & Benchmark de DNS")
+        lbl_title = QLabel(tr("net_test_title"))
         lbl_title.setStyleSheet(f"font-weight: bold; font-size: 15px; color: {self.c_accent};")
-        lbl_sub = QLabel("Avalia em tempo real a rota do Gateway, DNS da placa e os principais provedores mundiais e nacionais.")
+        lbl_sub = QLabel(tr("net_test_sub"))
         lbl_sub.setStyleSheet(f"font-size: 12px; color: {self.c_text_sub};")
         info_box.addWidget(lbl_title)
         info_box.addWidget(lbl_sub)
@@ -737,10 +937,10 @@ class InternetQualityDialog(QDialog):
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(10)
 
-        self.card_wan = self._create_kpi_card("🌐 IP Público (WAN)", "Identificando...", "#0284c7" if not self.is_dark else "#38bdf8")
-        self.card_gw = self._create_kpi_card("🏠 Gateway Local", self.gateway_ip or "Testando...", "#10b981")
-        self.card_dns = self._create_kpi_card("🛡️ DNS da Placa", "Testando...", "#9333ea" if not self.is_dark else "#c084fc")
-        self.card_fastest = self._create_kpi_card("🏆 Mais Rápido", "Aguardando...", "#d97706" if not self.is_dark else "#facc15")
+        self.card_wan = self._create_kpi_card(tr("card_wan"), "Identificando...", "#0284c7" if not self.is_dark else "#38bdf8")
+        self.card_gw = self._create_kpi_card(tr("card_gw"), self.gateway_ip or "Testando...", "#10b981")
+        self.card_dns = self._create_kpi_card(tr("card_dns"), "Testando...", "#9333ea" if not self.is_dark else "#c084fc")
+        self.card_fastest = self._create_kpi_card(tr("card_fastest"), "Aguardando...", "#d97706" if not self.is_dark else "#facc15")
 
         kpi_row.addWidget(self.card_wan)
         kpi_row.addWidget(self.card_gw)
@@ -780,7 +980,7 @@ class InternetQualityDialog(QDialog):
         sort_bar.setContentsMargins(2, 2, 2, 2)
         sort_bar.setSpacing(8)
 
-        lbl_sort = QLabel("⇅ Classificação:")
+        lbl_sort = QLabel(tr("sort_label"))
         lbl_sort.setStyleSheet(f"font-size: 12px; font-weight: bold; color: {self.c_text_main};")
         sort_bar.addWidget(lbl_sort)
 
@@ -817,14 +1017,14 @@ class InternetQualityDialog(QDialog):
         self.combo_sort_col.currentIndexChanged.connect(self.on_sort_changed)
         sort_bar.addWidget(self.combo_sort_col)
 
-        self.btn_sort_asc = QPushButton("▲ Crescente")
+        self.btn_sort_asc = QPushButton(tr("sort_asc"))
         self.btn_sort_asc.setFixedHeight(28)
         self.btn_sort_asc.setCheckable(True)
         self.btn_sort_asc.setChecked(True)
         self.btn_sort_asc.setCursor(Qt.PointingHandCursor)
         self.btn_sort_asc.setToolTip("Classificação crescente (menor latência / mais veloz primeiro)")
 
-        self.btn_sort_desc = QPushButton("▼ Decrescente")
+        self.btn_sort_desc = QPushButton(tr("sort_desc"))
         self.btn_sort_desc.setFixedHeight(28)
         self.btn_sort_desc.setCheckable(True)
         self.btn_sort_desc.setChecked(False)
@@ -836,6 +1036,63 @@ class InternetQualityDialog(QDialog):
 
         sort_bar.addWidget(self.btn_sort_asc)
         sort_bar.addWidget(self.btn_sort_desc)
+
+        # Divisor e Botões de Gerenciamento da Lista DNS
+        sort_bar.addSpacing(10)
+        sep_dns_bar = QFrame()
+        sep_dns_bar.setFrameShape(QFrame.VLine)
+        sep_dns_bar.setFrameShadow(QFrame.Sunken)
+        sep_dns_bar.setStyleSheet(f"color: {self.c_border};")
+        sort_bar.addWidget(sep_dns_bar)
+
+        dns_btn_style = f"""
+            QPushButton {{
+                background-color: {self.c_card_bg};
+                color: {self.c_text_main};
+                border: 1px solid {self.c_border};
+                border-radius: 4px;
+                padding: 3px 10px;
+                font-size: 11px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {self.c_card_hover};
+                border-color: {self.c_accent};
+            }}
+        """
+
+        self.btn_add_dns = QPushButton(tr("btn_add_dns"))
+        self.btn_add_dns.setFixedHeight(28)
+        self.btn_add_dns.setCursor(Qt.PointingHandCursor)
+        self.btn_add_dns.setStyleSheet(dns_btn_style)
+        self.btn_add_dns.setToolTip("Adicionar um novo servidor DNS personalizado na lista de testes")
+        self.btn_add_dns.clicked.connect(self.on_add_dns)
+        sort_bar.addWidget(self.btn_add_dns)
+
+        self.btn_edit_dns = QPushButton(tr("btn_edit_dns"))
+        self.btn_edit_dns.setFixedHeight(28)
+        self.btn_edit_dns.setCursor(Qt.PointingHandCursor)
+        self.btn_edit_dns.setStyleSheet(dns_btn_style)
+        self.btn_edit_dns.setToolTip("Editar o servidor DNS selecionado na tabela")
+        self.btn_edit_dns.clicked.connect(self.on_edit_dns)
+        sort_bar.addWidget(self.btn_edit_dns)
+
+        self.btn_delete_dns = QPushButton(tr("btn_delete_dns"))
+        self.btn_delete_dns.setFixedHeight(28)
+        self.btn_delete_dns.setCursor(Qt.PointingHandCursor)
+        self.btn_delete_dns.setStyleSheet(dns_btn_style)
+        self.btn_delete_dns.setToolTip("Excluir o servidor DNS selecionado da lista de testes")
+        self.btn_delete_dns.clicked.connect(self.on_delete_dns)
+        sort_bar.addWidget(self.btn_delete_dns)
+
+        self.btn_reset_dns = QPushButton(tr("btn_reset_dns"))
+        self.btn_reset_dns.setFixedHeight(28)
+        self.btn_reset_dns.setCursor(Qt.PointingHandCursor)
+        self.btn_reset_dns.setStyleSheet(dns_btn_style)
+        self.btn_reset_dns.setToolTip("Restaurar a lista para os 30 servidores DNS oficiais padrão")
+        self.btn_reset_dns.clicked.connect(self.on_reset_dns)
+        sort_bar.addWidget(self.btn_reset_dns)
+
         sort_bar.addStretch()
 
         vbox.addLayout(sort_bar)
@@ -844,13 +1101,13 @@ class InternetQualityDialog(QDialog):
         self.table = QTableWidget()
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
-            "Provedor / Alvo",
-            "Endereço IP",
-            "Ping ICMP (Médio)",
-            "Query DNS UDP 53",
-            "Perda de Pacotes",
-            "Qualidade",
-            "Destaque",
+            tr("col_dns_provider"),
+            tr("col_dns_ip"),
+            tr("col_dns_icmp"),
+            tr("col_dns_udp"),
+            tr("col_dns_loss"),
+            tr("col_dns_quality"),
+            tr("col_dns_feature"),
         ])
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
@@ -864,6 +1121,8 @@ class InternetQualityDialog(QDialog):
         self.table.verticalHeader().setVisible(False)
         self.table.setAlternatingRowColors(True)
         self.table.setShowGrid(True)
+        self.table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self.on_table_context_menu)
         self._update_sort_btn_styles()
 
         self.table.setStyleSheet(f"""
@@ -923,7 +1182,7 @@ class InternetQualityDialog(QDialog):
         btn_box = QHBoxLayout()
         btn_box.setSpacing(10)
 
-        self.btn_restart = QPushButton("▶  Novo Teste")
+        self.btn_restart = QPushButton(tr("btn_restart_test"))
         self.btn_restart.setObjectName("btnStart")
         self.btn_restart.setFixedHeight(34)
         self.btn_restart.setFixedWidth(125)
@@ -931,7 +1190,7 @@ class InternetQualityDialog(QDialog):
         self.btn_restart.clicked.connect(self.start_test)
         btn_box.addWidget(self.btn_restart)
 
-        self.btn_copy = QPushButton("📋 Copiar Relatório")
+        self.btn_copy = QPushButton(tr("btn_copy_report"))
         self.btn_copy.setFixedHeight(34)
         self.btn_copy.setCursor(Qt.PointingHandCursor)
         self.btn_copy.clicked.connect(self.copy_report)
@@ -939,7 +1198,7 @@ class InternetQualityDialog(QDialog):
 
         btn_box.addStretch()
 
-        btn_close = QPushButton("Fechar")
+        btn_close = QPushButton(tr("btn_close"))
         btn_close.setFixedHeight(34)
         btn_close.setFixedWidth(100)
         btn_close.setCursor(Qt.PointingHandCursor)
@@ -1036,6 +1295,134 @@ class InternetQualityDialog(QDialog):
         self.table.setSortingEnabled(True)
         self.table.sortByColumn(col, order)
 
+    def on_table_context_menu(self, pos: QPoint):
+        item = self.table.itemAt(pos)
+        menu = QMenu(self)
+        menu.setStyleSheet(f"""
+            QMenu {{
+                background-color: {self.c_card_bg};
+                color: {self.c_text_main};
+                border: 1px solid {self.c_border};
+                border-radius: 4px;
+                padding: 4px;
+            }}
+            QMenu::item {{
+                padding: 6px 16px;
+                border-radius: 3px;
+            }}
+            QMenu::item:selected {{
+                background-color: {self.c_accent};
+                color: #ffffff;
+            }}
+        """)
+        act_add = menu.addAction(tr("btn_add_dns"))
+        act_add.triggered.connect(self.on_add_dns)
+
+        if item:
+            row = item.row()
+            self.table.selectRow(row)
+            act_edit = menu.addAction(tr("btn_edit_dns"))
+            act_edit.triggered.connect(self.on_edit_dns)
+            act_del = menu.addAction(tr("btn_delete_dns"))
+            act_del.triggered.connect(self.on_delete_dns)
+
+        menu.addSeparator()
+        act_reset = menu.addAction(tr("btn_reset_dns"))
+        act_reset.triggered.connect(self.on_reset_dns)
+
+        menu.exec_(self.table.viewport().mapToGlobal(pos))
+
+    def on_add_dns(self):
+        dlg = DnsEntryDialog(self, is_dark=self.is_dark)
+        if dlg.exec_() == QDialog.Accepted and dlg.result_entry:
+            new_item = dlg.result_entry
+            existing_idx = next((i for i, x in enumerate(self.dns_targets) if x["ip"] == new_item["ip"]), None)
+            if existing_idx is not None:
+                self.dns_targets[existing_idx] = new_item
+            else:
+                self.dns_targets.append(new_item)
+            save_dns_targets(self.dns_targets)
+            ret = QMessageBox.question(
+                self,
+                "DNS Adicionado",
+                f"Servidor '{new_item['provider']}' ({new_item['ip']}) salvo com sucesso!\n\nDeseja iniciar um novo teste de benchmark agora?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes
+            )
+            if ret == QMessageBox.Yes:
+                self.start_test()
+
+    def on_edit_dns(self):
+        row = self.table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "Aviso", "Selecione um servidor DNS na tabela para editar.")
+            return
+        item_ip = self.table.item(row, 1)
+        if not item_ip:
+            return
+        ip_str = item_ip.text().strip()
+        entry = next((x for x in self.dns_targets if x["ip"] == ip_str), None)
+        if not entry:
+            item_name = self.table.item(row, 0)
+            name_str = item_name.text().strip() if item_name else ip_str
+            entry = {"provider": name_str, "ip": ip_str, "category": "Público Global", "feature": name_str, "icon": "🌐"}
+
+        dlg = DnsEntryDialog(self, entry=entry, is_dark=self.is_dark)
+        if dlg.exec_() == QDialog.Accepted and dlg.result_entry:
+            new_item = dlg.result_entry
+            for i, x in enumerate(self.dns_targets):
+                if x["ip"] == entry["ip"] or x["ip"] == new_item["ip"]:
+                    self.dns_targets[i] = new_item
+                    break
+            else:
+                self.dns_targets.append(new_item)
+            save_dns_targets(self.dns_targets)
+            ret = QMessageBox.question(
+                self,
+                "DNS Atualizado",
+                f"Servidor '{new_item['provider']}' ({new_item['ip']}) atualizado com sucesso!\n\nDeseja reiniciar o teste de benchmark agora?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes
+            )
+            if ret == QMessageBox.Yes:
+                self.start_test()
+
+    def on_delete_dns(self):
+        row = self.table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "Aviso", "Selecione um servidor DNS na tabela para remover.")
+            return
+        item_name = self.table.item(row, 0)
+        item_ip = self.table.item(row, 1)
+        if not item_ip:
+            return
+        name_str = item_name.text().strip() if item_name else ""
+        ip_str = item_ip.text().strip()
+
+        ret = QMessageBox.question(
+            self,
+            "Confirmar Remoção",
+            f"Deseja realmente remover o servidor DNS '{name_str}' ({ip_str}) da lista?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        if ret == QMessageBox.Yes:
+            self.dns_targets = [x for x in self.dns_targets if x["ip"] != ip_str]
+            save_dns_targets(self.dns_targets)
+            self.table.removeRow(row)
+
+    def on_reset_dns(self):
+        ret = QMessageBox.question(
+            self,
+            "Restaurar Padrões",
+            "Deseja realmente restaurar a lista para os 30 servidores DNS oficiais padrão de fábrica?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        if ret == QMessageBox.Yes:
+            self.dns_targets = reset_dns_targets()
+            self.start_test()
+
     def start_test(self):
         if self.worker and self.worker.isRunning():
             self.worker.cancel()
@@ -1050,7 +1437,7 @@ class InternetQualityDialog(QDialog):
         self.lbl_status.setText("Disparando testes simultâneos de latência ICMP e queries DNS UDP 53...")
         self.lbl_recommendation.setText("Aguardando finalização das medições para calcular o melhor provedor...")
 
-        self.worker = InternetTestWorker(gateway_ip=self.gateway_ip)
+        self.worker = InternetTestWorker(gateway_ip=self.gateway_ip, dns_targets=self.dns_targets)
         self.worker.progress.connect(self.on_progress)
         self.worker.target_tested.connect(self.on_target_tested)
         self.worker.finished.connect(self.on_finished)

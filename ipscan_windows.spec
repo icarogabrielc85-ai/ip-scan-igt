@@ -29,6 +29,7 @@ a = Analysis(
         'onvif_engine',
         'oui_db',
         'version',
+        'i18n',
         'ui_theme',
         'scanner_engine',
         'interface_dialog',

@@ -129,6 +129,7 @@ from PyQt5.QtCore import QObject, QPoint, QProcess, QSize, Qt, QThread, QTimer, 
 from PyQt5.QtGui import QColor, QDesktopServices, QFont, QIcon, QPixmap
 from PyQt5.QtWidgets import (
     QAction,
+    QActionGroup,
     QApplication,
     QCheckBox,
     QComboBox,
@@ -157,6 +158,8 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from i18n import SUPPORTED_LANGUAGES, get_current_language, set_current_language, tr
 
 from oui_db import OUI_DB
 from scanner_engine import (
@@ -675,146 +678,164 @@ class MainWindow(QMainWindow):
         self.table_sweep_timer.timeout.connect(self.sweep_table_pings)
         self.table_sweep_timer.start(2500)
 
+        self.current_lang = get_current_language()
+
         self.init_menu_bar()
         self.init_ui()
         self.load_favorites()
         self.apply_theme()
+        self.retranslate_ui()
 
     def init_menu_bar(self):
         menu_bar = self.menuBar()
 
         # 1. Arquivo
-        menu_file = menu_bar.addMenu("&Arquivo")
-        act_csv = QAction("Exportar Resultados para CSV...", self)
-        act_csv.setShortcut("Ctrl+S")
-        act_csv.triggered.connect(lambda: self.export_results("csv"))
-        menu_file.addAction(act_csv)
+        self.menu_file = menu_bar.addMenu(tr("menu_file"))
+        self.act_csv = QAction(tr("export_csv"), self)
+        self.act_csv.setShortcut("Ctrl+S")
+        self.act_csv.triggered.connect(lambda: self.export_results("csv"))
+        self.menu_file.addAction(self.act_csv)
 
-        act_html = QAction("Exportar Relatório Executivo HTML / PDF...", self)
-        act_html.setShortcut("Ctrl+H")
-        act_html.triggered.connect(lambda: self.export_results("html"))
-        menu_file.addAction(act_html)
+        self.act_html = QAction(tr("export_html"), self)
+        self.act_html.setShortcut("Ctrl+H")
+        self.act_html.triggered.connect(lambda: self.export_results("html"))
+        self.menu_file.addAction(self.act_html)
 
-        act_json = QAction("Exportar Resultados para JSON...", self)
-        act_json.triggered.connect(lambda: self.export_results("json"))
-        menu_file.addAction(act_json)
+        self.act_json = QAction(tr("export_json"), self)
+        self.act_json.triggered.connect(lambda: self.export_results("json"))
+        self.menu_file.addAction(self.act_json)
 
-        act_txt = QAction("Exportar Relatório em Texto (.txt)...", self)
-        act_txt.triggered.connect(lambda: self.export_results("txt"))
-        menu_file.addAction(act_txt)
+        self.act_txt = QAction(tr("export_txt"), self)
+        self.act_txt.triggered.connect(lambda: self.export_results("txt"))
+        self.menu_file.addAction(self.act_txt)
 
-        menu_file.addSeparator()
-        act_exit = QAction("Sair", self)
-        act_exit.setShortcut("Ctrl+Q")
-        act_exit.triggered.connect(self.close)
-        menu_file.addAction(act_exit)
+        self.menu_file.addSeparator()
+        self.act_exit = QAction(tr("exit"), self)
+        self.act_exit.setShortcut("Ctrl+Q")
+        self.act_exit.triggered.connect(self.close)
+        self.menu_file.addAction(self.act_exit)
 
         # 2. Ações
-        menu_actions = menu_bar.addMenu("&Ações")
-        self.act_scan = QAction("Verificar Rede", self)
+        self.menu_actions = menu_bar.addMenu(tr("menu_actions"))
+        self.act_scan = QAction(tr("scan_network"), self)
         self.act_scan.setShortcut("F5")
         self.act_scan.triggered.connect(self.toggle_scan)
-        menu_actions.addAction(self.act_scan)
+        self.menu_actions.addAction(self.act_scan)
 
-        self.act_stop = QAction("Parar Varredura", self)
+        self.act_stop = QAction(tr("stop_scan"), self)
         self.act_stop.setShortcut("Esc")
         self.act_stop.triggered.connect(self.toggle_scan)
-        menu_actions.addAction(self.act_stop)
+        self.menu_actions.addAction(self.act_stop)
 
-        menu_actions.addSeparator()
-        act_expand = QAction("Expandir Todos os Serviços [+]", self)
-        act_expand.setShortcut("Ctrl+E")
-        act_expand.triggered.connect(self.expand_all_results)
-        menu_actions.addAction(act_expand)
+        self.menu_actions.addSeparator()
+        self.act_expand = QAction(tr("expand_all"), self)
+        self.act_expand.setShortcut("Ctrl+E")
+        self.act_expand.triggered.connect(self.expand_all_results)
+        self.menu_actions.addAction(self.act_expand)
 
-        act_collapse = QAction("Recolher Todos [-]", self)
-        act_collapse.setShortcut("Ctrl+R")
-        act_collapse.triggered.connect(self.collapse_all_results)
-        menu_actions.addAction(act_collapse)
+        self.act_collapse = QAction(tr("collapse_all"), self)
+        self.act_collapse.setShortcut("Ctrl+R")
+        self.act_collapse.triggered.connect(self.collapse_all_results)
+        self.menu_actions.addAction(self.act_collapse)
 
-        menu_actions.addSeparator()
-        act_add_fav = QAction("Adicionar Selecionado aos Favoritos", self)
-        act_add_fav.setShortcut("Ctrl+D")
-        act_add_fav.triggered.connect(self.add_selected_to_favorites)
-        menu_actions.addAction(act_add_fav)
+        self.menu_actions.addSeparator()
+        self.act_add_fav = QAction(tr("add_favorite"), self)
+        self.act_add_fav.setShortcut("Ctrl+D")
+        self.act_add_fav.triggered.connect(self.add_selected_to_favorites)
+        self.menu_actions.addAction(self.act_add_fav)
 
-        act_scan_fav = QAction("Verificar Somente Favoritos", self)
-        act_scan_fav.triggered.connect(self.scan_favorites_only)
-        menu_actions.addAction(act_scan_fav)
+        self.act_scan_fav = QAction(tr("scan_favorites"), self)
+        self.act_scan_fav.triggered.connect(self.scan_favorites_only)
+        self.menu_actions.addAction(self.act_scan_fav)
 
-        menu_actions.addSeparator()
-        act_iface = QAction("Selecionar Placa de Rede...", self)
-        act_iface.setShortcut("Ctrl+I")
-        act_iface.triggered.connect(self.open_interface_dialog)
-        menu_actions.addAction(act_iface)
+        self.menu_actions.addSeparator()
+        self.act_iface = QAction(tr("select_interface"), self)
+        self.act_iface.setShortcut("Ctrl+I")
+        self.act_iface.triggered.connect(self.open_interface_dialog)
+        self.menu_actions.addAction(self.act_iface)
 
-        act_nmap = QAction("Varredura Avançada com Nmap...", self)
-        act_nmap.setShortcut("Ctrl+N")
-        act_nmap.triggered.connect(self.action_open_nmap)
-        menu_actions.addAction(act_nmap)
+        self.act_nmap = QAction(tr("nmap_scan"), self)
+        self.act_nmap.setShortcut("Ctrl+N")
+        self.act_nmap.triggered.connect(self.action_open_nmap)
+        self.menu_actions.addAction(self.act_nmap)
 
-        menu_actions.addSeparator()
-        act_rdp = QAction("Conectar via Área de Trabalho Remota (RDP)...", self)
-        act_rdp.triggered.connect(self.action_open_rdp)
-        menu_actions.addAction(act_rdp)
+        self.menu_actions.addSeparator()
+        self.act_rdp = QAction(tr("connect_rdp"), self)
+        self.act_rdp.triggered.connect(self.action_open_rdp)
+        self.menu_actions.addAction(self.act_rdp)
 
-        act_ssh = QAction("Conectar via Terminal SSH...", self)
-        act_ssh.triggered.connect(self.action_open_ssh)
-        menu_actions.addAction(act_ssh)
+        self.act_ssh = QAction(tr("connect_ssh"), self)
+        self.act_ssh.triggered.connect(self.action_open_ssh)
+        self.menu_actions.addAction(self.act_ssh)
 
-        act_wol = QAction("Enviar Wake-on-LAN (Ligar Computador)...", self)
-        act_wol.triggered.connect(self.action_open_wol)
-        menu_actions.addAction(act_wol)
+        self.act_wol = QAction(tr("wake_on_lan"), self)
+        self.act_wol.triggered.connect(self.action_open_wol)
+        self.menu_actions.addAction(self.act_wol)
 
-        act_video_cfg = QAction("⚙️ Configurar Resolução e Reprodução de Câmeras...", self)
-        act_video_cfg.triggered.connect(self.open_camera_config_dialog)
-        menu_actions.addAction(act_video_cfg)
+        self.act_video_cfg = QAction(tr("config_video"), self)
+        self.act_video_cfg.triggered.connect(self.open_camera_config_dialog)
+        self.menu_actions.addAction(self.act_video_cfg)
 
-        act_doctor_act = QAction("🩺 Verificar Aptidão e Dependências do Sistema...", self)
-        act_doctor_act.triggered.connect(self.open_system_doctor_dialog)
-        menu_actions.addAction(act_doctor_act)
+        self.act_doctor_act = QAction(tr("system_doctor"), self)
+        self.act_doctor_act.triggered.connect(self.open_system_doctor_dialog)
+        self.menu_actions.addAction(self.act_doctor_act)
 
-        act_net_test = QAction("🌐 Testar Qualidade e Conexão da Internet...", self)
-        act_net_test.triggered.connect(self.open_internet_test_dialog)
-        menu_actions.addAction(act_net_test)
+        self.act_net_test = QAction(tr("internet_test"), self)
+        self.act_net_test.triggered.connect(self.open_internet_test_dialog)
+        self.menu_actions.addAction(self.act_net_test)
 
         # 3. Exibir
-        menu_view = menu_bar.addMenu("&Exibir")
-        self.act_toggle_bottom = QAction("Painel Inferior de Ping & Detalhes", self)
+        self.menu_view = menu_bar.addMenu(tr("menu_view"))
+        self.act_toggle_bottom = QAction(tr("panel_ping"), self)
         self.act_toggle_bottom.setCheckable(True)
         self.act_toggle_bottom.setChecked(True)
         self.act_toggle_bottom.setShortcut("Ctrl+P")
         self.act_toggle_bottom.triggered.connect(self.toggle_bottom_panel)
-        menu_view.addAction(self.act_toggle_bottom)
+        self.menu_view.addAction(self.act_toggle_bottom)
 
-        menu_view.addSeparator()
-        act_theme = QAction("Alternar Tema Claro / Escuro", self)
-        act_theme.setShortcut("Ctrl+T")
-        act_theme.triggered.connect(self.toggle_theme)
-        menu_view.addAction(act_theme)
+        self.menu_view.addSeparator()
+        self.act_theme = QAction(tr("toggle_theme"), self)
+        self.act_theme.setShortcut("Ctrl+T")
+        self.act_theme.triggered.connect(self.toggle_theme)
+        self.menu_view.addAction(self.act_theme)
 
-        # 4. Ajuda
-        menu_help = menu_bar.addMenu("&Ajuda")
-        act_net_test_help = QAction("🌐 Teste de Conexão & Benchmark de DNS...", self)
-        act_net_test_help.triggered.connect(self.open_internet_test_dialog)
-        menu_help.addAction(act_net_test_help)
+        # 4. Idioma / Language (9 idiomas completos)
+        self.menu_lang = menu_bar.addMenu(tr("menu_lang"))
+        self.lang_action_group = QActionGroup(self)
+        self.lang_action_group.setExclusive(True)
+        self.lang_actions = {}
+        for code, lang_info in SUPPORTED_LANGUAGES.items():
+            act = QAction(f"{lang_info['flag']}  {lang_info['native']}", self)
+            act.setCheckable(True)
+            if code == self.current_lang:
+                act.setChecked(True)
+            act.triggered.connect(lambda checked, c=code: self.change_language(c))
+            self.lang_action_group.addAction(act)
+            self.menu_lang.addAction(act)
+            self.lang_actions[code] = act
 
-        act_doctor = QAction("🩺 Diagnóstico e Aptidão do Sistema...", self)
-        act_doctor.triggered.connect(self.open_system_doctor_dialog)
-        menu_help.addAction(act_doctor)
+        # 5. Ajuda
+        self.menu_help = menu_bar.addMenu(tr("menu_help"))
+        self.act_net_test_help = QAction(tr("internet_test"), self)
+        self.act_net_test_help.triggered.connect(self.open_internet_test_dialog)
+        self.menu_help.addAction(self.act_net_test_help)
 
-        act_update = QAction("🔄 Verificar e Atualizar IP Scan IGT...", self)
-        act_update.triggered.connect(self.check_and_apply_update)
-        menu_help.addAction(act_update)
+        self.act_doctor = QAction(tr("system_doctor"), self)
+        self.act_doctor.triggered.connect(self.open_system_doctor_dialog)
+        self.menu_help.addAction(self.act_doctor)
 
-        act_changelog = QAction("Histórico de Versões e Atualizações...", self)
-        act_changelog.triggered.connect(self.show_changelog_dialog)
-        menu_help.addAction(act_changelog)
-        menu_help.addSeparator()
+        self.act_update = QAction(tr("check_updates"), self)
+        self.act_update.triggered.connect(self.check_and_apply_update)
+        self.menu_help.addAction(self.act_update)
 
-        act_about = QAction("Sobre o IP Scan IGT...", self)
-        act_about.triggered.connect(self.show_about_dialog)
-        menu_help.addAction(act_about)
+        self.act_changelog = QAction("Histórico de Versões e Atualizações...", self)
+        self.act_changelog.triggered.connect(self.show_changelog_dialog)
+        self.menu_help.addAction(self.act_changelog)
+        self.menu_help.addSeparator()
+
+        self.act_about = QAction(tr("about"), self)
+        self.act_about.triggered.connect(self.show_about_dialog)
+        self.menu_help.addAction(self.act_about)
 
     def init_ui(self):
         central_widget = QWidget()
@@ -885,9 +906,9 @@ class MainWindow(QMainWindow):
         top_layout.addWidget(self.btn_subnet)
 
         # Range inputs
-        lbl_from = QLabel("Faixa:")
-        lbl_from.setStyleSheet("font-weight: 600; font-size: 12px;")
-        top_layout.addWidget(lbl_from)
+        self.lbl_from = QLabel("Faixa:")
+        self.lbl_from.setStyleSheet("font-weight: 600; font-size: 12px;")
+        top_layout.addWidget(self.lbl_from)
 
         self.txt_start_ip = QLineEdit(self.local_info.get("start_ip", "192.168.1.1"))
         self.txt_start_ip.setObjectName("txtStartIp")
@@ -909,9 +930,9 @@ class MainWindow(QMainWindow):
         self.txt_end_ip.setToolTip("Endereço IP final da faixa de varredura")
         top_layout.addWidget(self.txt_end_ip)
 
-        lbl_mask = QLabel("Máscara:")
-        lbl_mask.setStyleSheet("font-weight: 600; font-size: 12px;")
-        top_layout.addWidget(lbl_mask)
+        self.lbl_mask = QLabel("Máscara:")
+        self.lbl_mask.setStyleSheet("font-weight: 600; font-size: 12px;")
+        top_layout.addWidget(self.lbl_mask)
 
         self.combo_mask = QComboBox()
         self.combo_mask.setMinimumWidth(235)
@@ -956,19 +977,19 @@ class MainWindow(QMainWindow):
         ribbon_layout.setSpacing(6)
 
         # Quick Expand/Collapse buttons
-        btn_expand = QPushButton("⊞ Expandir")
-        btn_expand.setObjectName("ribbonBtn")
-        btn_expand.setFixedHeight(28)
-        btn_expand.setToolTip("Expandir todos os serviços e recursos de todos os hosts [+] (Ctrl+E)")
-        btn_expand.clicked.connect(self.expand_all_results)
-        ribbon_layout.addWidget(btn_expand)
+        self.btn_expand = QPushButton("⊞ Expandir")
+        self.btn_expand.setObjectName("ribbonBtn")
+        self.btn_expand.setFixedHeight(28)
+        self.btn_expand.setToolTip("Expandir todos os serviços e recursos de todos os hosts [+] (Ctrl+E)")
+        self.btn_expand.clicked.connect(self.expand_all_results)
+        ribbon_layout.addWidget(self.btn_expand)
 
-        btn_collapse = QPushButton("⊟ Recolher")
-        btn_collapse.setObjectName("ribbonBtn")
-        btn_collapse.setFixedHeight(28)
-        btn_collapse.setToolTip("Recolher todos os dispositivos [-] (Ctrl+R)")
-        btn_collapse.clicked.connect(self.collapse_all_results)
-        ribbon_layout.addWidget(btn_collapse)
+        self.btn_collapse = QPushButton("⊟ Recolher")
+        self.btn_collapse.setObjectName("ribbonBtn")
+        self.btn_collapse.setFixedHeight(28)
+        self.btn_collapse.setToolTip("Recolher todos os dispositivos [-] (Ctrl+R)")
+        self.btn_collapse.clicked.connect(self.collapse_all_results)
+        ribbon_layout.addWidget(self.btn_collapse)
 
         # Divider
         sep_r1 = QFrame()
@@ -1042,6 +1063,19 @@ class MainWindow(QMainWindow):
         self.btn_theme.clicked.connect(self.toggle_theme)
         ribbon_layout.addWidget(self.btn_theme)
 
+        # Seletor Rápido de Idioma na Barra de Ferramentas (9 idiomas)
+        self.combo_lang = QComboBox()
+        self.combo_lang.setObjectName("comboLang")
+        self.combo_lang.setFixedHeight(28)
+        self.combo_lang.setToolTip("Alterar idioma da aplicação (Change application language)")
+        for code, lang_info in SUPPORTED_LANGUAGES.items():
+            self.combo_lang.addItem(f"{lang_info['flag']}  {lang_info['native']}", code)
+        idx_lang = self.combo_lang.findData(self.current_lang)
+        if idx_lang >= 0:
+            self.combo_lang.setCurrentIndex(idx_lang)
+        self.combo_lang.currentIndexChanged.connect(self.on_lang_combo_changed)
+        ribbon_layout.addWidget(self.combo_lang)
+
         # Stretch spacer
         ribbon_layout.addStretch()
 
@@ -1096,18 +1130,18 @@ class MainWindow(QMainWindow):
         # Toolbar on top of Favorites tab
         fav_bar = QHBoxLayout()
         fav_bar.setContentsMargins(0, 0, 0, 4)
-        btn_scan_fav = QPushButton("▶  Verificar Favoritos")
-        btn_scan_fav.setFixedHeight(28)
-        btn_scan_fav.clicked.connect(self.scan_favorites_only)
-        btn_del_fav = QPushButton("Remover Selecionado")
-        btn_del_fav.setFixedHeight(28)
-        btn_del_fav.clicked.connect(self.remove_selected_favorite)
-        btn_clear_fav = QPushButton("Limpar Todos")
-        btn_clear_fav.setFixedHeight(28)
-        btn_clear_fav.clicked.connect(self.clear_all_favorites)
-        fav_bar.addWidget(btn_scan_fav)
-        fav_bar.addWidget(btn_del_fav)
-        fav_bar.addWidget(btn_clear_fav)
+        self.btn_scan_fav = QPushButton("▶  Verificar Favoritos")
+        self.btn_scan_fav.setFixedHeight(28)
+        self.btn_scan_fav.clicked.connect(self.scan_favorites_only)
+        self.btn_del_fav = QPushButton("Remover Selecionado")
+        self.btn_del_fav.setFixedHeight(28)
+        self.btn_del_fav.clicked.connect(self.remove_selected_favorite)
+        self.btn_clear_fav = QPushButton("Limpar Todos")
+        self.btn_clear_fav.setFixedHeight(28)
+        self.btn_clear_fav.clicked.connect(self.clear_all_favorites)
+        fav_bar.addWidget(self.btn_scan_fav)
+        fav_bar.addWidget(self.btn_del_fav)
+        fav_bar.addWidget(self.btn_clear_fav)
         fav_bar.addStretch()
         fav_layout.addLayout(fav_bar)
 
@@ -1139,10 +1173,10 @@ class MainWindow(QMainWindow):
         pheader_layout.addWidget(self.lbl_panel_title)
         pheader_layout.addStretch()
 
-        btn_hide_panel = QPushButton("✕ Fechar")
-        btn_hide_panel.setFixedHeight(24)
-        btn_hide_panel.clicked.connect(lambda: self.set_bottom_panel_visible(False))
-        pheader_layout.addWidget(btn_hide_panel)
+        self.btn_hide_panel = QPushButton("✕ Fechar")
+        self.btn_hide_panel.setFixedHeight(24)
+        self.btn_hide_panel.clicked.connect(lambda: self.set_bottom_panel_visible(False))
+        pheader_layout.addWidget(self.btn_hide_panel)
         panel_layout.addWidget(panel_header)
 
         # Panel content: Left = Oscilloscope, Right = Details Table & Actions
@@ -1274,13 +1308,13 @@ class MainWindow(QMainWindow):
         tree = QTreeWidget()
         tree.setColumnCount(7)
         tree.setHeaderLabels([
-            "Status",
-            "Nome",
-            "Endereço IP",
-            "Fabricante",
-            "Endereço MAC",
-            "Ping",
-            "Comentários / Serviços",
+            tr("col_status"),
+            tr("col_hostname"),
+            tr("col_ip"),
+            tr("col_manufacturer"),
+            tr("col_mac"),
+            tr("col_ping"),
+            tr("col_comments"),
         ])
         tree.setAlternatingRowColors(True)
 
@@ -1305,6 +1339,129 @@ class MainWindow(QMainWindow):
         tree.header().resizeSection(5, 85)
         tree.header().setSectionResizeMode(6, QHeaderView.Stretch)
         return tree
+
+    def on_lang_combo_changed(self):
+        code = self.combo_lang.currentData()
+        if code and code != self.current_lang:
+            self.change_language(code)
+
+    def change_language(self, lang_code: str):
+        if lang_code in SUPPORTED_LANGUAGES:
+            self.current_lang = lang_code
+            set_current_language(lang_code)
+
+            # Sync combo box
+            idx = self.combo_lang.findData(lang_code)
+            if idx >= 0 and self.combo_lang.currentIndex() != idx:
+                self.combo_lang.blockSignals(True)
+                self.combo_lang.setCurrentIndex(idx)
+                self.combo_lang.blockSignals(False)
+
+            # Sync menu action check
+            act = self.lang_actions.get(lang_code)
+            if act and not act.isChecked():
+                act.setChecked(True)
+
+            self.retranslate_ui()
+
+    def retranslate_ui(self):
+        # Window Title
+        self.setWindowTitle(f"IP Scan IGT — {get_full_version()} [{SUPPORTED_LANGUAGES[self.current_lang]['native']}]")
+
+        # Menus
+        if hasattr(self, "menu_file"):
+            self.menu_file.setTitle(tr("menu_file"))
+            self.act_csv.setText(tr("export_csv"))
+            self.act_html.setText(tr("export_html"))
+            self.act_json.setText(tr("export_json"))
+            self.act_txt.setText(tr("export_txt"))
+            self.act_exit.setText(tr("exit"))
+
+            self.menu_actions.setTitle(tr("menu_actions"))
+            if self.scan_worker and self.scan_worker.isRunning():
+                self.act_scan.setText(tr("stop_scan"))
+            else:
+                self.act_scan.setText(tr("scan_network"))
+            self.act_stop.setText(tr("stop_scan"))
+            self.act_expand.setText(tr("expand_all"))
+            self.act_collapse.setText(tr("collapse_all"))
+            self.act_add_fav.setText(tr("add_favorite"))
+            self.act_scan_fav.setText(tr("scan_favorites"))
+            self.act_iface.setText(tr("select_interface"))
+            self.act_nmap.setText(tr("nmap_scan"))
+            self.act_rdp.setText(tr("connect_rdp"))
+            self.act_ssh.setText(tr("connect_ssh"))
+            self.act_wol.setText(tr("wake_on_lan"))
+            self.act_video_cfg.setText(tr("config_video"))
+            self.act_doctor_act.setText(tr("system_doctor"))
+            self.act_net_test.setText(tr("internet_test"))
+
+            self.menu_view.setTitle(tr("menu_view"))
+            self.act_toggle_bottom.setText(tr("panel_ping"))
+            self.act_theme.setText(tr("toggle_theme"))
+
+            self.menu_lang.setTitle(tr("menu_lang"))
+
+            self.menu_help.setTitle(tr("menu_help"))
+            self.act_net_test_help.setText(tr("internet_test"))
+            self.act_doctor.setText(tr("system_doctor"))
+            self.act_update.setText(tr("check_updates"))
+            self.act_about.setText(tr("about"))
+
+        # Ribbon Inputs & Buttons
+        if hasattr(self, "btn_start"):
+            if self.scan_worker and self.scan_worker.isRunning():
+                self.btn_start.setText(f"⏹  {tr('btn_stop')}")
+            else:
+                self.btn_start.setText(f"▶  {tr('btn_scan')}")
+
+            self.lbl_from.setText(tr("lbl_ip_range"))
+            self.lbl_mask.setText(tr("lbl_mask"))
+            self.txt_search.setPlaceholderText(f"🔍 {tr('filter_placeholder')}")
+            self.btn_update.setText(tr("btn_update"))
+            self.btn_expand.setText(f"⊞ {tr('expand_all')}")
+            self.btn_collapse.setText(f"⊟ {tr('collapse_all')}")
+            self.btn_camera_cfg.setText(tr("btn_video"))
+            self.btn_nmap.setText(tr("btn_nmap"))
+            self.btn_net_test.setText(tr("btn_net_test"))
+            self.btn_report.setText(tr("report_menu"))
+            self.btn_panel_toggle.setText(tr("panel_ping"))
+            self.btn_theme.setText(tr("theme_light") if self.is_dark_mode else tr("theme_dark"))
+
+        # Tabs
+        if hasattr(self, "main_tabs"):
+            self.main_tabs.setTabText(0, tr("tab_results"))
+            self.main_tabs.setTabText(1, tr("tab_favorites"))
+
+        # Favorites Bar
+        if hasattr(self, "btn_scan_fav"):
+            self.btn_scan_fav.setText(f"▶  {tr('scan_favorites')}")
+            self.btn_del_fav.setText(tr("remove_favorite"))
+            self.btn_clear_fav.setText(tr("clear_all"))
+
+        # Table Headers
+        headers = [
+            tr("col_status"),
+            tr("col_hostname"),
+            tr("col_ip"),
+            tr("col_manufacturer"),
+            tr("col_mac"),
+            tr("col_ping"),
+            tr("col_comments"),
+        ]
+        if hasattr(self, "tree"):
+            self.tree.setHeaderLabels(headers)
+        if hasattr(self, "fav_tree"):
+            self.fav_tree.setHeaderLabels(headers)
+
+        # Bottom Panel Close Button
+        if hasattr(self, "btn_hide_panel"):
+            self.btn_hide_panel.setText(f"✕ {tr('btn_close')}")
+
+        # Status Bar (if idle)
+        if hasattr(self, "lbl_stats") and not (self.scan_worker and self.scan_worker.isRunning()):
+            online_count = sum(1 for r in self.records.values() if r.alive)
+            self.lbl_stats.setText(f"{tr('status_ready')} • Interface: {self.local_info.get('interface')} ({self.local_info.get('ip')}) • {online_count} online")
 
     def show_report_menu(self):
         menu = QMenu(self)
@@ -1647,7 +1804,7 @@ class MainWindow(QMainWindow):
 
     def set_scan_running_state(self, running: bool, total: int = 0):
         if running:
-            self.btn_start.setText("⏹  Parar")
+            self.btn_start.setText(f"⏹  {tr('btn_stop')}")
             self.btn_start.setObjectName("btnStop")
             self.btn_start.style().unpolish(self.btn_start)
             self.btn_start.style().polish(self.btn_start)
@@ -1658,7 +1815,7 @@ class MainWindow(QMainWindow):
             self.prog_bar.setValue(0)
             self.prog_bar.setVisible(True)
         else:
-            self.btn_start.setText("▶  Verificar")
+            self.btn_start.setText(f"▶  {tr('btn_scan')}")
             self.btn_start.setObjectName("btnStart")
             self.btn_start.style().unpolish(self.btn_start)
             self.btn_start.style().polish(self.btn_start)
@@ -1978,38 +2135,38 @@ class MainWindow(QMainWindow):
         rec = self.records[ip]
 
         menu = QMenu(self)
-        a_add_fav = menu.addAction("★ Adicionar aos Favoritos")
+        a_add_fav = menu.addAction(f"★ {tr('ctx_add_fav')}")
         menu.addSeparator()
 
         a_rtsp = None
         a_cam_cfg = None
         if rec.rtsp_url or 554 in rec.open_ports:
-            a_rtsp = menu.addAction("🎬 Assistir Transmissão ao Vivo (RTSP)")
-            a_cam_cfg = menu.addAction("⚙️ Configurar Resolução de Vídeo...")
+            a_rtsp = menu.addAction(f"🎬 {tr('ctx_rtsp')}")
+            a_cam_cfg = menu.addAction(tr("config_video"))
 
         a_onvif = None
         if rec.onvif_url:
-            a_onvif = menu.addAction("🎥 Abrir Painel ONVIF no Navegador")
+            a_onvif = menu.addAction(f"🎥 {tr('col_cameras')}")
 
-        a_nmap = menu.addAction("🔍 Escanear com Nmap (-sV)...")
+        a_nmap = menu.addAction(f"🔍 {tr('ctx_nmap')}")
         menu.addSeparator()
 
-        a_rdp = menu.addAction("🖥️ Conectar via Área de Trabalho Remota (RDP)")
-        a_ssh = menu.addAction("💻 Conectar via Terminal SSH")
-        a_wol = menu.addAction("⚡ Enviar Wake-on-LAN (Ligar Computador)")
+        a_rdp = menu.addAction(f"🖥️ {tr('ctx_rdp')}")
+        a_ssh = menu.addAction(f"💻 {tr('ctx_ssh')}")
+        a_wol = menu.addAction(f"⚡ {tr('ctx_wol')}")
         menu.addSeparator()
 
-        a_open_http = menu.addAction("Abrir no Navegador (HTTP)")
-        a_open_https = menu.addAction("Abrir no Navegador Seguro (HTTPS)")
-        a_open_smb = menu.addAction("Abrir Compartilhamento de Rede (SMB)")
+        a_open_http = menu.addAction(tr("ctx_open_http"))
+        a_open_https = menu.addAction(tr("ctx_open_https"))
+        a_open_smb = menu.addAction(tr("ctx_open_smb"))
         menu.addSeparator()
 
-        a_copy_ip = menu.addAction("Copiar Endereço IP")
-        a_copy_mac = menu.addAction("Copiar Endereço MAC")
-        a_copy_all = menu.addAction("Copiar Relatório Completo")
+        a_copy_ip = menu.addAction(tr("ctx_copy_ip"))
+        a_copy_mac = menu.addAction(tr("ctx_copy_mac"))
+        a_copy_all = menu.addAction(tr("export_txt"))
         menu.addSeparator()
 
-        a_term_ping = menu.addAction("Ping Contínuo no Terminal")
+        a_term_ping = menu.addAction(tr("ctx_ping"))
 
         action = menu.exec_(self.tree.viewport().mapToGlobal(pos))
         if action == a_add_fav:
@@ -2054,23 +2211,23 @@ class MainWindow(QMainWindow):
         rec = self.fav_records[ip]
 
         menu = QMenu(self)
-        a_remove = menu.addAction("Remover dos Favoritos")
+        a_remove = menu.addAction(f"★ {tr('ctx_remove_fav')}")
         menu.addSeparator()
         a_rtsp = None
         a_cam_cfg = None
         if rec.rtsp_url or 554 in rec.open_ports:
-            a_rtsp = menu.addAction("🎬 Assistir Transmissão ao Vivo (RTSP)")
-            a_cam_cfg = menu.addAction("⚙️ Configurar Resolução de Vídeo...")
-        a_nmap = menu.addAction("🔍 Escanear com Nmap (-sV)...")
+            a_rtsp = menu.addAction(f"🎬 {tr('ctx_rtsp')}")
+            a_cam_cfg = menu.addAction(tr("config_video"))
+        a_nmap = menu.addAction(f"🔍 {tr('ctx_nmap')}")
         menu.addSeparator()
-        a_rdp = menu.addAction("🖥️ Conectar via Área de Trabalho Remota (RDP)")
-        a_ssh = menu.addAction("💻 Conectar via Terminal SSH")
-        a_wol = menu.addAction("⚡ Enviar Wake-on-LAN (Ligar Computador)")
+        a_rdp = menu.addAction(f"🖥️ {tr('ctx_rdp')}")
+        a_ssh = menu.addAction(f"💻 {tr('ctx_ssh')}")
+        a_wol = menu.addAction(f"⚡ {tr('ctx_wol')}")
         menu.addSeparator()
-        a_open_http = menu.addAction("Abrir HTTP")
-        a_open_smb = menu.addAction("Abrir SMB")
-        a_term_ping = menu.addAction("Ping no Terminal")
-        a_copy_ip = menu.addAction("Copiar IP")
+        a_open_http = menu.addAction(tr("ctx_open_http"))
+        a_open_smb = menu.addAction(tr("ctx_open_smb"))
+        a_term_ping = menu.addAction(tr("ctx_ping"))
+        a_copy_ip = menu.addAction(tr("ctx_copy_ip"))
 
         action = menu.exec_(self.fav_tree.viewport().mapToGlobal(pos))
         if action == a_remove:

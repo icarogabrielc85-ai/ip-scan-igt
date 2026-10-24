@@ -124,22 +124,22 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.6.2
-          name: "IP Scan IGT v2.6.2 — Pacotes .deb (Linux), .msi e .exe (Windows)"
+          tag_name: v2.7.0
+          name: "IP Scan IGT v2.7.0 — Pacotes .deb (Linux), .msi e .exe (Windows)"
           body: |
-            ## 📦 Downloads Oficiais do IP Scan IGT (v2.6.2)
+            ## 📦 Downloads Oficiais do IP Scan IGT (v2.7.0)
 
             Selecione o pacote compatível com seu sistema operacional:
 
             ### 🐧 Linux (Ubuntu, Debian, Pop!_OS, Linux Mint, Kali):
-            - **Pacote Debian (.deb):** `ipscan-igt_2.6.2_amd64.deb`  
-              *(Instale dando duplo-clique ou pelo terminal: `sudo apt install ./ipscan-igt_2.6.2_amd64.deb`)*
+            - **Pacote Debian (.deb):** `ipscan-igt_2.7.0_amd64.deb`  
+              *(Instale dando duplo-clique ou pelo terminal: `sudo apt install ./ipscan-igt_2.7.0_amd64.deb`)*
             - **Binário Portátil:** `IPScanIGT`
 
             ### 🪟 Windows 10 e Windows 11:
             - **Instalador MSI (.msi):** `IPScanIGT.msi`  
               *(Instalação padrão corporativa do Windows)*
-            - **Instalador Assistente (.exe):** `IPScanIGT-Setup-2.6.2.exe`  
+            - **Instalador Assistente (.exe):** `IPScanIGT-Setup-2.7.0.exe`  
               *(Instala o programa e cria o atalho oficial na Área de Trabalho)*
             - **Executável Portátil (.exe):** `IPScanIGT.exe`  
               *(Executa direto com duplo-clique sem precisar instalar)*

@@ -6,7 +6,7 @@ import os
 import subprocess
 
 # Versão Semântica Oficial (MAJOR.MINOR.PATCH)
-APP_VERSION = "2.6.2"
+APP_VERSION = "2.7.0"
 APP_RELEASE_DATE = "24/10/2026"
 
 
@@ -73,6 +73,19 @@ def get_short_version() -> str:
 
 
 VERSION_HISTORY = [
+    {
+        "version": "v2.7.0",
+        "date": "24/10/2026",
+        "title": "Suporte Multilíngue (9 Idiomas) & Gerenciamento Customizado da Lista DNS",
+        "changes": [
+            "Suporte completo a 9 idiomas: Português (Brasil), Inglês, Espanhol, Italiano, Ucraniano, Russo, Chinês Simplificado, Polonês e Francês.",
+            "Troca dinâmica de idioma em tempo real via menu ou seletor rápido no Ribbon, com persistência em settings.json.",
+            "Gerenciamento completo da lista de servidores DNS: adicionar novo DNS, editar existente, excluir e restaurar padrões de fábrica.",
+            "Diálogo dedicado de cadastro com validação de formato IPv4, categorias e seleção de ícones representativos.",
+            "Menu de contexto rápido com o botão direito na tabela de benchmark de DNS para edição e remoção direta.",
+            "Persistência automática da lista personalizada em ~/.config/linux-ipscan/dns_targets.json.",
+        ],
+    },
     {
         "version": "v2.6.2",
         "date": "24/10/2026",
