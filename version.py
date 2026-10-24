@@ -63,7 +63,7 @@ VERSION_HISTORY = [
         "changes": [
             "Botão dedicado '🌐 Testar Internet' no Ribbon e no menu Ações/Ajuda para auditoria completa de conexão WAN.",
             "Teste de latência e integridade do Gateway local e de todos os servidores DNS configurados na placa de rede.",
-            "Benchmark comparativo em paralelo dos principais DNS globais (Cloudflare 1.1.1.1, Google 8.8.8.8, OpenDNS Cisco, Quad9 e AdGuard).",
+            "Benchmark comparativo em paralelo dos principais DNS globais e nacionais (Cloudflare, Google, GigaDNS Brasil, CleanBrowsing, Control D, OpenDNS, Quad9, AdGuard, Mullvad, Comodo, Yandex, Level3, SafeDNS, Neustar UltraDNS).",
             "Medição precisa de RTT via query DNS RFC 1035 UDP 53, ping ICMP (mín/méd/máx) e porcentagem de perda de pacotes.",
             "Detecção automática de IP Público (WAN) e exibição de badges com classificação colorida.",
             "Recomendação inteligente destacando o provedor DNS mais veloz (🏆) para a rota do usuário.",

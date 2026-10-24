@@ -2,7 +2,8 @@
 """
 Internet Health, Latency & DNS Benchmark Diagnostic Dialog for IP Scan IGT.
 Measures gateway ping, network interface DNS servers, and benchmarks major public DNS providers
-(Cloudflare, Google, OpenDNS, Quad9, AdGuard) with packet loss, jitter, and DNS resolution latency.
+(Cloudflare, Google, GigaDNS, CleanBrowsing, Control D, OpenDNS, Quad9, AdGuard, Mullvad, Comodo, Yandex, Level3, SafeDNS, Neustar UltraDNS)
+with packet loss, jitter, and DNS resolution latency.
 Fully adaptive to both Dark Mode and Light Mode with high-contrast, modern UI/UX ergonomics.
 """
 
@@ -39,6 +40,7 @@ from PyQt5.QtWidgets import (
 IS_WINDOWS = sys.platform.startswith("win") or os.name == "nt"
 
 PUBLIC_DNS_TARGETS = [
+    # Cloudflare
     {
         "provider": "Cloudflare DNS (Primário)",
         "ip": "1.1.1.1",
@@ -53,6 +55,7 @@ PUBLIC_DNS_TARGETS = [
         "feature": "Ultra Baixa Latência / Backup Cloudflare",
         "icon": "⚡",
     },
+    # Google Public DNS
     {
         "provider": "Google Public DNS (Primário)",
         "ip": "8.8.8.8",
@@ -67,6 +70,52 @@ PUBLIC_DNS_TARGETS = [
         "feature": "Alta Confiabilidade / Backup Google",
         "icon": "🔍",
     },
+    # GigaDNS (Latência otimizada para o Brasil)
+    {
+        "provider": "GigaDNS (Primário)",
+        "ip": "189.38.95.95",
+        "category": "Brasil / Latência Otimizada",
+        "feature": "Latência otimizada para o Brasil",
+        "icon": "🇧🇷",
+    },
+    {
+        "provider": "GigaDNS (Secundário)",
+        "ip": "189.38.95.96",
+        "category": "Brasil / Latência Otimizada",
+        "feature": "Latência otimizada para o Brasil",
+        "icon": "🇧🇷",
+    },
+    # CleanBrowsing (Filtro de Segurança)
+    {
+        "provider": "CleanBrowsing (Primário)",
+        "ip": "185.228.168.9",
+        "category": "Filtro de Segurança",
+        "feature": "Filtro de segurança e proteção para família",
+        "icon": "🛡️",
+    },
+    {
+        "provider": "CleanBrowsing (Secundário)",
+        "ip": "185.228.169.9",
+        "category": "Filtro de Segurança",
+        "feature": "Filtro de segurança e proteção para família",
+        "icon": "🛡️",
+    },
+    # Control D (Sem filtros/Alta velocidade)
+    {
+        "provider": "Control D (Primário)",
+        "ip": "76.76.2.0",
+        "category": "Velocidade & Neutro",
+        "feature": "Sem filtros / Alta velocidade Anycast",
+        "icon": "⚡",
+    },
+    {
+        "provider": "Control D (Secundário)",
+        "ip": "76.76.10.0",
+        "category": "Velocidade & Neutro",
+        "feature": "Sem filtros / Alta velocidade Anycast",
+        "icon": "⚡",
+    },
+    # OpenDNS Cisco
     {
         "provider": "OpenDNS Cisco (Primário)",
         "ip": "208.67.222.222",
@@ -81,6 +130,7 @@ PUBLIC_DNS_TARGETS = [
         "feature": "Proteção Antiphishing / Backup Cisco",
         "icon": "🛡️",
     },
+    # Quad9 DNS
     {
         "provider": "Quad9 DNS (Primário)",
         "ip": "9.9.9.9",
@@ -89,11 +139,131 @@ PUBLIC_DNS_TARGETS = [
         "icon": "🔒",
     },
     {
-        "provider": "AdGuard DNS (Público)",
+        "provider": "Quad9 DNS (Secundário)",
+        "ip": "149.112.112.112",
+        "category": "Segurança & Privacidade",
+        "feature": "Filtro Ativo contra Ameaças / Backup Quad9",
+        "icon": "🔒",
+    },
+    # AdGuard DNS
+    {
+        "provider": "AdGuard DNS (Primário)",
         "ip": "94.140.14.14",
         "category": "Privacidade & Anti-Ad",
         "feature": "Bloqueio de Anúncios e Rastreadores",
         "icon": "🚫",
+    },
+    {
+        "provider": "AdGuard DNS (Secundário)",
+        "ip": "94.140.15.15",
+        "category": "Privacidade & Anti-Ad",
+        "feature": "Bloqueio de Anúncios / Backup AdGuard",
+        "icon": "🚫",
+    },
+    # Alternate DNS (Bloqueio de anúncios)
+    {
+        "provider": "Alternate DNS (Primário)",
+        "ip": "76.76.19.19",
+        "category": "Bloqueio de Anúncios",
+        "feature": "Bloqueio de anúncios e rastreadores",
+        "icon": "🚫",
+    },
+    {
+        "provider": "Alternate DNS (Secundário)",
+        "ip": "76.223.122.150",
+        "category": "Bloqueio de Anúncios",
+        "feature": "Bloqueio de anúncios e rastreadores",
+        "icon": "🚫",
+    },
+    # Mullvad DNS (Foco em privacidade e sem logs)
+    {
+        "provider": "Mullvad DNS (Primário)",
+        "ip": "194.242.2.2",
+        "category": "Privacidade Estrita",
+        "feature": "Foco em privacidade e sem logs (No-Log)",
+        "icon": "🕵️",
+    },
+    {
+        "provider": "Mullvad DNS (Secundário)",
+        "ip": "194.242.2.3",
+        "category": "Privacidade Estrita",
+        "feature": "Foco em privacidade e sem logs (No-Log)",
+        "icon": "🕵️",
+    },
+    # Comodo Secure DNS (Foco em segurança)
+    {
+        "provider": "Comodo Secure DNS (Primário)",
+        "ip": "8.26.56.26",
+        "category": "Foco em Segurança",
+        "feature": "Foco em segurança e proteção contra ameaças",
+        "icon": "🛡️",
+    },
+    {
+        "provider": "Comodo Secure DNS (Secundário)",
+        "ip": "8.20.247.20",
+        "category": "Foco em Segurança",
+        "feature": "Foco em segurança e proteção contra ameaças",
+        "icon": "🛡️",
+    },
+    # Yandex.DNS (Básico/Confiável)
+    {
+        "provider": "Yandex.DNS (Primário)",
+        "ip": "77.88.8.8",
+        "category": "Básico & Confiável",
+        "feature": "Básico e confiável Anycast",
+        "icon": "🌐",
+    },
+    {
+        "provider": "Yandex.DNS (Secundário)",
+        "ip": "77.88.8.1",
+        "category": "Básico & Confiável",
+        "feature": "Básico e confiável Anycast / Backup",
+        "icon": "🌐",
+    },
+    # Level3 / CenturyLink (Infraestrutura de backbone)
+    {
+        "provider": "Level3 / CenturyLink (Primário)",
+        "ip": "209.244.0.3",
+        "category": "Infraestrutura Backbone",
+        "feature": "Infraestrutura de backbone Tier-1",
+        "icon": "🏢",
+    },
+    {
+        "provider": "Level3 / CenturyLink (Secundário)",
+        "ip": "209.244.0.4",
+        "category": "Infraestrutura Backbone",
+        "feature": "Infraestrutura de backbone Tier-1",
+        "icon": "🏢",
+    },
+    # SafeDNS (Filtro de conteúdo e ameaças)
+    {
+        "provider": "SafeDNS (Primário)",
+        "ip": "195.46.39.39",
+        "category": "Filtro de Conteúdo",
+        "feature": "Filtro de conteúdo e ameaças cibernéticas",
+        "icon": "🔒",
+    },
+    {
+        "provider": "SafeDNS (Secundário)",
+        "ip": "195.46.39.40",
+        "category": "Filtro de Conteúdo",
+        "feature": "Filtro de conteúdo e ameaças cibernéticas",
+        "icon": "🔒",
+    },
+    # Neustar UltraDNS (Proteção contra ameaças)
+    {
+        "provider": "Neustar UltraDNS (Primário)",
+        "ip": "156.154.70.2",
+        "category": "Proteção contra Ameaças",
+        "feature": "Proteção corporativa contra ameaças",
+        "icon": "🛡️",
+    },
+    {
+        "provider": "Neustar UltraDNS (Secundário)",
+        "ip": "156.154.71.2",
+        "category": "Proteção contra Ameaças",
+        "feature": "Proteção corporativa contra ameaças",
+        "icon": "🛡️",
     },
 ]
 
@@ -344,7 +514,7 @@ class InternetTestWorker(QThread):
             return res
 
         tested_count = 0
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             future_to_item = {executor.submit(_test_single_target, item): item for item in targets}
             for future in concurrent.futures.as_completed(future_to_item):
                 if self._is_cancelled:
@@ -392,7 +562,7 @@ class InternetQualityDialog(QDialog):
             self.is_dark = is_dark
 
         self.setWindowTitle("Diagnóstico de Conexão com a Internet & Benchmark de DNS")
-        self.resize(860, 600)
+        self.resize(880, 640)
         self.init_palette_and_styles()
         self.init_ui()
         self.start_test()
@@ -465,7 +635,7 @@ class InternetQualityDialog(QDialog):
         info_box.setSpacing(3)
         lbl_title = QLabel("Teste de Conexão com a Internet & Benchmark de DNS")
         lbl_title.setStyleSheet(f"font-weight: bold; font-size: 15px; color: {self.c_accent};")
-        lbl_sub = QLabel("Avalia em tempo real a rota do Gateway, DNS configurado na placa e os 5 maiores provedores mundiais.")
+        lbl_sub = QLabel("Avalia em tempo real a rota do Gateway, DNS da placa e os principais provedores mundiais e nacionais.")
         lbl_sub.setStyleSheet(f"font-size: 12px; color: {self.c_text_sub};")
         info_box.addWidget(lbl_title)
         info_box.addWidget(lbl_sub)
