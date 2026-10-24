@@ -27,19 +27,19 @@ from PyQt5.QtWidgets import (
 VIDEO_CONFIG_FILE = os.path.expanduser("~/.config/linux-ipscan/video_config.json")
 
 RESOLUTION_PRESETS = [
-    ("1280x720 (HD 720p — Recomendado)", "1280x720", 1280, 720),
+    ("800x600 (SVGA — Resolução Padrão)", "800x600", 800, 600),
+    ("1280x720 (HD 720p)", "1280x720", 1280, 720),
     ("1920x1080 (Full HD 1080p)", "1920x1080", 1920, 1080),
     ("1024x768 (XGA 4:3)", "1024x768", 1024, 768),
-    ("800x600 (SVGA)", "800x600", 800, 600),
     ("640x480 (VGA — Leve / Baixa Carga)", "640x480", 640, 480),
     ("Automático (Resolução Nativa da Câmera)", "auto", 0, 0),
-    ("Personalizada (Definir Pixels)...", "custom", 1280, 720),
+    ("Personalizada (Definir Pixels)...", "custom", 800, 600),
 ]
 
 DEFAULT_VIDEO_CONFIG = {
-    "resolution_preset": "1280x720",
-    "custom_width": 1280,
-    "custom_height": 720,
+    "resolution_preset": "800x600",
+    "custom_width": 800,
+    "custom_height": 600,
     "transport": "tcp",
     "low_latency": True,
     "auto_exit": True,
@@ -76,18 +76,18 @@ def save_video_config(cfg: Dict) -> bool:
 def get_video_dimensions() -> Tuple[Optional[int], Optional[int]]:
     """Returns (width, height) or (None, None) if native resolution is chosen."""
     cfg = get_video_config()
-    preset = cfg.get("resolution_preset", "1280x720")
+    preset = cfg.get("resolution_preset", "800x600")
     if preset == "auto":
         return None, None
     elif preset == "custom":
-        w = cfg.get("custom_width", 1280)
-        h = cfg.get("custom_height", 720)
+        w = cfg.get("custom_width", 800)
+        h = cfg.get("custom_height", 600)
         return w, h
     else:
         for _, code, w, h in RESOLUTION_PRESETS:
             if code == preset and w > 0 and h > 0:
                 return w, h
-    return 1280, 720
+    return 800, 600
 
 
 class VideoConfigDialog(QDialog):
@@ -163,7 +163,7 @@ class VideoConfigDialog(QDialog):
         lbl_w.setStyleSheet("font-weight: 500; font-size: 12px;")
         self.spin_w = QSpinBox()
         self.spin_w.setRange(320, 7680)
-        self.spin_w.setValue(1280)
+        self.spin_w.setValue(800)
         self.spin_w.setFixedHeight(30)
         self.spin_w.valueChanged.connect(self.update_preview)
 
@@ -171,7 +171,7 @@ class VideoConfigDialog(QDialog):
         lbl_h.setStyleSheet("font-weight: 500; font-size: 12px;")
         self.spin_h = QSpinBox()
         self.spin_h.setRange(240, 4320)
-        self.spin_h.setValue(720)
+        self.spin_h.setValue(600)
         self.spin_h.setFixedHeight(30)
         self.spin_h.valueChanged.connect(self.update_preview)
 
@@ -225,7 +225,7 @@ class VideoConfigDialog(QDialog):
         form_layout.addWidget(self.chk_autoexit)
 
         # Preview label
-        self.lbl_preview = QLabel("Comando: ffplay -rtsp_transport tcp -x 1280 -y 720 ...")
+        self.lbl_preview = QLabel("Comando: ffplay -rtsp_transport tcp -x 800 -y 600 ...")
         self.lbl_preview.setStyleSheet("font-family: monospace; font-size: 11px; color: #38bdf8; background: #0f172a; padding: 6px; border-radius: 4px; border: 1px solid #1e293b;")
         self.lbl_preview.setWordWrap(True)
         form_layout.addWidget(self.lbl_preview)
@@ -284,7 +284,7 @@ class VideoConfigDialog(QDialog):
         elif preset == "custom":
             res_str = f"-x {self.spin_w.value()} -y {self.spin_h.value()}" if player != "vlc" else f"--width={self.spin_w.value()} --height={self.spin_h.value()}"
         else:
-            w, h = 1280, 720
+            w, h = 800, 600
             for _, c, pw, ph in RESOLUTION_PRESETS:
                 if c == preset:
                     w, h = pw, ph
@@ -302,15 +302,15 @@ class VideoConfigDialog(QDialog):
 
     def load_config(self):
         cfg = get_video_config()
-        preset = cfg.get("resolution_preset", "1280x720")
+        preset = cfg.get("resolution_preset", "800x600")
         idx = self.combo_res.findData(preset)
         if idx >= 0:
             self.combo_res.setCurrentIndex(idx)
         else:
             self.combo_res.setCurrentIndex(0)
 
-        self.spin_w.setValue(cfg.get("custom_width", 1280))
-        self.spin_h.setValue(cfg.get("custom_height", 720))
+        self.spin_w.setValue(cfg.get("custom_width", 800))
+        self.spin_h.setValue(cfg.get("custom_height", 600))
 
         trans = cfg.get("transport", "tcp")
         t_idx = self.combo_trans.findData(trans)

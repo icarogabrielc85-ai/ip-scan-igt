@@ -309,7 +309,7 @@ def launch_video_player(rtsp_url: str, title: str = "Câmera IP — IP Scan IGT"
         width, height = get_video_dimensions()
     except Exception:
         cfg = {}
-        width, height = 1280, 720
+        width, height = 800, 600
 
     preferred = cfg.get("player", "auto")
     transport = cfg.get("transport", "tcp")
