@@ -91,8 +91,10 @@ class StressTestRunner:
 
         # 6. Mock external OS system launchers in main
         import main
+        import ssh_dialog
         main.open_rdp = lambda ip: True
-        main.open_terminal_ssh = lambda ip: True
+        main.open_terminal_ssh = lambda *args, **kwargs: True
+        ssh_dialog.open_terminal_ssh = lambda *args, **kwargs: True
         main.open_smb = lambda ip: True
         main.send_wake_on_lan = lambda mac, broadcast_ip="255.255.255.255", port=9: True
 
@@ -448,7 +450,8 @@ class StressTestRunner:
         w.show_interface_menu()
         w.show_changelog_dialog()
         w.show_about_dialog()
-        self.total_actions += 4
+        w.open_camera_config_dialog()
+        self.total_actions += 5
 
         # Medição de tempo e memória
         elapsed = time.perf_counter() - cycle_start

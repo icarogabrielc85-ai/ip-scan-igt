@@ -119,36 +119,8 @@ def open_rdp(ip: str) -> bool:
         return False
 
 
-def open_terminal_ssh(ip: str, user: str = "") -> bool:
-    if not ip:
-        return False
-    target = f"{user}@{ip}" if user else ip
-    if IS_WINDOWS:
-        try:
-            subprocess.Popen(f'cmd.exe /c start "SSH {target}" ssh {target}', shell=True)
-            return True
-        except Exception:
-            return False
-    else:
-        terms = [
-            ("konsole", ["konsole", "-e", "ssh", target]),
-            ("gnome-terminal", ["gnome-terminal", "--", "ssh", target]),
-            ("x-terminal-emulator", ["x-terminal-emulator", "-e", f"ssh {target}"]),
-            ("xfce4-terminal", ["xfce4-terminal", "-e", f"ssh {target}"]),
-            ("xterm", ["xterm", "-e", f"ssh {target}"]),
-        ]
-        for name, cmd in terms:
-            if shutil.which(name):
-                try:
-                    subprocess.Popen(cmd)
-                    return True
-                except Exception:
-                    pass
-        try:
-            subprocess.Popen(["xterm", "-e", f"ssh {target}"])
-            return True
-        except Exception:
-            return False
+from ssh_dialog import SshConnectDialog, open_terminal_ssh
+from video_config_dialog import VideoConfigDialog, get_video_config
 
 from PyQt5.QtCore import QObject, QPoint, QProcess, QSize, Qt, QThread, QTimer, QUrl, pyqtSignal, pyqtSlot
 from PyQt5.QtGui import QColor, QDesktopServices, QFont, QIcon, QPixmap
@@ -627,6 +599,10 @@ class MainWindow(QMainWindow):
         act_wol.triggered.connect(self.action_open_wol)
         menu_actions.addAction(act_wol)
 
+        act_video_cfg = QAction("⚙️ Configurar Resolução e Reprodução de Câmeras...", self)
+        act_video_cfg.triggered.connect(self.open_camera_config_dialog)
+        menu_actions.addAction(act_video_cfg)
+
         # 3. Exibir
         menu_view = menu_bar.addMenu("&Exibir")
         self.act_toggle_bottom = QAction("Painel Inferior de Ping & Detalhes", self)
@@ -825,6 +801,14 @@ class MainWindow(QMainWindow):
         self.chk_onvif.setStyleSheet("font-weight: 600; padding: 0 4px;")
         self.chk_onvif.setToolTip("Descobrir câmeras IP e gravadores NVR via protocolo ONVIF (WS-Discovery)")
         ribbon_layout.addWidget(self.chk_onvif)
+
+        # Camera Video resolution / playback config button
+        self.btn_camera_cfg = QPushButton("⚙️ Resolução")
+        self.btn_camera_cfg.setObjectName("ribbonBtn")
+        self.btn_camera_cfg.setFixedHeight(28)
+        self.btn_camera_cfg.setToolTip("Configurar resolução de exibição, player preferido e latência de câmeras (RTSP)")
+        self.btn_camera_cfg.clicked.connect(self.open_camera_config_dialog)
+        ribbon_layout.addWidget(self.btn_camera_cfg)
 
         # Nmap Scanner tool button
         self.btn_nmap = QPushButton("🔍 Nmap")
@@ -1031,6 +1015,11 @@ class MainWindow(QMainWindow):
         btn_rtsp.setToolTip("Assistir transmissão de vídeo em tempo real da câmera (RTSP / ONVIF)")
         btn_rtsp.clicked.connect(self.action_open_rtsp)
 
+        btn_cam_cfg_bottom = QPushButton("⚙️ Vídeo")
+        btn_cam_cfg_bottom.setObjectName("btnActionDiag")
+        btn_cam_cfg_bottom.setToolTip("Configurar resolução de exibição e opções de reprodução de câmeras RTSP")
+        btn_cam_cfg_bottom.clicked.connect(self.open_camera_config_dialog)
+
         btn_nmap_bottom = QPushButton("🔍 Nmap")
         btn_nmap_bottom.setObjectName("btnActionDiag")
         btn_nmap_bottom.setToolTip("Executar auditoria profunda de portas com Nmap neste host")
@@ -1055,6 +1044,7 @@ class MainWindow(QMainWindow):
         actions_row2.setSpacing(6)
         actions_row2.addWidget(btn_wol)
         actions_row2.addWidget(btn_rtsp)
+        actions_row2.addWidget(btn_cam_cfg_bottom)
         actions_row2.addWidget(btn_nmap_bottom)
         actions_row2.addWidget(btn_copy_ip)
         actions_row2.addStretch()
@@ -1798,8 +1788,10 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
 
         a_rtsp = None
+        a_cam_cfg = None
         if rec.rtsp_url or 554 in rec.open_ports:
             a_rtsp = menu.addAction("🎬 Assistir Transmissão ao Vivo (RTSP)")
+            a_cam_cfg = menu.addAction("⚙️ Configurar Resolução de Vídeo...")
 
         a_onvif = None
         if rec.onvif_url:
@@ -1830,6 +1822,8 @@ class MainWindow(QMainWindow):
             self.add_record_to_favorites(rec)
         elif a_rtsp and action == a_rtsp:
             self.launch_rtsp_stream(rec.rtsp_url or f"rtsp://{rec.ip}:554/", ip=rec.ip)
+        elif a_cam_cfg and action == a_cam_cfg:
+            self.open_camera_config_dialog()
         elif a_onvif and action == a_onvif:
             QDesktopServices.openUrl(QUrl(rec.onvif_url))
         elif action == a_nmap:
@@ -1869,8 +1863,10 @@ class MainWindow(QMainWindow):
         a_remove = menu.addAction("Remover dos Favoritos")
         menu.addSeparator()
         a_rtsp = None
+        a_cam_cfg = None
         if rec.rtsp_url or 554 in rec.open_ports:
             a_rtsp = menu.addAction("🎬 Assistir Transmissão ao Vivo (RTSP)")
+            a_cam_cfg = menu.addAction("⚙️ Configurar Resolução de Vídeo...")
         a_nmap = menu.addAction("🔍 Escanear com Nmap (-sV)...")
         menu.addSeparator()
         a_rdp = menu.addAction("🖥️ Conectar via Área de Trabalho Remota (RDP)")
@@ -1887,6 +1883,8 @@ class MainWindow(QMainWindow):
             self.remove_favorite_ip(rec.ip)
         elif a_rtsp and action == a_rtsp:
             self.launch_rtsp_stream(rec.rtsp_url or f"rtsp://{rec.ip}:554/", ip=rec.ip)
+        elif a_cam_cfg and action == a_cam_cfg:
+            self.open_camera_config_dialog()
         elif action == a_nmap:
             self.open_nmap_dialog(rec.ip, rec.hostname)
         elif action == a_rdp:
@@ -1993,15 +1991,25 @@ class MainWindow(QMainWindow):
         if not ip:
             QMessageBox.information(self, "SSH", "Selecione um dispositivo na lista primeiro.")
             return
-        ok = open_terminal_ssh(ip)
-        if ok:
-            self.lbl_stats.setText(f"Iniciando sessão de terminal SSH para {ip}...")
-        else:
-            QMessageBox.warning(
-                self,
-                "Terminal Ausente",
-                f"Não foi possível abrir o emulador de terminal para conectar em {ip}."
-            )
+        rec = self.records.get(ip) or self.fav_records.get(ip)
+        hostname = rec.hostname if rec else ""
+        dlg = SshConnectDialog(self, ip=ip, hostname=hostname)
+        if dlg.exec_() == QDialog.Accepted:
+            ok = open_terminal_ssh(ip, user=dlg.user, password=dlg.password, port=dlg.port)
+            if ok:
+                user_prefix = f"{dlg.user}@" if dlg.user else ""
+                port_suffix = f":{dlg.port}" if dlg.port != 22 else ""
+                self.lbl_stats.setText(f"Iniciando sessão SSH para {user_prefix}{ip}{port_suffix}...")
+            else:
+                QMessageBox.warning(
+                    self,
+                    "Terminal Ausente",
+                    f"Não foi possível abrir o emulador de terminal para conectar em {ip}."
+                )
+
+    def open_camera_config_dialog(self):
+        dlg = VideoConfigDialog(self)
+        dlg.exec_()
 
     def action_open_rdp(self):
         ip = self.get_selected_or_current_ip()

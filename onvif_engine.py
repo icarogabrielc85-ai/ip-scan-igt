@@ -231,7 +231,7 @@ def probe_rtsp(ip: str, port: int = 554, timeout: float = 1.2) -> Tuple[bool, st
         return False, ""
 
 
-def find_video_player() -> Tuple[Optional[str], str]:
+def find_video_player(preferred: str = "auto") -> Tuple[Optional[str], str]:
     """
     Finds the best video player available on the operating system.
     Returns (executable_path, player_type) where player_type is 'ffplay' or 'vlc' or (None, '').
@@ -243,9 +243,11 @@ def find_video_player() -> Tuple[Optional[str], str]:
             os.path.join(os.path.dirname(os.path.abspath(__file__)), "ffplay.exe"),
             os.path.join(os.path.dirname(sys.executable), "ffplay.exe"),
         ]
+        ffplay_path = None
         for c in ffplay_candidates:
             if c and os.path.exists(c):
-                return c, "ffplay"
+                ffplay_path = c
+                break
 
         vlc_candidates = [
             shutil.which("vlc"),
@@ -255,51 +257,91 @@ def find_video_player() -> Tuple[Optional[str], str]:
             "C:\\Program Files\\VideoLAN\\VLC\\vlc.exe",
             "C:\\Program Files (x86)\\VideoLAN\\VLC\\vlc.exe",
         ]
+        vlc_path = None
         for c in vlc_candidates:
             if c and os.path.exists(c):
-                return c, "vlc"
+                vlc_path = c
+                break
+
+        if preferred == "vlc" and vlc_path:
+            return vlc_path, "vlc"
+        if preferred == "ffplay" and ffplay_path:
+            return ffplay_path, "ffplay"
+        if ffplay_path:
+            return ffplay_path, "ffplay"
+        if vlc_path:
+            return vlc_path, "vlc"
         return None, ""
 
     # Linux / macOS
+    ffplay_path = None
     for c in [shutil.which("ffplay"), "/usr/bin/ffplay", "/usr/local/bin/ffplay"]:
         if c and os.path.exists(c) and os.access(c, os.X_OK):
-            return c, "ffplay"
+            ffplay_path = c
+            break
 
+    vlc_path = None
     for c in [shutil.which("vlc"), "/usr/bin/vlc", "/snap/bin/vlc", "/usr/local/bin/vlc"]:
         if c and os.path.exists(c) and os.access(c, os.X_OK):
-            return c, "vlc"
+            vlc_path = c
+            break
+
+    if preferred == "vlc" and vlc_path:
+        return vlc_path, "vlc"
+    if preferred == "ffplay" and ffplay_path:
+        return ffplay_path, "ffplay"
+    if ffplay_path:
+        return ffplay_path, "ffplay"
+    if vlc_path:
+        return vlc_path, "vlc"
 
     return None, ""
 
 
 def launch_video_player(rtsp_url: str, title: str = "Câmera IP — IP Scan IGT") -> bool:
     """
-    Launches ffplay or vlc with the given RTSP URL. Returns True if a player was launched.
+    Launches ffplay or vlc with the given RTSP URL applying configured viewing resolution
+    and latency parameters. Returns True if a player was launched.
     """
-    player_path, player_type = find_video_player()
+    try:
+        from video_config_dialog import get_video_config, get_video_dimensions
+        cfg = get_video_config()
+        width, height = get_video_dimensions()
+    except Exception:
+        cfg = {}
+        width, height = 1280, 720
+
+    preferred = cfg.get("player", "auto")
+    transport = cfg.get("transport", "tcp")
+    low_latency = cfg.get("low_latency", True)
+    auto_exit = cfg.get("auto_exit", True)
+
+    player_path, player_type = find_video_player(preferred=preferred)
     if not player_path:
         return False
 
     try:
         if player_type == "ffplay":
-            cmd = [
-                player_path,
-                "-rtsp_transport", "tcp",
-                "-fflags", "nobuffer",
-                "-flags", "low_delay",
-                "-framedrop",
-                "-autoexit",
-                "-infbuf",
-                "-window_title", title,
-                rtsp_url,
-            ]
+            cmd = [player_path]
+            if transport in ["tcp", "udp"]:
+                cmd += ["-rtsp_transport", transport]
+            if low_latency:
+                cmd += ["-fflags", "nobuffer", "-flags", "low_delay", "-framedrop", "-infbuf"]
+            if auto_exit:
+                cmd += ["-autoexit"]
+            if width and height and width > 0 and height > 0:
+                cmd += ["-x", str(width), "-y", str(height)]
+            cmd += ["-window_title", title, rtsp_url]
         else:
-            cmd = [
-                player_path,
-                "--network-caching=300",
-                "--rtsp-tcp",
-                rtsp_url,
-            ]
+            cmd = [player_path]
+            if transport == "tcp":
+                cmd += ["--rtsp-tcp"]
+            if low_latency:
+                cmd += ["--network-caching=300"]
+            if width and height and width > 0 and height > 0:
+                cmd += [f"--width={width}", f"--height={height}"]
+            cmd += [rtsp_url]
+
         subprocess.Popen(cmd)
         return True
     except Exception as e:

@@ -6,8 +6,8 @@ import os
 import subprocess
 
 # Versão Semântica Oficial (MAJOR.MINOR.PATCH)
-APP_VERSION = "2.3.0"
-APP_RELEASE_DATE = "22/10/2026"
+APP_VERSION = "2.4.0"
+APP_RELEASE_DATE = "24/10/2026"
 
 
 def get_git_info(repo_dir: str = None) -> tuple:
@@ -56,6 +56,19 @@ def get_short_version() -> str:
 
 
 VERSION_HISTORY = [
+    {
+        "version": "v2.4.0",
+        "date": "24/10/2026",
+        "title": "Gerenciamento de Credenciais SSH Persistentes & Resolução de Câmeras Configurável",
+        "changes": [
+            "Prompt de credenciais ao conectar via SSH, com opção de salvar usuário e senha para acessos rápidos posteriores.",
+            "Armazenamento ofuscado de credenciais SSH por IP em ~/.config/linux-ipscan/ssh_credentials.json.",
+            "Botão dedicado '⚙️ Resolução'/'⚙️ Vídeo' no Ribbon e no painel de ações para configurar exibição de câmeras.",
+            "Presets de resolução RTSP (HD 720p, Full HD 1080p, XGA, SVGA, VGA leve, auto nativo e largura x altura personalizada).",
+            "Controle de protocolo de transporte (TCP/UDP), seleção de player (FFplay/VLC) e modo de ultra baixa latência.",
+            "Redimensionamento ergonômico das caixas de faixa de IP e máscara eliminando cortes de texto em qualquer resolução.",
+        ],
+    },
     {
         "version": "v2.3.0",
         "date": "22/10/2026",
