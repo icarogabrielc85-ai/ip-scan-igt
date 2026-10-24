@@ -24,6 +24,7 @@ from PyQt5.QtCore import QObject, QPoint, QSize, Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QBrush, QColor, QFont, QIcon
 from PyQt5.QtWidgets import (
     QApplication,
+    QComboBox,
     QDialog,
     QFrame,
     QHBoxLayout,
@@ -409,6 +410,32 @@ def get_public_ip_info() -> Dict[str, str]:
     return {"ip": "Indisponível (Sem rota externa)", "status": "offline"}
 
 
+class NumericTableWidgetItem(QTableWidgetItem):
+    """
+    Table widget item supporting accurate numeric and hierarchical sorting
+    rather than purely alphabetical string comparison.
+    """
+    def __init__(self, text: str, sort_key=None, raw_data=None):
+        super().__init__(text)
+        self.sort_key = sort_key
+        self.raw_data = raw_data
+
+    def __lt__(self, other):
+        if isinstance(other, NumericTableWidgetItem):
+            v1 = self.sort_key
+            v2 = other.sort_key
+            if v1 is not None and v2 is not None:
+                try:
+                    return v1 < v2
+                except TypeError:
+                    return str(v1) < str(v2)
+            if v1 is None:
+                return False
+            if v2 is None:
+                return True
+        return super().__lt__(other)
+
+
 class InternetTestWorker(QThread):
     """Background worker executing parallel latency, loss, and DNS resolution tests."""
     progress = pyqtSignal(int, int, str)
@@ -429,41 +456,47 @@ class InternetTestWorker(QThread):
         if self._is_cancelled:
             return
 
-        # 2. Assemble test targets list
+        # 2. Assemble test targets list strictly for public DNS benchmark
         targets = []
-
-        # Local Gateway
-        if self.gateway_ip and self.gateway_ip != "N/D":
-            targets.append({
-                "provider": "Gateway da Rede Local (Roteador)",
-                "ip": self.gateway_ip,
-                "category": "Rede Local",
-                "feature": "Ponto de Saída da LAN",
-                "icon": "🏠",
-                "is_dns": False,
-            })
-
-        # Configured interface DNS
-        local_dns = get_interface_configured_dns()
-        for idx, d_ip in enumerate(local_dns):
-            targets.append({
-                "provider": f"DNS da Placa de Rede {'(Primário)' if idx == 0 else '(Secundário)'}",
-                "ip": d_ip,
-                "category": "DNS Local Ativo",
-                "feature": "Configurado na Interface de Rede",
-                "icon": "🛡️",
-                "is_dns": True,
-            })
-
-        # Public DNS providers
         for p in PUBLIC_DNS_TARGETS:
-            if not any(t["ip"] == p["ip"] for t in targets):
-                p_copy = dict(p)
-                p_copy["is_dns"] = True
-                targets.append(p_copy)
+            p_copy = dict(p)
+            p_copy["is_dns"] = True
+            targets.append(p_copy)
 
         total_targets = len(targets)
         results = []
+
+        # Local Gateway test (for KPI summary)
+        def _test_gateway():
+            if self._is_cancelled or not self.gateway_ip or self.gateway_ip == "N/D":
+                return None
+            p_min, p_avg, p_max, loss = ping_target_stats(self.gateway_ip, count=3, timeout_sec=1)
+            return {
+                "provider": "Gateway da Rede Local",
+                "ip": self.gateway_ip,
+                "ping_avg": p_avg,
+                "packet_loss": loss,
+                "is_dns": False,
+            }
+
+        # Local DNS test (for KPI summary & comparison)
+        local_dns_ips = get_interface_configured_dns()
+        def _test_local_dns(d_ip, idx):
+            if self._is_cancelled:
+                return None
+            dns_rtt, dns_ok = query_dns_latency(d_ip)
+            p_min, p_avg, p_max, loss = ping_target_stats(d_ip, count=3, timeout_sec=1)
+            score = dns_rtt if (dns_rtt is not None) else (p_avg if p_avg is not None else 9999.0)
+            return {
+                "provider": f"DNS da Placa {'(Primário)' if idx == 0 else '(Secundário)'}",
+                "ip": d_ip,
+                "dns_rtt": dns_rtt,
+                "dns_ok": dns_ok,
+                "ping_avg": p_avg,
+                "packet_loss": loss,
+                "score_latency": score,
+                "is_dns": True,
+            }
 
         # 3. Test targets in parallel using thread pool
         def _test_single_target(item):
@@ -514,7 +547,15 @@ class InternetTestWorker(QThread):
             return res
 
         tested_count = 0
+        gw_future = None
+        local_dns_futures = []
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            if self.gateway_ip and self.gateway_ip != "N/D":
+                gw_future = executor.submit(_test_gateway)
+            for idx, d_ip in enumerate(local_dns_ips):
+                local_dns_futures.append(executor.submit(_test_local_dns, d_ip, idx))
+
             future_to_item = {executor.submit(_test_single_target, item): item for item in targets}
             for future in concurrent.futures.as_completed(future_to_item):
                 if self._is_cancelled:
@@ -533,10 +574,15 @@ class InternetTestWorker(QThread):
         dns_results = [r for r in results if r.get("is_dns") and r.get("score_latency", 9999) < 9999 and r["packet_loss"] < 50]
         fastest_dns = min(dns_results, key=lambda x: x["score_latency"]) if dns_results else None
 
+        gw_res = gw_future.result() if gw_future else None
+        local_dns_res = [f.result() for f in local_dns_futures if f.result() is not None]
+
         summary = {
             "public_ip": pub_info.get("ip", "N/D"),
             "public_status": pub_info.get("status", "offline"),
             "gateway_ip": self.gateway_ip,
+            "gateway_result": gw_res,
+            "local_dns_results": local_dns_res,
             "fastest_dns": fastest_dns,
             "total_tested": len(results),
             "results": results,
@@ -685,7 +731,72 @@ class InternetQualityDialog(QDialog):
         prog_box.addWidget(self.prog_bar)
         vbox.addLayout(prog_box)
 
-        # 4. Table Widget (High contrast, clearly bordered cells)
+        # 4. Sorting and Controls Bar
+        sort_bar = QHBoxLayout()
+        sort_bar.setContentsMargins(2, 2, 2, 2)
+        sort_bar.setSpacing(8)
+
+        lbl_sort = QLabel("⇅ Classificação:")
+        lbl_sort.setStyleSheet(f"font-size: 12px; font-weight: bold; color: {self.c_text_main};")
+        sort_bar.addWidget(lbl_sort)
+
+        self.combo_sort_col = QComboBox()
+        self.combo_sort_col.setFixedHeight(28)
+        self.combo_sort_col.addItem("⚡ Latência DNS UDP 53", 3)
+        self.combo_sort_col.addItem("📶 Ping ICMP (Médio)", 2)
+        self.combo_sort_col.addItem("🔤 Provedor / Alvo", 0)
+        self.combo_sort_col.addItem("🌐 Endereço IP", 1)
+        self.combo_sort_col.addItem("📉 Perda de Pacotes", 4)
+        self.combo_sort_col.addItem("⭐ Classificação de Qualidade", 5)
+        self.combo_sort_col.setStyleSheet(f"""
+            QComboBox {{
+                background-color: {self.c_card_bg};
+                color: {self.c_text_main};
+                border: 1px solid {self.c_border};
+                border-radius: 4px;
+                padding: 2px 10px;
+                font-size: 12px;
+                font-weight: 500;
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                width: 20px;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: {self.c_card_bg};
+                color: {self.c_text_main};
+                selection-background-color: {self.c_accent};
+                selection-color: #ffffff;
+                border: 1px solid {self.c_border};
+            }}
+        """)
+        self.combo_sort_col.currentIndexChanged.connect(self.on_sort_changed)
+        sort_bar.addWidget(self.combo_sort_col)
+
+        self.btn_sort_asc = QPushButton("▲ Crescente")
+        self.btn_sort_asc.setFixedHeight(28)
+        self.btn_sort_asc.setCheckable(True)
+        self.btn_sort_asc.setChecked(True)
+        self.btn_sort_asc.setCursor(Qt.PointingHandCursor)
+        self.btn_sort_asc.setToolTip("Classificação crescente (menor latência / mais veloz primeiro)")
+
+        self.btn_sort_desc = QPushButton("▼ Decrescente")
+        self.btn_sort_desc.setFixedHeight(28)
+        self.btn_sort_desc.setCheckable(True)
+        self.btn_sort_desc.setChecked(False)
+        self.btn_sort_desc.setCursor(Qt.PointingHandCursor)
+        self.btn_sort_desc.setToolTip("Classificação decrescente (maior latência primeiro)")
+
+        self.btn_sort_asc.clicked.connect(lambda: self.set_sort_order(Qt.AscendingOrder))
+        self.btn_sort_desc.clicked.connect(lambda: self.set_sort_order(Qt.DescendingOrder))
+
+        sort_bar.addWidget(self.btn_sort_asc)
+        sort_bar.addWidget(self.btn_sort_desc)
+        sort_bar.addStretch()
+
+        vbox.addLayout(sort_bar)
+
+        # 5. Table Widget (High contrast, clearly bordered cells)
         self.table = QTableWidget()
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
@@ -704,9 +815,12 @@ class InternetQualityDialog(QDialog):
         self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSortIndicatorShown(True)
+        self.table.horizontalHeader().sortIndicatorChanged.connect(self.on_header_sort_changed)
         self.table.verticalHeader().setVisible(False)
         self.table.setAlternatingRowColors(True)
         self.table.setShowGrid(True)
+        self._update_sort_btn_styles()
 
         self.table.setStyleSheet(f"""
             QTableWidget {{
@@ -822,11 +936,68 @@ class InternetQualityDialog(QDialog):
             if custom_color:
                 lbl.setStyleSheet(f"font-size: 13px; font-weight: bold; color: {custom_color};")
 
+    def _update_sort_btn_styles(self):
+        active_bg = "#0284c7" if not self.is_dark else "#0369a1"
+        inactive_bg = self.c_card_bg
+        border = self.c_border
+        base_style = f"""
+            QPushButton {{
+                border: 1px solid {border};
+                border-radius: 4px;
+                padding: 3px 12px;
+                font-size: 11px;
+                font-weight: bold;
+            }}
+        """
+        self.btn_sort_asc.setStyleSheet(base_style + f"""
+            QPushButton {{
+                background-color: {active_bg if self.btn_sort_asc.isChecked() else inactive_bg};
+                color: {"#ffffff" if self.btn_sort_asc.isChecked() else self.c_text_main};
+            }}
+        """)
+        self.btn_sort_desc.setStyleSheet(base_style + f"""
+            QPushButton {{
+                background-color: {active_bg if self.btn_sort_desc.isChecked() else inactive_bg};
+                color: {"#ffffff" if self.btn_sort_desc.isChecked() else self.c_text_main};
+            }}
+        """)
+
+    def set_sort_order(self, order: Qt.SortOrder):
+        self.btn_sort_asc.setChecked(order == Qt.AscendingOrder)
+        self.btn_sort_desc.setChecked(order == Qt.DescendingOrder)
+        self._update_sort_btn_styles()
+        self.apply_sorting(order=order)
+
+    def on_sort_changed(self):
+        col = self.combo_sort_col.currentData()
+        self.apply_sorting(col=col)
+
+    def on_header_sort_changed(self, col: int, order: Qt.SortOrder):
+        idx = self.combo_sort_col.findData(col)
+        if idx >= 0:
+            self.combo_sort_col.blockSignals(True)
+            self.combo_sort_col.setCurrentIndex(idx)
+            self.combo_sort_col.blockSignals(False)
+
+        self.btn_sort_asc.setChecked(order == Qt.AscendingOrder)
+        self.btn_sort_desc.setChecked(order == Qt.DescendingOrder)
+        self._update_sort_btn_styles()
+
+    def apply_sorting(self, col: Optional[int] = None, order: Optional[Qt.SortOrder] = None):
+        if col is None:
+            col = self.combo_sort_col.currentData()
+        if order is None:
+            order = Qt.AscendingOrder if self.btn_sort_asc.isChecked() else Qt.DescendingOrder
+
+        self.table.setSortingEnabled(True)
+        self.table.sortByColumn(col, order)
+
     def start_test(self):
         if self.worker and self.worker.isRunning():
             self.worker.cancel()
             self.worker.wait(1000)
 
+        self.table.setSortingEnabled(False)
         self.results_list.clear()
         self.table.setRowCount(0)
         self.prog_bar.setValue(0)
@@ -853,13 +1024,19 @@ class InternetQualityDialog(QDialog):
 
         # 0. Provider name with icon
         icon = res.get("icon", "🌐")
-        item_prov = QTableWidgetItem(f"{icon}  {res['provider']}")
+        item_prov = NumericTableWidgetItem(f"{icon}  {res['provider']}", sort_key=res['provider'], raw_data=res)
         item_prov.setFont(QFont("", -1, QFont.Bold))
         item_prov.setForeground(QColor(self.c_text_main))
         self.table.setItem(row, 0, item_prov)
 
         # 1. IP (Monospace)
-        item_ip = QTableWidgetItem(res["ip"])
+        def _ip_tuple(ip: str):
+            try:
+                return tuple(int(x) for x in ip.split("."))
+            except Exception:
+                return (999, 999, 999, 999)
+
+        item_ip = NumericTableWidgetItem(res["ip"], sort_key=_ip_tuple(res["ip"]), raw_data=res)
         item_ip.setTextAlignment(Qt.AlignCenter)
         font_mono = QFont("JetBrains Mono", -1)
         font_mono.setStyleHint(QFont.Monospace)
@@ -868,8 +1045,8 @@ class InternetQualityDialog(QDialog):
         self.table.setItem(row, 1, item_ip)
 
         # 2. Ping ICMP Avg
-        if res.get("ping_avg") is not None:
-            p_val = res["ping_avg"]
+        p_val = res.get("ping_avg")
+        if p_val is not None:
             ping_str = f"{p_val:.1f} ms"
             if p_val < 20.0:
                 p_color = "#10b981" if self.is_dark else "#16a34a"
@@ -879,19 +1056,21 @@ class InternetQualityDialog(QDialog):
                 p_color = "#f59e0b" if self.is_dark else "#d97706"
             else:
                 p_color = "#ef4444" if self.is_dark else "#dc2626"
+            sort_ping = p_val
         else:
             ping_str = "Sem resposta" if res["packet_loss"] == 100 else "N/D"
             p_color = "#ef4444" if self.is_dark else "#dc2626"
+            sort_ping = 999999.0
 
-        item_ping = QTableWidgetItem(ping_str)
+        item_ping = NumericTableWidgetItem(ping_str, sort_key=sort_ping, raw_data=res)
         item_ping.setTextAlignment(Qt.AlignCenter)
         item_ping.setFont(QFont("", -1, QFont.Bold))
         item_ping.setForeground(QColor(p_color))
         self.table.setItem(row, 2, item_ping)
 
         # 3. DNS Query RTT
-        if res.get("dns_rtt") is not None:
-            d_val = res["dns_rtt"]
+        d_val = res.get("dns_rtt")
+        if d_val is not None:
             dns_str = f"{d_val:.1f} ms"
             if d_val < 20.0:
                 d_color = "#10b981" if self.is_dark else "#16a34a"
@@ -899,14 +1078,17 @@ class InternetQualityDialog(QDialog):
                 d_color = "#38bdf8" if self.is_dark else "#0284c7"
             else:
                 d_color = "#f59e0b" if self.is_dark else "#d97706"
+            sort_dns = d_val
         elif not res.get("is_dns"):
-            dns_str = "— (Gateway)"
+            dns_str = "—"
             d_color = self.c_text_sub
+            sort_dns = 999998.0
         else:
             dns_str = "Falhou"
             d_color = "#ef4444" if self.is_dark else "#dc2626"
+            sort_dns = 999999.0
 
-        item_dns = QTableWidgetItem(dns_str)
+        item_dns = NumericTableWidgetItem(dns_str, sort_key=sort_dns, raw_data=res)
         item_dns.setTextAlignment(Qt.AlignCenter)
         item_dns.setFont(QFont("", -1, QFont.Bold))
         item_dns.setForeground(QColor(d_color))
@@ -914,7 +1096,7 @@ class InternetQualityDialog(QDialog):
 
         # 4. Packet Loss
         loss = res.get("packet_loss", 0)
-        item_loss = QTableWidgetItem(f"{loss}%")
+        item_loss = NumericTableWidgetItem(f"{loss}%", sort_key=loss, raw_data=res)
         item_loss.setTextAlignment(Qt.AlignCenter)
         item_loss.setFont(QFont("", -1, QFont.Bold))
         if loss > 0:
@@ -948,7 +1130,8 @@ class InternetQualityDialog(QDialog):
             badge_bg = QColor(239, 68, 68, 35) if self.is_dark else QColor(254, 226, 226)
             bullet = "🔴"
 
-        item_rating = QTableWidgetItem(f"{bullet} {res['rating']}")
+        rank_val = {"Excelente": 1, "Bom": 2, "Aceitável": 3, "Lento": 4, "Inacessível": 5}.get(res["rating"], 99)
+        item_rating = NumericTableWidgetItem(f"{bullet} {res['rating']}", sort_key=rank_val, raw_data=res)
         item_rating.setTextAlignment(Qt.AlignCenter)
         item_rating.setFont(QFont("", -1, QFont.Bold))
         item_rating.setForeground(QColor(badge_fg))
@@ -956,8 +1139,7 @@ class InternetQualityDialog(QDialog):
         self.table.setItem(row, 5, item_rating)
 
         # 6. Feature/Highlight
-        badge = "🛡️ Placa de Rede" if "Placa" in res["provider"] else ("🏠 Gateway" if "Gateway" in res["provider"] else "")
-        item_feat = QTableWidgetItem(badge or res.get("feature", ""))
+        item_feat = NumericTableWidgetItem(res.get("feature", ""), sort_key=res.get("feature", ""), raw_data=res)
         item_feat.setTextAlignment(Qt.AlignCenter)
         item_feat.setForeground(QColor(self.c_text_sub))
         self.table.setItem(row, 6, item_feat)
@@ -966,14 +1148,14 @@ class InternetQualityDialog(QDialog):
         self.prog_bar.setValue(100)
         self.btn_restart.setEnabled(True)
         self.btn_restart.setText("▶  Novo Teste")
-        self.lbl_status.setText(f"Diagnóstico concluído: {summary['total_tested']} alvos aferidos com sucesso.")
+        self.lbl_status.setText(f"Diagnóstico concluído: {summary['total_tested']} servidores DNS testados com sucesso.")
 
         # Update WAN KPI
         wan_ip = summary.get("public_ip", "Indisponível")
         self._set_kpi_val(self.card_wan, wan_ip, self.c_accent)
 
         # Update Local DNS KPI
-        local_dns = [r for r in self.results_list if "Placa" in r.get("provider", "")]
+        local_dns = summary.get("local_dns_results", [])
         if local_dns:
             d_best = min(local_dns, key=lambda x: x["score_latency"])
             d_ms = f"{d_best['score_latency']:.1f} ms" if d_best['score_latency'] < 9999 else "Offline"
@@ -982,7 +1164,7 @@ class InternetQualityDialog(QDialog):
             self._set_kpi_val(self.card_dns, "Router / DHCP")
 
         # Update Gateway KPI
-        gw_res = next((r for r in self.results_list if "Gateway" in r.get("provider", "")), None)
+        gw_res = summary.get("gateway_result")
         if gw_res and gw_res.get("ping_avg") is not None:
             self._set_kpi_val(self.card_gw, f"{gw_res['ip']} ({gw_res['ping_avg']:.1f} ms)", "#10b981")
         elif self.gateway_ip:
@@ -1005,6 +1187,8 @@ class InternetQualityDialog(QDialog):
                     if item_dest:
                         item_dest.setText("🏆 Mais Rápido!")
                         item_dest.setFont(QFont("", -1, QFont.Bold))
+                        if isinstance(item_dest, NumericTableWidgetItem):
+                            item_dest.sort_key = "  0_champion"
                         gold_fg = "#facc15" if self.is_dark else "#854d0e"
                         gold_bg = QColor(234, 179, 8, 45) if self.is_dark else QColor(254, 249, 195)
                         item_dest.setForeground(QColor(gold_fg))
@@ -1031,8 +1215,11 @@ class InternetQualityDialog(QDialog):
                 "⚠️ Não foi possível resolver consultas DNS externas. Verifique sua conexão com o roteador ou firewall de rede."
             )
 
+        # Apply default sorting: DNS latency ascending (lowest latency on top)
+        self.apply_sorting(col=3, order=Qt.AscendingOrder)
+
     def copy_report(self):
-        if not self.results_list:
+        if self.table.rowCount() == 0:
             QMessageBox.information(self, "Aviso", "Aguarde a conclusão do teste antes de copiar o relatório.")
             return
 
@@ -1049,10 +1236,22 @@ class InternetQualityDialog(QDialog):
             f"{'Alvo':<34} | {'IP':<15} | {'Ping Méd':<10} | {'DNS RTT':<10} | {'Perda':<6} | {'Classificação'}",
             "------------------------------------------------------------------",
         ]
-        for r in self.results_list:
-            p_str = f"{r['ping_avg']:.1f} ms" if r.get('ping_avg') is not None else "N/D"
-            d_str = f"{r['dns_rtt']:.1f} ms" if r.get('dns_rtt') is not None else ("—" if not r.get('is_dns') else "Falhou")
-            lines.append(f"{r['provider']:<34} | {r['ip']:<15} | {p_str:<10} | {d_str:<10} | {r['packet_loss']:>3}%  | {r['rating']}")
+        for r in range(self.table.rowCount()):
+            item_prov = self.table.item(r, 0)
+            item_ip = self.table.item(r, 1)
+            item_ping = self.table.item(r, 2)
+            item_dns = self.table.item(r, 3)
+            item_loss = self.table.item(r, 4)
+            item_rating = self.table.item(r, 5)
+
+            prov_text = item_prov.text() if item_prov else ""
+            ip_text = item_ip.text() if item_ip else ""
+            ping_text = item_ping.text() if item_ping else "N/D"
+            dns_text = item_dns.text() if item_dns else "N/D"
+            loss_text = item_loss.text() if item_loss else "0%"
+            rating_text = item_rating.text() if item_rating else "N/D"
+
+            lines.append(f"{prov_text:<34} | {ip_text:<15} | {ping_text:<10} | {dns_text:<10} | {loss_text:>6} | {rating_text}")
 
         lines.append("==================================================================")
         lines.append(f"Recomendação: {self.lbl_recommendation.text()}")
