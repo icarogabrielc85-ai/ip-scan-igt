@@ -207,7 +207,7 @@ class ScanWorker(QThread):
 
         onvif_cache = {}
         if self.enable_onvif:
-            self.progress_updated.emit(0, len(self.ip_list), "Buscando câmeras ONVIF (WS-Discovery)...")
+            self.progress_updated.emit(0, len(self.ip_list), tr("stat_onvif_discovery", "Buscando câmeras ONVIF (WS-Discovery)..."))
             try:
                 onvif_cache = discover_onvif_devices(timeout=1.2)
             except Exception as e:
@@ -265,11 +265,14 @@ class LivePingWorker(QThread):
             ip = ""
             with self._lock:
                 ip = self.target_ip
-            if ip:
-                alive, rtt, ttl, method = probe_ping(ip, timeout_ms=500)
-                if ip == self.target_ip:
+            if ip and self._is_running:
+                alive, rtt, ttl, method = probe_ping(ip, timeout_ms=450)
+                if ip == self.target_ip and self._is_running:
                     self.sample_ready.emit(ip, rtt if alive else -1.0, ttl, method)
-            time.sleep(0.50)
+            for _ in range(10):
+                if not self._is_running:
+                    break
+                time.sleep(0.05)
 
 
 class PingSweepWorker(QThread):
@@ -278,17 +281,26 @@ class PingSweepWorker(QThread):
     def __init__(self, ips: List[str]):
         super().__init__()
         self.ips = ips
+        self._is_running = True
+
+    def stop(self):
+        self._is_running = False
 
     def run(self):
         def ping_one(ip_addr):
+            if not self._is_running:
+                return ip_addr, -1.0
             alive, rtt, _, _ = probe_ping(ip_addr, timeout_ms=250)
             return ip_addr, rtt if alive else -1.0
 
         results = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=min(5, len(self.ips) or 1)) as ex:
             for ip, rtt in ex.map(ping_one, self.ips):
+                if not self._is_running:
+                    break
                 results.append((ip, rtt))
-        self.batch_finished.emit(results)
+        if self._is_running:
+            self.batch_finished.emit(results)
 
 
 class AppUpdateWorker(QThread):
@@ -1458,29 +1470,65 @@ class MainWindow(QMainWindow):
         if hasattr(self, "btn_hide_panel"):
             self.btn_hide_panel.setText(f"✕ {tr('btn_close')}")
 
-        # Status Bar (if idle)
-        if hasattr(self, "lbl_stats") and not (self.scan_worker and self.scan_worker.isRunning()):
-            online_count = sum(1 for r in self.records.values() if r.alive)
-            self.lbl_stats.setText(f"{tr('status_ready')} • Interface: {self.local_info.get('interface')} ({self.local_info.get('ip')}) • {online_count} online")
+        # Retranslate all existing scanned records in both trees
+        if hasattr(self, "tree") and hasattr(self, "records"):
+            for rec in self.records.values():
+                rec.device_type, rec.os_family = classify_device(rec)
+                self.add_or_update_tree_node(self.tree, rec)
+
+        if hasattr(self, "fav_tree") and hasattr(self, "fav_records"):
+            for rec in self.fav_records.values():
+                rec.device_type, rec.os_family = classify_device(rec)
+                self.add_or_update_tree_node(self.fav_tree, rec)
+
+        # Retranslate Details Table & Oscilloscope title
+        if hasattr(self, "details_table") and hasattr(self, "lbl_panel_title"):
+            tree = self.get_active_tree()
+            selected_items = tree.selectedItems() if tree else []
+            if selected_items:
+                sel_ip = selected_items[0].data(2, Qt.UserRole)
+                rec_pool = self.records if tree == self.tree else self.fav_records
+                if sel_ip and sel_ip in rec_pool:
+                    sel_rec = rec_pool[sel_ip]
+                    self.populate_details_table(sel_rec)
+                    self.lbl_panel_title.setText(f"● {tr('details_header', 'Monitor de Ping Dinâmico & Detalhes')}: {sel_rec.ip} — {sel_rec.hostname or tr('dev_network_dev', 'Dispositivo')}")
+            else:
+                self.lbl_panel_title.setText(tr("select_host_prompt", "● Monitor de Ping Dinâmico & Detalhes: [Selecione um dispositivo da lista]"))
+
+        # Status Bar & KPIs
+        if hasattr(self, "lbl_stats"):
+            if self.scan_worker and self.scan_worker.isRunning():
+                pass
+            elif hasattr(self, "records"):
+                self.update_status_stats()
 
     def show_report_menu(self):
         menu = QMenu(self)
-        act_html = menu.addAction("📑  Relatório Executivo HTML / PDF (Ctrl+H)")
+        act_html = menu.addAction(f"📑  {tr('export_html')}")
         act_html.triggered.connect(lambda: self.export_results("html"))
-        act_csv = menu.addAction("📊  Exportar Tabela CSV (Ctrl+S)")
+        act_csv = menu.addAction(f"📊  {tr('export_csv')}")
         act_csv.triggered.connect(lambda: self.export_results("csv"))
-        act_json = menu.addAction("🗄️  Exportar Dados JSON")
+        act_json = menu.addAction(f"🗄️  {tr('export_json')}")
         act_json.triggered.connect(lambda: self.export_results("json"))
-        act_txt = menu.addAction("📝  Exportar Resumo TXT")
+        act_txt = menu.addAction(f"📝  {tr('export_txt')}")
         act_txt.triggered.connect(lambda: self.export_results("txt"))
         menu.exec_(self.btn_report.mapToGlobal(QPoint(0, self.btn_report.height() + 2)))
 
     def on_tree_header_clicked(self, tree: QTreeWidget, col: int):
         order = tree.header().sortIndicatorOrder()
-        order_str = "Crescente ▲" if order == Qt.AscendingOrder else "Decrescente ▼"
-        col_names = ["Status", "Nome", "IP", "Fabricante", "Endereço MAC", "Ping", "Comentários"]
+        order_str = tr("sort_order_asc", "Crescente ▲") if order == Qt.AscendingOrder else tr("sort_order_desc", "Decrescente ▼")
+        col_names = [
+            tr("col_status", "Status"),
+            tr("col_hostname", "Nome"),
+            tr("col_ip", "IP"),
+            tr("col_manufacturer", "Fabricante"),
+            tr("col_mac", "Endereço MAC"),
+            tr("col_ping", "Ping"),
+            tr("col_comments", "Comentários"),
+        ]
         name = col_names[col] if 0 <= col < len(col_names) else f"Coluna {col}"
-        self.lbl_stats.setText(f"Classificando por: {name} ({order_str})")
+        tpl = tr("stat_sorting_by", "Classificando por: {col} ({order})")
+        self.lbl_stats.setText(tpl.format(col=name, order=order_str))
 
     def apply_theme(self):
         self.setStyleSheet(DARK_STYLESHEET if self.is_dark_mode else LIGHT_STYLESHEET)
@@ -1750,7 +1798,7 @@ class MainWindow(QMainWindow):
         if self.scan_worker and self.scan_worker.isRunning():
             self.scan_worker.stop()
             self.set_scan_running_state(False)
-            self.lbl_stats.setText("Parando varredura...")
+            self.lbl_stats.setText(tr("stat_scan_stopping", "Parando varredura..."))
             return
 
         start_ip = self.txt_start_ip.text().strip()
@@ -1762,11 +1810,11 @@ class MainWindow(QMainWindow):
             if start_int > end_int:
                 start_int, end_int = end_int, start_int
             if (end_int - start_int) > 65536:
-                QMessageBox.warning(self, "Faixa Muito Grande", "A faixa excede 65.536 endereços IP. Por favor, especifique uma sub-rede /16 ou menor.")
+                QMessageBox.warning(self, tr("range_too_large_title", "Faixa Muito Grande"), tr("range_too_large_msg", "A faixa excede 65.536 endereços IP. Por favor, especifique uma sub-rede /16 ou menor."))
                 return
             ip_list = [str(ipaddress.IPv4Address(i)) for i in range(start_int, end_int + 1)]
         except Exception as e:
-            QMessageBox.warning(self, "Faixa Inválida", f"Endereço IP inválido especificado: {e}")
+            QMessageBox.warning(self, tr("range_invalid_title", "Faixa Inválida"), tr("range_invalid_msg", "Endereço IP inválido especificado: {err}").format(err=e))
             return
 
         self.records.clear()
@@ -1774,7 +1822,7 @@ class MainWindow(QMainWindow):
         self.details_table.setRowCount(0)
         self.oscilloscope.clear()
         self.live_ping_worker.set_target("")
-        self.lbl_panel_title.setText("● Monitor de Ping Dinâmico & Detalhes: [Selecione um dispositivo da lista]")
+        self.lbl_panel_title.setText(tr("select_host_prompt", "● Monitor de Ping Dinâmico & Detalhes: [Selecione um dispositivo da lista]"))
         self.main_tabs.setCurrentIndex(0)  # Switch to Resultados
 
         self.set_scan_running_state(True, len(ip_list))
@@ -1787,7 +1835,7 @@ class MainWindow(QMainWindow):
 
     def scan_favorites_only(self):
         if not self.fav_records:
-            QMessageBox.information(self, "Favoritos Vazios", "Nenhum dispositivo salvo nos Favoritos para verificar.")
+            QMessageBox.information(self, tr("fav_empty_title", "Favoritos Vazios"), tr("fav_empty_msg", "Nenhum dispositivo salvo nos Favoritos para verificar."))
             return
 
         ip_list = list(self.fav_records.keys())
@@ -1827,7 +1875,7 @@ class MainWindow(QMainWindow):
     @pyqtSlot(int, int, str)
     def on_scan_progress(self, current: int, total: int, current_ip: str):
         self.prog_bar.setValue(current)
-        self.lbl_stats.setText(f"Verificando: {current_ip} ({current}/{total})...")
+        self.lbl_stats.setText(tr("stat_scan_checking", "Verificando: {ip} ({curr}/{total})...").format(ip=current_ip, curr=current, total=total))
 
     @pyqtSlot(object)
     def on_host_found(self, rec: HostRecord):
@@ -1843,7 +1891,7 @@ class MainWindow(QMainWindow):
     @pyqtSlot(int, float)
     def on_scan_finished(self, found_count: int, elapsed_sec: float):
         self.set_scan_running_state(False)
-        self.lbl_stats.setText(f"Concluído em {elapsed_sec:.1f}s • {found_count} dispositivo(s) online encontrado(s)")
+        self.lbl_stats.setText(tr("stat_scan_finished", "Concluído em {sec:.1f}s • {count} dispositivo(s) online encontrado(s)").format(sec=elapsed_sec, count=found_count))
         col = self.tree.sortColumn()
         order = self.tree.header().sortIndicatorOrder()
         self.tree.sortItems(col if col >= 0 else 2, order)
@@ -1880,10 +1928,10 @@ class MainWindow(QMainWindow):
         parent_item.setText(2, rec.ip)
 
         # Col 3: Fabricante
-        parent_item.setText(3, rec.vendor or "Desconhecido")
+        parent_item.setText(3, rec.vendor or tr("unknown", "Desconhecido"))
 
         # Col 4: MAC
-        parent_item.setText(4, rec.mac or "N/D")
+        parent_item.setText(4, rec.mac or tr("not_available", "N/D"))
 
         # Col 5: Ping
         parent_item.setText(5, rec.format_ping())
@@ -1897,7 +1945,7 @@ class MainWindow(QMainWindow):
 
         # Col 6: Comentários / Serviços
         comment_parts = []
-        if rec.device_type and rec.device_type != "🖧 Host Online":
+        if rec.device_type and rec.device_type != tr("dev_host_online", "🖧 Host Online"):
             comment_parts.append(rec.device_type)
         if rec.http_info:
             comment_parts.append(rec.http_info)
@@ -1906,15 +1954,16 @@ class MainWindow(QMainWindow):
         elif rec.ssh_banner:
             comment_parts.append(rec.ssh_banner)
         if rec.open_ports:
-            comment_parts.append(f"Portas: {rec.format_ports()}")
+            comment_parts.append(f"{tr('ports_label', 'Portas')}: {rec.format_ports()}")
 
-        parent_item.setText(6, " • ".join(comment_parts) if comment_parts else "Nenhum serviço identificado")
+        parent_item.setText(6, " • ".join(comment_parts) if comment_parts else tr("no_services_found", "Nenhum serviço identificado"))
 
         # Sub-items [ + ] for individual services (HTTP, HTTPS, SMB, etc.)
         parent_item.takeChildren()
         link_color = QColor("#0969da") if not self.is_dark_mode else QColor("#38bdf8")
         text_color = QColor("#475569") if not self.is_dark_mode else QColor("#cbd5e1")
 
+        rec.resources = build_resources_for_host(rec)
         for res in rec.resources:
             child = QTreeWidgetItem(parent_item)
             child.setText(1, f"    {res.icon}  {res.title}")
@@ -1943,17 +1992,16 @@ class MainWindow(QMainWindow):
         rtts = [r.rtt_ms for r in records_pool.values() if r.rtt_ms >= 0]
         avg_rtt = f"{sum(rtts)/len(rtts):.2f} ms" if rtts else "-- ms"
 
-        self.lbl_stats.setText(
-            f"Resultados: {online_count} dispositivo(s) online  |  "
-            f"{services_count} com serviços  |  "
-            f"Latência média: {avg_rtt}"
-        )
+        summary_template = tr("stat_results_summary", "Resultados: {online} dispositivo(s) online  |  {services} com serviços  |  Latência média: {avg}")
+        self.lbl_stats.setText(summary_template.format(online=online_count, services=services_count, avg=avg_rtt))
         if hasattr(self, "kpi_online"):
-            self.kpi_online.setText(f"● {online_count} Online")
+            tpl = tr("kpi_online", "● {count} Online")
+            self.kpi_online.setText(tpl.format(count=online_count))
         if hasattr(self, "kpi_latency"):
             self.kpi_latency.setText(f"⚡ {avg_rtt}")
         if hasattr(self, "kpi_services"):
-            self.kpi_services.setText(f"🛡️ {services_count} Serviços")
+            tpl = tr("kpi_services", "🛡️ {count} Serviços")
+            self.kpi_services.setText(tpl.format(count=services_count))
 
     def on_tree_selection_changed(self, tree: QTreeWidget):
         items = tree.selectedItems()
@@ -1970,34 +2018,36 @@ class MainWindow(QMainWindow):
             return
 
         rec = records_pool[ip]
-        self.lbl_panel_title.setText(f"● Monitor de Ping Dinâmico & Detalhes: {rec.ip} — {rec.hostname or 'Dispositivo'}")
+        self.lbl_panel_title.setText(f"● {tr('details_header', 'Monitor de Ping Dinâmico & Detalhes')}: {rec.ip} — {rec.hostname or tr('dev_network_dev', 'Dispositivo')}")
         self.oscilloscope.clear(ip)
         self.live_ping_worker.set_target(ip)
         self.populate_details_table(rec)
 
     def populate_details_table(self, rec: HostRecord):
+        ttl_detail = tr("direct_lan", "Rede Local Direta") if rec.ttl in [64, 128, 255] else tr("hops_detected", "Saltos detectados")
+        na = tr("not_available", "N/D")
         props = [
-            ("Endereço IP", rec.ip),
-            ("Nome / Hostname", rec.hostname or "Não configurado"),
-            ("Tipo / Sistema", f"{rec.device_type} • {rec.os_family}"),
-            ("Fabricante (OUI)", rec.vendor or "Não identificado"),
-            ("Endereço MAC", rec.mac or "Não disponível"),
-            ("Latência (Ping)", f"{rec.format_ping()} (Método: {rec.ping_method})"),
-            ("TTL de Rede", f"{rec.ttl} ({'Rede Local Direta' if rec.ttl in [64, 128, 255] else 'Saltos detectados'})" if rec.ttl > 0 else "N/D"),
-            ("Portas TCP Abertas", rec.format_ports() or "Nenhuma porta padrão aberta"),
-            ("HTTP / Servidor Web", rec.http_info or "Nenhum"),
-            ("Certificado SSL / HTTPS", f"CN={rec.ssl_info}" if rec.ssl_info else "Nenhum"),
-            ("Banner SSH (Porta 22)", rec.ssh_banner or "Fechada"),
-            ("NetBIOS / Grupo SMB", rec.netbios_domain or "N/D"),
+            (tr("prop_ip", "Endereço IP"), rec.ip),
+            (tr("prop_hostname", "Nome / Hostname"), rec.hostname or tr("not_configured", "Não configurado")),
+            (tr("prop_type_sys", "Tipo / Sistema"), f"{rec.device_type} • {rec.os_family}"),
+            (tr("prop_vendor", "Fabricante (OUI)"), rec.vendor or tr("not_identified", "Não identificado")),
+            (tr("prop_mac", "Endereço MAC"), rec.mac or na),
+            (tr("prop_latency", "Latência (Ping)"), f"{rec.format_ping()} ({tr('method_label', 'Método')}: {rec.ping_method})"),
+            (tr("prop_ttl", "TTL de Rede"), f"{rec.ttl} ({ttl_detail})" if rec.ttl > 0 else na),
+            (tr("prop_open_ports", "Portas TCP Abertas"), rec.format_ports() or tr("no_default_ports", "Nenhuma porta padrão aberta")),
+            (tr("prop_http", "HTTP / Servidor Web"), rec.http_info or tr("none", "Nenhum")),
+            (tr("prop_ssl", "Certificado SSL / HTTPS"), f"CN={rec.ssl_info}" if rec.ssl_info else tr("none", "Nenhum")),
+            (tr("prop_ssh", "Banner SSH (Porta 22)"), rec.ssh_banner or tr("closed", "Fechada")),
+            (tr("prop_netbios", "NetBIOS / Grupo SMB"), rec.netbios_domain or na),
         ]
 
         if rec.onvif_url or rec.onvif_model:
-            props.append(("ONVIF Câmera / NVR", f"{rec.onvif_model} ({rec.onvif_url})"))
+            props.append((tr("prop_onvif", "ONVIF Câmera / NVR"), f"{rec.onvif_model} ({rec.onvif_url})"))
         if rec.rtsp_url or 554 in rec.open_ports:
-            props.append(("Stream RTSP de Vídeo", rec.rtsp_url or f"rtsp://{rec.ip}:554/"))
+            props.append((tr("prop_rtsp", "Stream RTSP de Vídeo"), rec.rtsp_url or f"rtsp://{rec.ip}:554/"))
         if rec.nmap_services:
             svc_str = "; ".join(f"{p}: {s}" for p, s in rec.nmap_services.items())
-            props.append(("Serviços Auditados (Nmap)", svc_str))
+            props.append((tr("prop_nmap_audited", "Serviços Auditados (Nmap)"), svc_str))
 
         self.details_table.setRowCount(len(props))
         for row, (k, v) in enumerate(props):
@@ -2256,7 +2306,7 @@ class MainWindow(QMainWindow):
     def add_selected_to_favorites(self):
         items = self.tree.selectedItems()
         if not items:
-            QMessageBox.information(self, "Aviso", "Selecione um dispositivo da lista de Resultados primeiro.")
+            QMessageBox.information(self, tr("tab_favorites"), "Selecione um dispositivo da lista de Resultados primeiro.")
             return
         ip = items[0].data(2, Qt.UserRole)
         if ip and ip in self.records:
@@ -2268,7 +2318,7 @@ class MainWindow(QMainWindow):
         self.fav_records[rec.ip] = rec
         self.add_or_update_tree_node(self.fav_tree, rec)
         self.save_favorites_to_disk()
-        self.lbl_stats.setText(f"Dispositivo {rec.ip} ({rec.hostname}) adicionado aos Favoritos.")
+        self.lbl_stats.setText(tr("stat_fav_added", "Dispositivo {ip} ({host}) adicionado aos Favoritos.").format(ip=rec.ip, host=rec.hostname or rec.ip))
 
     def remove_selected_favorite(self):
         items = self.fav_tree.selectedItems()
@@ -2287,12 +2337,12 @@ class MainWindow(QMainWindow):
                     self.fav_tree.takeTopLevelItem(i)
                     break
             self.save_favorites_to_disk()
-            self.lbl_stats.setText(f"Dispositivo {ip} removido dos Favoritos.")
+            self.lbl_stats.setText(tr("stat_fav_removed", "Dispositivo {ip} removido dos Favoritos.").format(ip=ip))
 
     def clear_all_favorites(self):
         if not self.fav_records:
             return
-        res = QMessageBox.question(self, "Limpar Favoritos", "Deseja remover todos os dispositivos salvos dos Favoritos?", QMessageBox.Yes | QMessageBox.No)
+        res = QMessageBox.question(self, tr("clear_fav_confirm_title", "Limpar Favoritos"), tr("clear_fav_confirm_msg", "Deseja remover todos os dispositivos salvos dos Favoritos?"), QMessageBox.Yes | QMessageBox.No)
         if res == QMessageBox.Yes:
             self.fav_records.clear()
             self.fav_tree.clear()
@@ -2654,26 +2704,26 @@ class MainWindow(QMainWindow):
     def export_results(self, fmt: str = "csv"):
         records_to_export = self.records if self.main_tabs.currentIndex() == 0 else self.fav_records
         if not records_to_export:
-            QMessageBox.information(self, "Exportar", "Nenhum resultado para exportar.")
+            QMessageBox.information(self, tr("export_dialog_title", "Exportar"), tr("export_no_results", "Nenhum resultado para exportar."))
             return
 
         filter_str = (
-            "Relatório Executivo HTML (*.html);;"
-            "Arquivo CSV (*.csv);;"
-            "Arquivo JSON (*.json);;"
-            "Arquivo TXT (*.txt)"
+            f"{tr('export_filter_html', 'Relatório Executivo HTML (*.html)')};;"
+            f"{tr('export_filter_csv', 'Arquivo CSV (*.csv)')};;"
+            f"{tr('export_filter_json', 'Arquivo JSON (*.json)')};;"
+            f"{tr('export_filter_txt', 'Arquivo TXT (*.txt)')}"
         )
         if fmt == "html":
-            default_filter = "Relatório Executivo HTML (*.html)"
+            default_filter = tr("export_filter_html", "Relatório Executivo HTML (*.html)")
         elif fmt == "csv":
-            default_filter = "Arquivo CSV (*.csv)"
+            default_filter = tr("export_filter_csv", "Arquivo CSV (*.csv)")
         elif fmt == "json":
-            default_filter = "Arquivo JSON (*.json)"
+            default_filter = tr("export_filter_json", "Arquivo JSON (*.json)")
         else:
-            default_filter = "Arquivo TXT (*.txt)"
+            default_filter = tr("export_filter_txt", "Arquivo TXT (*.txt)")
 
         default_name = f"relatorio_rede.{fmt}"
-        path, _ = QFileDialog.getSaveFileName(self, "Exportar Resultados", os.path.expanduser(f"~/{default_name}"), filter_str, default_filter)
+        path, _ = QFileDialog.getSaveFileName(self, tr("export_dialog_title", "Exportar Resultados"), os.path.expanduser(f"~/{default_name}"), filter_str, default_filter)
         if not path:
             return
 
@@ -2813,9 +2863,10 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         self.table_sweep_timer.stop()
         if hasattr(self, "_sweep_worker") and self._sweep_worker and self._sweep_worker.isRunning():
+            self._sweep_worker.stop()
             self._sweep_worker.wait(500)
         self.live_ping_worker.stop()
-        self.live_ping_worker.wait(1000)
+        self.live_ping_worker.wait(500)
         if self.scan_worker and self.scan_worker.isRunning():
             self.scan_worker.stop()
             self.scan_worker.wait(1000)

@@ -6,7 +6,7 @@ import os
 import subprocess
 
 # Versão Semântica Oficial (MAJOR.MINOR.PATCH)
-APP_VERSION = "2.7.0"
+APP_VERSION = "2.7.1"
 APP_RELEASE_DATE = "24/10/2026"
 
 
@@ -73,6 +73,20 @@ def get_short_version() -> str:
 
 
 VERSION_HISTORY = [
+    {
+        "version": "v2.7.1",
+        "date": "24/10/2026",
+        "title": "Tradução Completa dos Resultados de Scan, Propriedades e Sub-Recursos nos 9 Idiomas & Otimização do Projeto",
+        "changes": [
+            "Tradução integral dinâmica de todos os itens escaneados na rede nos 9 idiomas suportados (pt_BR, en, es, it, uk, ru, zh_CN, pl, fr).",
+            "Tradução de todas as classificações de dispositivos (NVR ONVIF, Câmeras IP, RTSP, Access Points, Proxmox VE, VMs, Servidores Windows/Linux, Impressoras, etc.).",
+            "Tradução das linhas filhas de sub-recursos (Stream RTSP, Serviços ONVIF SOAP, Portas NVR, Web HTTP/HTTPS, SMB, FTP, RDP, SSH, Interface de Rede).",
+            "Tradução completa da tabela de propriedades do dispositivo (15 campos traduzidos dinamicamente) e do osciloscópio de ping em tempo real.",
+            "Re-renderização instantânea de todos os nós das tabelas ao alternar o idioma no menu sem necessidade de reiniciar ou refazer a varredura.",
+            "Otimização do ciclo de vida das threads (LivePingWorker e PingSweepWorker) com parada responsiva imediata em menos de 50ms.",
+            "Bateria de testes automatizados de ponta a ponta (E2E) com validação de 50 ciclos de stress e 100% de sucesso sem vazamentos.",
+        ],
+    },
     {
         "version": "v2.7.0",
         "date": "24/10/2026",

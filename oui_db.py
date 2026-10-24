@@ -1,14 +1,10 @@
-import os
-import re
-import sys
-import threading
-
 import json
 import os
 import re
 import sys
 import threading
 import urllib.request
+from i18n import tr
 
 ONLINE_CACHE_FILE = os.path.expanduser("~/.config/linux-ipscan/oui_online_cache.json")
 
@@ -81,7 +77,7 @@ class OuiDatabase:
             # Check locally administered / randomized or virtual MAC prefixes
             first_byte = int(clean[:2], 16)
             if first_byte & 0x02:
-                return "MAC Local / Virtual (Privado)"
+                return tr("mac_local_private", "MAC Local / Virtual (Privado)")
 
             # Check persistent online cache
             self._ensure_online_cache_loaded()

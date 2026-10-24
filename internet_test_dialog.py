@@ -745,19 +745,24 @@ class InternetTestWorker(QThread):
             # Rating logic
             ref_latency = dns_rtt if (is_dns and dns_rtt is not None) else p_avg
             if loss == 100 or (ref_latency is None and not dns_ok):
-                rating = "Inacessível"
+                rating_key = "rating_unreachable"
+                rating = tr(rating_key, "Inacessível")
                 badge_type = "danger"
             elif ref_latency is not None and ref_latency < 20.0:
-                rating = "Excelente"
+                rating_key = "rating_excellent"
+                rating = tr(rating_key, "Excelente")
                 badge_type = "success"
             elif ref_latency is not None and ref_latency < 50.0:
-                rating = "Bom"
+                rating_key = "rating_good"
+                rating = tr(rating_key, "Bom")
                 badge_type = "info"
             elif ref_latency is not None and ref_latency < 100.0:
-                rating = "Aceitável"
+                rating_key = "rating_fair"
+                rating = tr(rating_key, "Aceitável")
                 badge_type = "warning"
             else:
-                rating = "Lento"
+                rating_key = "rating_slow"
+                rating = tr(rating_key, "Lento")
                 badge_type = "orange"
 
             res = {
@@ -769,6 +774,7 @@ class InternetTestWorker(QThread):
                 "ping_max": p_max,
                 "packet_loss": loss,
                 "rating": rating,
+                "rating_key": rating_key,
                 "badge_type": badge_type,
                 "score_latency": ref_latency if ref_latency is not None else 9999.0,
             }
@@ -1355,7 +1361,7 @@ class InternetQualityDialog(QDialog):
     def on_edit_dns(self):
         row = self.table.currentRow()
         if row < 0:
-            QMessageBox.information(self, "Aviso", "Selecione um servidor DNS na tabela para editar.")
+            QMessageBox.information(self, tr("btn_edit_dns", "Editar"), tr("dns_select_edit", "Selecione um servidor DNS na tabela para editar."))
             return
         item_ip = self.table.item(row, 1)
         if not item_ip:
@@ -1379,8 +1385,8 @@ class InternetQualityDialog(QDialog):
             save_dns_targets(self.dns_targets)
             ret = QMessageBox.question(
                 self,
-                "DNS Atualizado",
-                f"Servidor '{new_item['provider']}' ({new_item['ip']}) atualizado com sucesso!\n\nDeseja reiniciar o teste de benchmark agora?",
+                "DNS",
+                f"Servidor '{new_item['provider']}' ({new_item['ip']}) OK!\n\nDeseja reiniciar o teste de benchmark agora?",
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.Yes
             )
@@ -1390,7 +1396,7 @@ class InternetQualityDialog(QDialog):
     def on_delete_dns(self):
         row = self.table.currentRow()
         if row < 0:
-            QMessageBox.information(self, "Aviso", "Selecione um servidor DNS na tabela para remover.")
+            QMessageBox.information(self, tr("btn_delete_dns", "Remover"), tr("dns_select_del", "Selecione um servidor DNS na tabela para remover."))
             return
         item_name = self.table.item(row, 0)
         item_ip = self.table.item(row, 1)
@@ -1489,7 +1495,7 @@ class InternetQualityDialog(QDialog):
                 p_color = "#ef4444" if self.is_dark else "#dc2626"
             sort_ping = p_val
         else:
-            ping_str = "Sem resposta" if res["packet_loss"] == 100 else "N/D"
+            ping_str = tr("no_response", "Sem resposta") if res["packet_loss"] == 100 else tr("not_available", "N/D")
             p_color = "#ef4444" if self.is_dark else "#dc2626"
             sort_ping = 999999.0
 
@@ -1515,7 +1521,7 @@ class InternetQualityDialog(QDialog):
             d_color = self.c_text_sub
             sort_dns = 999998.0
         else:
-            dns_str = "Falhou"
+            dns_str = tr("failed", "Falhou")
             d_color = "#ef4444" if self.is_dark else "#dc2626"
             sort_dns = 999999.0
 
@@ -1561,7 +1567,13 @@ class InternetQualityDialog(QDialog):
             badge_bg = QColor(239, 68, 68, 35) if self.is_dark else QColor(254, 226, 226)
             bullet = "🔴"
 
-        rank_val = {"Excelente": 1, "Bom": 2, "Aceitável": 3, "Lento": 4, "Inacessível": 5}.get(res["rating"], 99)
+        rank_val = {
+            tr("rating_excellent", "Excelente"): 1,
+            tr("rating_good", "Bom"): 2,
+            tr("rating_fair", "Aceitável"): 3,
+            tr("rating_slow", "Lento"): 4,
+            tr("rating_unreachable", "Inacessível"): 5,
+        }.get(res["rating"], 99)
         item_rating = NumericTableWidgetItem(f"{bullet} {res['rating']}", sort_key=rank_val, raw_data=res)
         item_rating.setTextAlignment(Qt.AlignCenter)
         item_rating.setFont(QFont("", -1, QFont.Bold))
@@ -1651,7 +1663,7 @@ class InternetQualityDialog(QDialog):
 
     def copy_report(self):
         if self.table.rowCount() == 0:
-            QMessageBox.information(self, "Aviso", "Aguarde a conclusão do teste antes de copiar o relatório.")
+            QMessageBox.information(self, tr("btn_net_test", "Aviso"), tr("dns_wait_test", "Aguarde a conclusão do teste antes de copiar o relatório."))
             return
 
         lines = [
@@ -1677,10 +1689,10 @@ class InternetQualityDialog(QDialog):
 
             prov_text = item_prov.text() if item_prov else ""
             ip_text = item_ip.text() if item_ip else ""
-            ping_text = item_ping.text() if item_ping else "N/D"
-            dns_text = item_dns.text() if item_dns else "N/D"
+            ping_text = item_ping.text() if item_ping else tr("not_available", "N/D")
+            dns_text = item_dns.text() if item_dns else tr("not_available", "N/D")
             loss_text = item_loss.text() if item_loss else "0%"
-            rating_text = item_rating.text() if item_rating else "N/D"
+            rating_text = item_rating.text() if item_rating else tr("not_available", "N/D")
 
             lines.append(f"{prov_text:<34} | {ip_text:<15} | {ping_text:<10} | {dns_text:<10} | {loss_text:>6} | {rating_text}")
 
@@ -1692,8 +1704,8 @@ class InternetQualityDialog(QDialog):
         QApplication.clipboard().setText(report)
         QMessageBox.information(
             self,
-            "Relatório Copiado",
-            "O relatório completo do teste de qualidade da internet foi copiado para a Área de Transferência!"
+            tr("dns_report_copied_title", "Relatório Copiado"),
+            tr("dns_report_copied_msg", "O relatório completo do teste de qualidade da internet foi copiado para a Área de Transferência!")
         )
 
     def closeEvent(self, event):

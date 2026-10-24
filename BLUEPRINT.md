@@ -1,12 +1,13 @@
 # BLUEPRINT — IP SCAN IGT
-**Versão:** 2.3.0 (Edição Multiplataforma: Linux & Windows)  
+**Versão:** 2.7.1 (Edição Multiplataforma: Linux & Windows)  
 **Projeto:** IP Scan IGT  
 **Repositório GitHub:** [https://github.com/icarogabrielc85-ai/ip-scan-igt](https://github.com/icarogabrielc85-ai/ip-scan-igt)  
 **Diretório Local (PC):** `/home/icaro/linux-ipscan`  
 **Executável do Sistema (Linux):** `/home/icaro/.local/bin/ip-scan-igt`  
+**Pacote Debian (.deb):** `/home/icaro/Área de trabalho/ipscan-igt_2.7.1_amd64.deb`  
 **Atalho da Área de Trabalho:** `/home/icaro/Área de trabalho/ip-scan-igt.desktop`  
 **Atalho do Menu do Sistema:** `~/.local/share/applications/ip-scan-igt.desktop`  
-**Data da Última Atualização:** 22/10/2026  
+**Data da Última Atualização:** 24/10/2026  
 
 ---
 
@@ -15,13 +16,27 @@
 O **IP Scan IGT** é uma ferramenta gráfica profissional de escaneamento, auditoria e diagnóstico de redes locais (LAN) desenvolvida para ambientes **Linux** e **Windows (10/11/Server)** utilizando **Python 3** e **PyQt5**.
 
 Inspirado na usabilidade ágil e visual clássico do consagrado *Advanced IP Scanner*, o IP Scan IGT expande essas capacidades trazendo recursos avançados nativos para ambas as plataformas:
+- **Suporte Multilíngue Completo (9 Idiomas) com Tradução Dinâmica Instantânea:**
+  - Português do Brasil (`pt_BR`), Inglês (`en`), Espanhol (`es`), Italiano (`it`), Ucraniano (`uk`), Russo (`ru`), Chinês Simplificado (`zh_CN`), Polonês (`pl`) e Francês (`fr`).
+  - Tradução integral de resultados de varredura, classificações de dispositivos, sub-recursos filhos, painel de propriedades, osciloscópio de ping e relatórios executivos.
+  - Alternância instantânea de idioma em tempo real via menu ou barra superior sem necessidade de reiniciar o programa ou refazer a varredura.
+- **Auditoria de Internet & Benchmark de Servidores DNS Mundiais:**
+  - Diagnóstico em tempo real de latência WAN, perda de pacotes, status do Gateway e DNS local.
+  - Benchmark automatizado de provedores globais com classificação de qualidade em cores de alto contraste.
+  - **Gerenciador Customizado de DNS:** Adição, edição, exclusão e restauração com persistência em `~/.config/linux-ipscan/dns_targets.json`.
+  - Ordenação dinâmica (Crescente ▲ / Decrescente ▼) por milissegundos numéricos reais.
+- **Abertura Inteligente Maximizada & Auto-Ajustável:**
+  - Aplicação e diálogo de teste iniciam maximizados por padrão adaptados à resolução nativa do monitor.
+  - Ao desmaximizar (restaurar), a janela centraliza suavemente em 90% da resolução da tela mantendo o controle ergonômico.
+  - Ping e diagnósticos no Windows executados de forma 100% oculta e silenciosa sem popups de janelas CMD.
 - **Descoberta Automática de Câmeras IP & NVRs via ONVIF (WS-Discovery UDP 3702)** com extração de perfis e URI tokenizada de streaming RTSP em tempo real.
 - **Reprodução Imediata de Transmissões de Vídeo ao Vivo (RTSP 554) via VLC / FFplay** com aceleração por hardware e suporte a H.264 e HEVC/H.265 (4K/5MP).
 - **Integração Total com Nmap** operando em espaço de usuário (*user-space* sem necessidade de `sudo` no Linux e detecção automática no Windows).
 - **Osciloscópio de Ping Instantâneo Dinâmico** com gráfico em tempo real e resolução sub-milissegundo.
-- **Classificação Dinâmica Inteligente em 1 Clique** (Crescente ▲ / Decrescente ▼) por IP numérico real, Nome, Latência, MAC e Fabricante.
-- **Seletor de Placas de Rede** com preenchimento automático para interfaces cabeadas (Ethernet), Wi-Fi, VPNs (WireGuard/OpenVPN) e Bridges virtuais (Docker/KVM/Hyper-V).
-- **Compilação e Empacotamento Automatizado** com executável portátil único para Windows (`IPScanIGT.exe`) e Linux (`IPScanIGT`), além de esteira de CI/CD no GitHub Actions.
+- **Compilação e Empacotamento Automatizado Multiplataforma:**
+  - Pacote Debian `.deb` oficial para Ubuntu, Debian, Mint e Pop!_OS.
+  - Instalador Assistente `.exe` (Inno Setup) e Pacote corporativo `.msi` (WiX) para Windows.
+  - Executável portátil standalone `.exe` sem dependências para Windows.
 
 ---
 
@@ -195,4 +210,4 @@ flowchart TD
 - **`Ctrl + Q`**: Sair do Aplicativo
 
 ---
-*Blueprint oficial v2.3.0 aprovado e sincronizado com o repositório GitHub do projeto IP Scan IGT.*
+*Blueprint oficial v2.7.1 aprovado e sincronizado com o repositório GitHub do projeto IP Scan IGT.*

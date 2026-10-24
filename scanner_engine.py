@@ -14,6 +14,8 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
+from i18n import tr
+
 IS_WINDOWS = sys.platform.startswith("win") or os.name == "nt"
 
 
@@ -154,7 +156,7 @@ class HostRecord:
 
     def format_ping(self) -> str:
         if not self.alive or self.rtt_ms < 0:
-            return "Offline"
+            return tr("status_offline", "Offline")
         if self.rtt_ms < 10.0:
             return f"{self.rtt_ms:.2f} ms"
         if self.rtt_ms < 100.0:
@@ -1019,74 +1021,76 @@ def classify_device(rec: HostRecord) -> Tuple[str, str]:
     if rec.onvif_url or rec.onvif_model:
         is_nvr = "nvr" in (rec.onvif_type or "").lower() or "nvr" in (rec.onvif_model or "").lower()
         if is_nvr:
-            return "📹 Gravador NVR (ONVIF)", f"NVR ({rec.onvif_model or rec.vendor or 'ONVIF'})"
-        return "📹 Câmera IP (ONVIF)", f"Câmera ONVIF ({rec.onvif_model or rec.vendor or 'IPC'})"
+            return tr("dev_nvr", "📹 Gravador NVR (ONVIF)"), f"NVR ({rec.onvif_model or rec.vendor or 'ONVIF'})"
+        return tr("dev_ipc", "📹 Câmera IP (ONVIF)"), f"ONVIF ({rec.onvif_model or rec.vendor or 'IPC'})"
 
     if 554 in p or 8899 in p or 2443 in p:
-        return "📹 Câmera de Vídeo / RTSP", f"Câmera / Vídeo IP ({rec.vendor or 'RTSP'})"
+        return tr("dev_rtsp", "📹 Câmera de Vídeo / RTSP"), f"RTSP / IP Video ({rec.vendor or 'RTSP'})"
 
     if "eap" in h or "omada" in s or ("tp-link" in v and (80 in p or 443 in p)):
-        return "📡 Access Point / Roteador", "TP-Link Omada / Linux Embedded"
+        return tr("dev_ap_router", "📡 Access Point / Roteador"), "TP-Link Omada / Linux Embedded"
     if "yealink" in v or 5060 in p:
-        return "📞 Telefone IP VoIP", f"VoIP SIP ({rec.vendor or 'SIP'})"
+        return tr("dev_voip", "📞 Telefone IP VoIP"), f"VoIP SIP ({rec.vendor or 'SIP'})"
     if 8006 in p:
-        return "🖥️ Hipervisor Proxmox VE", "Debian Linux (Proxmox VE)"
+        return tr("dev_proxmox", "🖥️ Hipervisor Proxmox VE"), "Debian Linux (Proxmox VE)"
     if "proxmox" in v:
         if 445 in p or 3389 in p or (64 < rec.ttl <= 128):
-            return "💻 VM Windows (Proxmox)", "Microsoft Windows (VM)"
+            return tr("dev_vm_win", "💻 VM Windows (Proxmox)"), "Microsoft Windows (VM)"
         if 22 in p:
-            return "🐧 VM / LXC Linux (Proxmox)", f"Linux ({rec.ssh_banner or 'Proxmox VM'})"
-        return "🖥️ VM / Container (Proxmox)", "Virtualizado Proxmox VE"
+            return tr("dev_vm_linux", "🐧 VM / LXC Linux (Proxmox)"), f"Linux ({rec.ssh_banner or 'Proxmox VM'})"
+        return tr("dev_vm_container", "🖥️ VM / Contêiner (Proxmox)"), "Virtualizado Proxmox VE"
     if rec.netbios_domain or 445 in p or 3389 in p or (64 < rec.ttl <= 128):
-        return "💻 Estação / Servidor Windows", "Microsoft Windows"
+        return tr("dev_win", "💻 Estação / Servidor Windows"), "Microsoft Windows"
     if 9100 in p or 631 in p:
-        return "🖨️ Impressora de Rede", "Impressora IPP/JetDirect"
+        return tr("dev_printer", "🖨️ Impressora de Rede"), "IPP / JetDirect"
     if 22 in p or rec.ssh_banner:
-        return "🐧 Servidor Linux / SSH", rec.ssh_banner or "Linux / Unix"
+        return tr("dev_linux_ssh", "🐧 Servidor Linux / SSH"), rec.ssh_banner or "Linux / Unix"
     if rec.ttl > 128:
-        return "🖧 Switch / Roteador de Rede", f"Network OS (TTL {rec.ttl})"
+        return tr("dev_switch_router", "🖧 Switch / Roteador de Rede"), f"Network OS (TTL {rec.ttl})"
     if 0 < rec.ttl <= 64:
-        return "🐧 Dispositivo Linux / Embarcado", f"Linux / Embedded (TTL {rec.ttl})"
+        return tr("dev_linux_embedded", "🐧 Dispositivo Linux / Embarcado"), f"Linux / Embedded (TTL {rec.ttl})"
     if rec.vendor:
-        return "🔌 Dispositivo de Rede", rec.vendor
-    return "🖧 Host Online", "Desconhecido"
+        return tr("dev_network_dev", "🔌 Dispositivo de Rede"), rec.vendor
+    return tr("dev_host_online", "🖧 Host Online"), tr("unknown", "Desconhecido")
 
 
 def build_resources_for_host(rec: HostRecord) -> List[ResourceItem]:
     items: List[ResourceItem] = []
+    na = tr("not_available", "N/D")
     if rec.onvif_url:
-        items.append(ResourceItem("📹", "Serviço ONVIF (Device Service)", f"Modelo: {rec.onvif_model or 'Câmera IP'}", rec.onvif_url))
+        model_name = rec.onvif_model or tr("dev_ipc", "Câmera IP")
+        items.append(ResourceItem("📹", tr("res_onvif", "Serviço ONVIF (Device Service)"), f"{tr('dns_field_name', 'Modelo')}: {model_name}", rec.onvif_url))
     if rec.rtsp_url or 554 in rec.open_ports:
         rtsp = rec.rtsp_url or f"rtsp://{rec.ip}:554/"
-        items.append(ResourceItem("🎬", "Stream de Vídeo RTSP (Porta 554)", "Transmissão H.264/H.265 em Tempo Real (VLC)", rtsp))
+        items.append(ResourceItem("🎬", tr("res_rtsp_title", "Stream de Vídeo RTSP (Porta 554)"), tr("res_rtsp_detail", "Transmissão H.264/H.265 em Tempo Real (VLC)"), rtsp))
     if 8899 in rec.open_ports and not rec.onvif_url:
-        items.append(ResourceItem("📹", "Porta ONVIF de Controle (8899)", "Serviço SOAP de Gerenciamento", f"http://{rec.ip}:8899/onvif/device_service"))
+        items.append(ResourceItem("📹", tr("res_onvif_ctrl_title", "Porta ONVIF de Controle (8899)"), tr("res_onvif_ctrl_detail", "Serviço SOAP de Gerenciamento"), f"http://{rec.ip}:8899/onvif/device_service"))
     if 2443 in rec.open_ports and not rec.onvif_url:
-        items.append(ResourceItem("📹", "Painel NVR Seguro (2443)", "Interface de Gerenciamento do Gravador", f"https://{rec.ip}:2443/"))
+        items.append(ResourceItem("📹", tr("res_nvr_secure_title", "Painel NVR Seguro (2443)"), tr("res_nvr_secure_detail", "Interface de Gerenciamento do Gravador"), f"https://{rec.ip}:2443/"))
 
     if 80 in rec.open_ports or rec.http_info:
-        items.append(ResourceItem("🌐", "Painel / Serviço Web HTTP (Porta 80)", rec.http_info or "Servidor HTTP Ativo", f"http://{rec.ip}/"))
+        items.append(ResourceItem("🌐", tr("res_http_title", "Painel / Serviço Web HTTP (Porta 80)"), rec.http_info or tr("active_http", "Servidor HTTP Ativo"), f"http://{rec.ip}/"))
     if 8080 in rec.open_ports:
-        items.append(ResourceItem("🌐", "Serviço Web HTTP-Alt (Porta 8080)", "Interface Web Alternativa", f"http://{rec.ip}:8080/"))
+        items.append(ResourceItem("🌐", tr("res_http_alt_title", "Serviço Web HTTP-Alt (Porta 8080)"), tr("res_http_alt_detail", "Interface Web Alternativa"), f"http://{rec.ip}:8080/"))
     if 443 in rec.open_ports or rec.ssl_info:
-        detail = f"Certificado SSL: CN={rec.ssl_info}" if rec.ssl_info else "HTTPS Ativo"
-        items.append(ResourceItem("🔒", "Serviço Web Seguro HTTPS (Porta 443)", detail, f"https://{rec.ip}/"))
+        detail = f"{tr('ssl_cert', 'Certificado SSL')}: CN={rec.ssl_info}" if rec.ssl_info else tr("active_https", "HTTPS Ativo")
+        items.append(ResourceItem("🔒", tr("res_https_title", "Serviço Web Seguro HTTPS (Porta 443)"), detail, f"https://{rec.ip}/"))
     if 8006 in rec.open_ports:
-        items.append(ResourceItem("🖥️", "Console Web Proxmox VE (Porta 8006)", "Gerenciamento Virtualização", f"https://{rec.ip}:8006/"))
+        items.append(ResourceItem("🖥️", tr("res_proxmox_title", "Console Web Proxmox VE (Porta 8006)"), tr("res_proxmox_desc", "Gerenciamento Virtualização"), f"https://{rec.ip}:8006/"))
     if 8443 in rec.open_ports:
-        items.append(ResourceItem("🔒", "Painel HTTPS Alternativo (Porta 8443)", "Controladora / Admin", f"https://{rec.ip}:8443/"))
+        items.append(ResourceItem("🔒", tr("res_https_alt_title", "Painel HTTPS Alternativo (Porta 8443)"), tr("res_https_alt_desc", "Controladora / Admin"), f"https://{rec.ip}:8443/"))
     if 445 in rec.open_ports or 139 in rec.open_ports or rec.netbios_domain:
-        items.append(ResourceItem("📁", "Compartilhamento de Arquivos SMB / Windows", rec.netbios_domain or "Porta 445 Aberta", f"smb://{rec.ip}/"))
+        items.append(ResourceItem("📁", tr("res_smb_title", "Compartilhamento de Arquivos SMB / Windows"), rec.netbios_domain or f"{tr('ports_label', 'Portas')} 445", f"smb://{rec.ip}/"))
     if 21 in rec.open_ports:
-        items.append(ResourceItem("📂", "Servidor de Arquivos FTP (Porta 21)", "Transferência de Arquivos", f"ftp://{rec.ip}/"))
+        items.append(ResourceItem("📂", tr("res_ftp_title", "Servidor de Arquivos FTP (Porta 21)"), tr("res_ftp_desc", "Transferência de Arquivos"), f"ftp://{rec.ip}/"))
     if 3389 in rec.open_ports:
-        items.append(ResourceItem("🖥️", "Área de Trabalho Remota RDP (Porta 3389)", "Microsoft Remote Desktop Ativo", f"rdp://{rec.ip}"))
+        items.append(ResourceItem("🖥️", tr("res_rdp_title", "Área de Trabalho Remota RDP (Porta 3389)"), tr("res_rdp_desc", "Microsoft Remote Desktop Ativo"), f"rdp://{rec.ip}"))
     if 22 in rec.open_ports or rec.ssh_banner:
-        items.append(ResourceItem("💻", "Servidor SSH (Porta 22)", rec.ssh_banner or "Acesso Terminal SSH Remoto", f"ssh://{rec.ip}"))
+        items.append(ResourceItem("💻", tr("res_ssh_title", "Servidor SSH (Porta 22)"), rec.ssh_banner or tr("res_ssh_desc", "Acesso Terminal SSH Remoto"), f"ssh://{rec.ip}"))
     if rec.mac or rec.vendor:
-        items.append(ResourceItem("🏷️", "Hardware / Placa de Rede", f"MAC: {rec.mac or 'N/D'}  •  Fabricante: {rec.vendor or 'N/D'}", ""))
+        items.append(ResourceItem("🏷️", tr("res_hardware_title", "Hardware / Placa de Rede"), f"MAC: {rec.mac or na}  •  {tr('col_manufacturer', 'Fabricante')}: {rec.vendor or na}", ""))
     if rec.open_ports:
-        items.append(ResourceItem("🔌", "Portas TCP Abertas", rec.format_ports(), ""))
+        items.append(ResourceItem("🔌", tr("res_open_ports_title", "Portas TCP Abertas"), rec.format_ports(), ""))
     return items
 
 
