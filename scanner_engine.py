@@ -16,6 +16,70 @@ from typing import Any, Dict, List, Optional, Tuple
 
 IS_WINDOWS = sys.platform.startswith("win") or os.name == "nt"
 
+
+def _get_windows_silent_kwargs() -> Dict[str, Any]:
+    """Returns kwargs for subprocess execution without popping up console/cmd windows on Windows."""
+    kwargs: Dict[str, Any] = {}
+    if IS_WINDOWS:
+        if hasattr(subprocess, "CREATE_NO_WINDOW"):
+            kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = subprocess.SW_HIDE
+        kwargs["startupinfo"] = startupinfo
+    return kwargs
+
+
+def create_robust_ssl_context():
+    """
+    Creates an SSL context that works reliably across platforms,
+    attempting certifi, system trust store, and falling back gracefully
+    to avoid CERTIFICATE_VERIFY_FAILED in frozen or restricted environments.
+    """
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        pass
+
+    try:
+        ctx = ssl.create_default_context()
+        if hasattr(ctx, "load_default_certs"):
+            ctx.load_default_certs()
+        return ctx
+    except Exception:
+        pass
+
+    try:
+        return ssl._create_unverified_context()
+    except Exception:
+        return None
+
+
+def robust_urlopen(url_or_req, timeout: float = 10, **kwargs):
+    """
+    Executes urllib.request.urlopen with fallback against SSL verification failures
+    such as [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate
+    which frequently occurs in Windows frozen executables or environments without certifi.
+    """
+    ctx = create_robust_ssl_context()
+    try:
+        if ctx:
+            return urllib.request.urlopen(url_or_req, timeout=timeout, context=ctx, **kwargs)
+        else:
+            return urllib.request.urlopen(url_or_req, timeout=timeout, **kwargs)
+    except Exception as exc:
+        err_msg = str(exc).lower()
+        if "certificate verify failed" in err_msg or "certificate_verify_failed" in err_msg or "local issuer certificate" in err_msg:
+            try:
+                unverified_ctx = ssl._create_unverified_context()
+                return urllib.request.urlopen(url_or_req, timeout=timeout, context=unverified_ctx, **kwargs)
+            except Exception:
+                pass
+        raise
+
+
+
 from oui_db import OUI_DB
 from onvif_engine import discover_onvif_devices, probe_onvif_unicast, probe_rtsp
 
@@ -113,9 +177,7 @@ def get_default_gateways() -> Dict[str, str]:
     gw_map = {}
     if IS_WINDOWS:
         try:
-            kwargs = {}
-            if hasattr(subprocess, "CREATE_NO_WINDOW"):
-                kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+            kwargs = _get_windows_silent_kwargs()
             out = subprocess.check_output(["route", "print", "0.0.0.0"], text=True, timeout=2.0, **kwargs)
             for line in out.splitlines():
                 parts = line.split()
@@ -149,9 +211,7 @@ def _get_windows_network_interfaces() -> List[Dict[str, Any]]:
     hostname = socket.gethostname()
 
     try:
-        kwargs = {}
-        if hasattr(subprocess, "CREATE_NO_WINDOW"):
-            kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+        kwargs = _get_windows_silent_kwargs()
         out = subprocess.check_output(["ipconfig", "/all"], text=True, timeout=3.0, **kwargs)
 
         blocks = re.split(r"\r?\n(?=\S)", out)
@@ -488,9 +548,7 @@ def read_arp_table() -> Dict[str, str]:
     arp_map: Dict[str, str] = {}
     if IS_WINDOWS:
         try:
-            kwargs = {}
-            if hasattr(subprocess, "CREATE_NO_WINDOW"):
-                kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+            kwargs = _get_windows_silent_kwargs()
             out = subprocess.check_output(["arp", "-a"], text=True, timeout=2.0, **kwargs)
             for line in out.splitlines():
                 m = re.search(r"(\d{1,3}(?:\.\d{1,3}){3})\s+([0-9a-fA-F]{2}(?:[-:][0-9a-fA-F]{2}){5})", line)
@@ -537,8 +595,7 @@ def probe_ping(ip: str, timeout_ms: int = 600, fallback_ports: Optional[List[int
         kwargs = {}
         if IS_WINDOWS:
             cmd = ["ping", "-n", "1", "-w", str(int(timeout_ms)), ip]
-            if hasattr(subprocess, "CREATE_NO_WINDOW"):
-                kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+            kwargs.update(_get_windows_silent_kwargs())
             wait_sec = max(0.6, (timeout_ms / 1000.0) + 0.5)
         else:
             ping_w = str(round(max(0.2, timeout_ms / 1000.0), 2))

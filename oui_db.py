@@ -105,12 +105,18 @@ class OuiDatabase:
             return self.online_cache[prefix]
 
         try:
+            from scanner_engine import robust_urlopen
+            urlopen_fn = robust_urlopen
+        except Exception:
+            urlopen_fn = urllib.request.urlopen
+
+        try:
             url = f"https://api.maclookup.app/v2/macs/{prefix}/company/name"
             req = urllib.request.Request(
                 url,
-                headers={"User-Agent": "IPScanIGT/2.3.0"}
+                headers={"User-Agent": "IPScanIGT/2.6.2"}
             )
-            with urllib.request.urlopen(req, timeout=1.5) as resp:
+            with urlopen_fn(req, timeout=1.5) as resp:
                 if resp.status == 200:
                     data = resp.read().decode("utf-8").strip()
                     if data and not data.startswith("{") and len(data) < 60:

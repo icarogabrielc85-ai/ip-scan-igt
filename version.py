@@ -6,7 +6,7 @@ import os
 import subprocess
 
 # Versão Semântica Oficial (MAJOR.MINOR.PATCH)
-APP_VERSION = "2.6.1"
+APP_VERSION = "2.6.2"
 APP_RELEASE_DATE = "24/10/2026"
 
 
@@ -73,6 +73,19 @@ def get_short_version() -> str:
 
 
 VERSION_HISTORY = [
+    {
+        "version": "v2.6.2",
+        "date": "24/10/2026",
+        "title": "Abertura Maximizada Auto-Ajustável, Controle de Janela de Diagnóstico, Ping Silencioso & Correção SSL no Windows",
+        "changes": [
+            "Abertura padrão da janela principal em modo maximizado e auto-ajustado à resolução do monitor.",
+            "Cálculo ergonômico da geometria ao desmaximizar (restaurar), centralizando a janela em 90% da área útil do display.",
+            "Janela de Teste de Conexão e Benchmark de DNS inicia em tela cheia/maximizada por padrão.",
+            "Inclusão de botões nativos de minimizar, maximizar/restaurar e fechar na janela de Diagnóstico de Internet.",
+            "Execução 100% silenciosa de testes de ping e ipconfig no Windows (CREATE_NO_WINDOW + SW_HIDE), eliminando o piscar de janelas CMD.",
+            "Correção de verificação SSL (CERTIFICATE_VERIFY_FAILED) com suporte a certifi e fallback seguro para auto-atualização no Windows.",
+        ],
+    },
     {
         "version": "v2.6.1",
         "date": "24/10/2026",

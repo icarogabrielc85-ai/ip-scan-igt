@@ -35,6 +35,7 @@ a = Analysis(
         'nmap_dialog',
         'nmap_engine',
         'ssl',
+        'certifi',
         'socket',
         'subprocess',
         'xml.etree.ElementTree',

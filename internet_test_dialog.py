@@ -20,6 +20,8 @@ import time
 import urllib.request
 from typing import Dict, List, Optional, Tuple
 
+from scanner_engine import robust_urlopen
+
 from PyQt5.QtCore import QObject, QPoint, QSize, Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QBrush, QColor, QFont, QIcon
 from PyQt5.QtWidgets import (
@@ -300,7 +302,20 @@ def get_interface_configured_dns() -> List[str]:
     else:
         # Windows ipconfig /all
         try:
-            out = subprocess.check_output(["ipconfig", "/all"], text=True, stderr=subprocess.DEVNULL, timeout=2.0)
+            kwargs = {
+                "text": True,
+                "stderr": subprocess.DEVNULL,
+                "timeout": 2.0,
+            }
+            if IS_WINDOWS:
+                if hasattr(subprocess, "CREATE_NO_WINDOW"):
+                    kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                startupinfo.wShowWindow = subprocess.SW_HIDE
+                kwargs["startupinfo"] = startupinfo
+
+            out = subprocess.check_output(["ipconfig", "/all"], **kwargs)
             capture = False
             for line in out.splitlines():
                 if "DNS Servers" in line or "Servidores DNS" in line:
@@ -357,10 +372,24 @@ def query_dns_latency(dns_ip: str, domain: str = "google.com", timeout: float = 
 def ping_target_stats(ip: str, count: int = 3, timeout_sec: int = 1) -> Tuple[Optional[float], Optional[float], Optional[float], int]:
     """
     Executes count ICMP echo pings returning (min_ms, avg_ms, max_ms, packet_loss_pct).
+    Executes 100% silently in the background with zero CMD window popups on Windows.
     """
     cmd = ["ping", "-n" if IS_WINDOWS else "-c", str(count), "-w" if IS_WINDOWS else "-W", str(timeout_sec * 1000 if IS_WINDOWS else timeout_sec), ip]
+    kwargs = {
+        "text": True,
+        "stderr": subprocess.DEVNULL,
+        "timeout": count * timeout_sec + 2.0,
+    }
+    if IS_WINDOWS:
+        if hasattr(subprocess, "CREATE_NO_WINDOW"):
+            kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = subprocess.SW_HIDE
+        kwargs["startupinfo"] = startupinfo
+
     try:
-        out = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL, timeout=count * timeout_sec + 2.0)
+        out = subprocess.check_output(cmd, **kwargs)
         # Packet loss
         loss_m = re.search(r"([0-9]+)%\s*(?:packet\s*loss|perdidos)", out, re.IGNORECASE)
         loss = int(loss_m.group(1)) if loss_m else 0
@@ -395,8 +424,8 @@ def get_public_ip_info() -> Dict[str, str]:
     ]
     for url in services:
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "IPScanIGT/2.6.0"})
-            with urllib.request.urlopen(req, timeout=1.8) as resp:
+            req = urllib.request.Request(url, headers={"User-Agent": "IPScanIGT/2.6.2"})
+            with robust_urlopen(req, timeout=1.8) as resp:
                 content = resp.read().decode("utf-8").strip()
                 if content.startswith("{"):
                     data = json.loads(content)
@@ -608,9 +637,24 @@ class InternetQualityDialog(QDialog):
             self.is_dark = is_dark
 
         self.setWindowTitle("Diagnóstico de Conexão com a Internet & Benchmark de DNS")
-        self.resize(880, 640)
+        # Permitir maximizar, restaurar e fechar com botões nativos no título da janela
+        self.setWindowFlags(self.windowFlags() | Qt.WindowMinMaxButtonsHint | Qt.WindowCloseButtonHint)
+
+        # Geometria padrão ao desmaximizar (auto-ajustada proporcionalmente à resolução)
+        screen = QApplication.primaryScreen()
+        if screen:
+            geo = screen.availableGeometry()
+            w = max(880, min(1360, int(geo.width() * 0.88)))
+            h = max(640, min(860, int(geo.height() * 0.86)))
+            x = geo.x() + (geo.width() - w) // 2
+            y = geo.y() + (geo.height() - h) // 2
+            self.setGeometry(x, y, w, h)
+        else:
+            self.resize(960, 680)
+
         self.init_palette_and_styles()
         self.init_ui()
+        self.showMaximized()
         self.start_test()
 
     def init_palette_and_styles(self):

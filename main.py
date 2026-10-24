@@ -168,6 +168,7 @@ from scanner_engine import (
     get_local_network_info,
     probe_ping,
     read_linux_arp_table,
+    robust_urlopen,
     scan_single_ip,
     send_wake_on_lan,
 )
@@ -405,7 +406,7 @@ class AppUpdateWorker(QThread):
             try:
                 rel_url = "https://api.github.com/repos/icarogabrielc85-ai/ip-scan-igt/releases/latest"
                 req = urllib.request.Request(rel_url, headers={"User-Agent": "IPScanIGT-Updater"})
-                with urllib.request.urlopen(req, timeout=8) as resp:
+                with robust_urlopen(req, timeout=8) as resp:
                     rel_data = json.loads(resp.read().decode("utf-8"))
                     latest_tag = rel_data.get("tag_name", "").lstrip("v")
                     html_url = rel_data.get("html_url", "https://github.com/icarogabrielc85-ai/ip-scan-igt/releases")
@@ -456,7 +457,7 @@ class AppUpdateWorker(QThread):
         try:
             api_url = "https://api.github.com/repos/icarogabrielc85-ai/ip-scan-igt/commits/main"
             req = urllib.request.Request(api_url, headers={"User-Agent": "IPScanIGT-Updater"})
-            with urllib.request.urlopen(req, timeout=8) as resp:
+            with robust_urlopen(req, timeout=8) as resp:
                 c_data = json.loads(resp.read().decode("utf-8"))
                 latest_sha = c_data.get("sha", "")[:7]
                 latest_msg = c_data.get("commit", {}).get("message", "").split("\n")[0]
@@ -481,7 +482,7 @@ class AppUpdateWorker(QThread):
         zip_url = "https://github.com/icarogabrielc85-ai/ip-scan-igt/archive/refs/heads/main.zip"
         req = urllib.request.Request(zip_url, headers={"User-Agent": "IPScanIGT-Updater"})
         try:
-            with urllib.request.urlopen(req, timeout=35) as resp:
+            with robust_urlopen(req, timeout=35) as resp:
                 zip_data = resp.read()
         except Exception as e:
             self.update_finished.emit(
@@ -640,12 +641,17 @@ class MainWindow(QMainWindow):
         primary = QApplication.primaryScreen()
         if primary:
             geo = primary.availableGeometry()
-            w, h = 1280, 760
+            # Geometria restaurada proporcional à resolução da tela (caso o usuário desmaximize)
+            w = max(800, min(1440, int(geo.width() * 0.90)))
+            h = max(600, min(920, int(geo.height() * 0.88)))
             x = geo.x() + (geo.width() - w) // 2
             y = geo.y() + (geo.height() - h) // 2
             self.setGeometry(x, y, w, h)
         else:
             self.resize(1280, 760)
+
+        # Iniciar maximizado por padrão auto-ajustado à tela
+        self.setWindowState(Qt.WindowMaximized)
 
         icon_path = get_resource_path("icon.ico") if IS_WINDOWS else get_resource_path("icon.png")
         if not os.path.exists(icon_path):
@@ -2208,6 +2214,7 @@ class MainWindow(QMainWindow):
         from internet_test_dialog import InternetQualityDialog
         gw = self.local_info.get("gateway", "")
         dlg = InternetQualityDialog(self, gateway_ip=gw, is_dark=self.is_dark_mode)
+        dlg.showMaximized()
         dlg.exec_()
 
     def action_open_rdp(self):
@@ -2663,7 +2670,7 @@ def main():
         app = QApplication(sys.argv)
         app.setApplicationName("IP Scan IGT")
         window = MainWindow()
-        window.show()
+        window.showMaximized()
         sys.exit(app.exec_())
     except Exception as err:
         import traceback
