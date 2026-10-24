@@ -6,7 +6,7 @@ import os
 import subprocess
 
 # Versão Semântica Oficial (MAJOR.MINOR.PATCH)
-APP_VERSION = "2.6.0"
+APP_VERSION = "2.6.1"
 APP_RELEASE_DATE = "24/10/2026"
 
 
@@ -73,6 +73,19 @@ def get_short_version() -> str:
 
 
 VERSION_HISTORY = [
+    {
+        "version": "v2.6.1",
+        "date": "24/10/2026",
+        "title": "Auto-Atualização Universal sem Git, Expansão DNS & Ordenação Dinâmica",
+        "changes": [
+            "Auto-atualização universal via download direto de ZIP do GitHub para instalações manuais sem Git no Windows e Linux.",
+            "Detecção automática de instaladores compilados (.exe / .msi) com integração direta ao GitHub Releases.",
+            "Expansão do benchmark com 10 novos provedores DNS primários e secundários (GigaDNS, CleanBrowsing, Control D, Alternate DNS, Mullvad, Comodo, Yandex, Level3, SafeDNS, Neustar UltraDNS).",
+            "Tabela dedicada exclusiva para servidores DNS públicos, desacoplando o Gateway e o DNS local para seus próprios cards de métricas.",
+            "Ordenação dinâmica crescente e decrescente por tempo de resposta DNS, ping ICMP, perda de pacotes e classificação de qualidade.",
+            "Correção de ordenação numérica real (NumericTableWidgetItem) evitando distorção alfabética em milissegundos.",
+        ],
+    },
     {
         "version": "v2.6.0",
         "date": "24/10/2026",
