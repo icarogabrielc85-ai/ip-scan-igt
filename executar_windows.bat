@@ -29,15 +29,14 @@ if %ERRORLEVEL% neq 0 (
 echo [*] Python detectado com sucesso.
 echo [*] Verificando biblioteca visual PyQt5...
 
-python -c "import PyQt5.QtCore, PyQt5.QtWidgets" >nul 2>nul
+python -c "import PyQt5.QtCore, PyQt5.QtWidgets, psutil" >nul 2>nul
 if %ERRORLEVEL% neq 0 (
     echo.
-    echo [*] PyQt5 ausente ou incompleto no seu Windows.
-    echo [*] Baixando e instalando PyQt5 automaticamente via pip...
-    echo [*] Isso pode levar cerca de 1 a 2 minutos. Aguarde...
+    echo [*] Dependencias Python (PyQt5 / psutil) ausentes ou incompletas no Windows.
+    echo [*] Baixando e instalando dependencias via pip...
     echo.
     python -m pip install --upgrade pip
-    python -m pip install PyQt5>=5.15.9
+    python -m pip install -r requirements.txt
     if %ERRORLEVEL% neq 0 (
         echo.
         echo ======================================================================

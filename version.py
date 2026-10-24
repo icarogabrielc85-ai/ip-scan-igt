@@ -6,7 +6,7 @@ import os
 import subprocess
 
 # Versão Semântica Oficial (MAJOR.MINOR.PATCH)
-APP_VERSION = "2.4.0"
+APP_VERSION = "2.5.0"
 APP_RELEASE_DATE = "24/10/2026"
 
 
@@ -56,6 +56,19 @@ def get_short_version() -> str:
 
 
 VERSION_HISTORY = [
+    {
+        "version": "v2.5.0",
+        "date": "24/10/2026",
+        "title": "Doutor de Aptidão do Sistema, Auto-Instalador de Dependências & Resolução 800x600",
+        "changes": [
+            "Script inteligente de instalação e resolução automática de dependências para Linux (instalar_linux.sh) e Windows (instalar_windows.bat).",
+            "Módulo de Diagnóstico e Aptidão do Sistema (System Doctor) integrado diretamente na interface gráfica.",
+            "Detecção em tempo real e comando de instalação em 1 clique para pacotes ausentes (FFplay, VLC, Nmap, Remmina, OpenSSH).",
+            "Configuração oficial da resolução padrão de exibição de câmeras para 800x600 (SVGA) com persistência contínua.",
+            "Criação automática de lançador de terminal (ipscan-igt) e atalho de aplicativo (.desktop) integrado ao sistema operacional.",
+            "Atualização de requirements.txt com psutil e proteção contra falhas de bibliotecas ausentes.",
+        ],
+    },
     {
         "version": "v2.4.0",
         "date": "24/10/2026",

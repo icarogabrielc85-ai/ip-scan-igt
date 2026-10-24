@@ -603,6 +603,10 @@ class MainWindow(QMainWindow):
         act_video_cfg.triggered.connect(self.open_camera_config_dialog)
         menu_actions.addAction(act_video_cfg)
 
+        act_doctor_act = QAction("🩺 Verificar Aptidão e Dependências do Sistema...", self)
+        act_doctor_act.triggered.connect(self.open_system_doctor_dialog)
+        menu_actions.addAction(act_doctor_act)
+
         # 3. Exibir
         menu_view = menu_bar.addMenu("&Exibir")
         self.act_toggle_bottom = QAction("Painel Inferior de Ping & Detalhes", self)
@@ -620,6 +624,10 @@ class MainWindow(QMainWindow):
 
         # 4. Ajuda
         menu_help = menu_bar.addMenu("&Ajuda")
+        act_doctor = QAction("🩺 Diagnóstico e Aptidão do Sistema...", self)
+        act_doctor.triggered.connect(self.open_system_doctor_dialog)
+        menu_help.addAction(act_doctor)
+
         act_update = QAction("🔄 Verificar e Atualizar IP Scan IGT...", self)
         act_update.triggered.connect(self.check_and_apply_update)
         menu_help.addAction(act_update)
@@ -2009,6 +2017,11 @@ class MainWindow(QMainWindow):
 
     def open_camera_config_dialog(self):
         dlg = VideoConfigDialog(self)
+        dlg.exec_()
+
+    def open_system_doctor_dialog(self):
+        from system_doctor_dialog import SystemDoctorDialog
+        dlg = SystemDoctorDialog(self)
         dlg.exec_()
 
     def action_open_rdp(self):

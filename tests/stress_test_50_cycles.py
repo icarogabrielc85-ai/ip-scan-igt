@@ -451,7 +451,8 @@ class StressTestRunner:
         w.show_changelog_dialog()
         w.show_about_dialog()
         w.open_camera_config_dialog()
-        self.total_actions += 5
+        w.open_system_doctor_dialog()
+        self.total_actions += 6
 
         # Medição de tempo e memória
         elapsed = time.perf_counter() - cycle_start

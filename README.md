@@ -18,15 +18,33 @@
 
 ---
 
-## 🚀 Como Executar
+## 🚀 Instalação e Execução Inteligente (Com Resolução de Dependências)
 
-### Pré-requisitos
-- **Python 3.10+**
-- **PyQt5**
+### 🐧 No Linux (Instalação Automática de Dependências)
+Basta rodar o instalador inteligente que analisa a aptidão do seu sistema, instala ferramentas ausentes (`ffmpeg`, `vlc`, `nmap`, `remmina`, `PyQt5`, `psutil`), cria o atalho no menu de aplicativos e configura o comando global `ipscan-igt`:
 
 ```bash
-pip install -r requirements.txt
-python main.py
+git clone https://github.com/icarogabrielc85-ai/ip-scan-igt.git
+cd ip-scan-igt
+chmod +x instalar_linux.sh
+./instalar_linux.sh
+```
+
+Para inicialização rápida no dia a dia:
+```bash
+./executar_linux.sh
+# ou simplesmente:
+ipscan-igt
+```
+
+### 🪟 No Windows (Instalação Automática)
+Dê um duplo-clique no arquivo:
+```cmd
+instalar_windows.bat
+```
+Ou para inicialização imediata com verificação de bibliotecas:
+```cmd
+executar_windows.bat
 ```
 
 ---
