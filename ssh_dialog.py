@@ -239,32 +239,38 @@ class SshConnectDialog(QDialog):
         vbox.setContentsMargins(18, 16, 18, 16)
         vbox.setSpacing(12)
 
+        is_dark = getattr(self.parent(), "is_dark_mode", False) if self.parent() else False
+        hdr_bg = "#162032" if is_dark else "#d2d2d2"
+        hdr_border = "#1f2937" if is_dark else "#a8a8a8"
+        title_col = "#38bdf8" if is_dark else "#164e78"
+        sub_col = "#94a3b8" if is_dark else "#3b424a"
+
         # Header card
         hdr = QFrame()
         hdr.setObjectName("sshHeaderFrame")
-        hdr.setStyleSheet("""
-            QFrame#sshHeaderFrame {
-                background-color: #162032;
-                border: 1px solid #1f2937;
-                border-radius: 8px;
+        hdr.setStyleSheet(f"""
+            QFrame#sshHeaderFrame {{
+                background-color: {hdr_bg};
+                border: 1px solid {hdr_border};
+                border-radius: 6px;
                 padding: 10px;
-            }
+            }}
         """)
         h_layout = QHBoxLayout(hdr)
         h_layout.setContentsMargins(6, 4, 6, 4)
         h_layout.setSpacing(12)
 
         lbl_icon = QLabel("💻")
-        lbl_icon.setStyleSheet("font-size: 28px;")
+        lbl_icon.setStyleSheet("font-size: 28px; border: none;")
         h_layout.addWidget(lbl_icon)
 
         info_box = QVBoxLayout()
         info_box.setSpacing(2)
         lbl_title = QLabel(f"Conectar via SSH: {self.ip}")
-        lbl_title.setStyleSheet("font-weight: bold; font-size: 14px; color: #38bdf8;")
+        lbl_title.setStyleSheet(f"font-weight: bold; font-size: 14px; color: {title_col}; border: none;")
         sub_text = f"Host: {self.hostname}" if self.hostname else "Sessão remota via Terminal seguro OpenSSH"
         lbl_sub = QLabel(sub_text)
-        lbl_sub.setStyleSheet("font-size: 12px; color: #94a3b8;")
+        lbl_sub.setStyleSheet(f"font-size: 12px; color: {sub_col}; border: none;")
         info_box.addWidget(lbl_title)
         info_box.addWidget(lbl_sub)
         h_layout.addLayout(info_box)

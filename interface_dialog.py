@@ -43,28 +43,34 @@ class NetworkInterfaceDialog(QDialog):
         layout.setContentsMargins(14, 14, 14, 14)
         layout.setSpacing(10)
 
+        is_dark = getattr(self.parent(), "is_dark_mode", False) if self.parent() else False
+        hdr_bg = "#162032" if is_dark else "#d2d2d2"
+        hdr_border = "#243447" if is_dark else "#a8a8a8"
+        title_col = "#f8fafc" if is_dark else "#1e242b"
+        sub_col = "#94a3b8" if is_dark else "#3b424a"
+
         # Header Info Card
         hdr_frame = QFrame()
-        hdr_frame.setStyleSheet("""
-            QFrame {
-                background-color: #f1f5f9;
-                border: 1px solid #cbd5e1;
+        hdr_frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: {hdr_bg};
+                border: 1px solid {hdr_border};
                 border-radius: 6px;
                 padding: 6px;
-            }
+            }}
         """)
         hdr_layout = QHBoxLayout(hdr_frame)
         hdr_layout.setContentsMargins(10, 6, 10, 6)
 
         lbl_icon = QLabel("🖧")
-        lbl_icon.setStyleSheet("font-size: 26px;")
+        lbl_icon.setStyleSheet("font-size: 26px; border: none;")
         hdr_layout.addWidget(lbl_icon)
 
         hdr_info = QVBoxLayout()
         lbl_title = QLabel("Escolha de Placa de Rede / Interface")
-        lbl_title.setStyleSheet("font-weight: bold; font-size: 14px; color: #0f172a;")
+        lbl_title.setStyleSheet(f"font-weight: bold; font-size: 14px; color: {title_col}; border: none;")
         lbl_sub = QLabel("Selecione a placa de rede desejada para preencher a faixa de IPs correspondente e executar a varredura.")
-        lbl_sub.setStyleSheet("color: #475569; font-size: 11px;")
+        lbl_sub.setStyleSheet(f"color: {sub_col}; font-size: 11px; border: none;")
         hdr_info.addWidget(lbl_title)
         hdr_info.addWidget(lbl_sub)
         hdr_layout.addLayout(hdr_info)

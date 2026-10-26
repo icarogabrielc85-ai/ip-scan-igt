@@ -198,8 +198,10 @@ class TopologyNodeItem(QGraphicsObject):
         vulns_count = len(getattr(record, "vulnerabilities", []) or [])
         risk_line = f"\n⚠️ Risco de Segurança: {record.risk_level} ({vulns_count} CVEs)" if vulns_count > 0 else ""
         snmp_line = f"\n📊 SNMP: {record.snmp_info}" if record.snmp_info else ""
+        alias_line = f"\n✏️ Apelido: {record.alias}" if getattr(record, "alias", "") else ""
         self.setToolTip(
-            f"Host: {record.hostname or record.ip}\n"
+            f"Host: {record.hostname or record.ip}"
+            f"{alias_line}\n"
             f"IP: {record.ip}\n"
             f"MAC: {record.mac or 'N/D'} ({record.vendor or 'Desconhecido'})\n"
             f"Tipo: {record.device_type or 'Host'}\n"
@@ -309,8 +311,8 @@ class TopologyNodeItem(QGraphicsObject):
                 str(len(vulns)),
             )
 
-        # Rótulo inferior: Nome curto + IP
-        label_name = rec.hostname or rec.vendor or "Host"
+        # Rótulo inferior: Apelido ou Nome curto + IP
+        label_name = getattr(rec, "alias", "") or rec.hostname or rec.vendor or "Host"
         if len(label_name) > 18:
             label_name = label_name[:16] + ".."
         if self.role == "gateway":

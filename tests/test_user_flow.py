@@ -163,15 +163,17 @@ def run_e2e_tests():
         current = i18n.get_current_language()
         assert current == lang, f"Idioma esperado {lang}, obteve {current}"
 
-        # Check Column Headers
+        # Check Column Headers (8 columns: Status, Nome, Apelido, IP, Fabricante, MAC, Ping, Comentários)
         col_0 = window.tree.headerItem().text(0)
         col_1 = window.tree.headerItem().text(1)
-        col_5 = window.tree.headerItem().text(5)
+        col_2 = window.tree.headerItem().text(2)
         col_6 = window.tree.headerItem().text(6)
+        col_7 = window.tree.headerItem().text(7)
         assert col_0 == tr("col_status"), f"Header status mismatch in {lang}"
         assert col_1 == tr("col_hostname"), f"Header hostname mismatch in {lang}"
-        assert col_5 == tr("col_ping"), f"Header ping mismatch in {lang}"
-        assert col_6 == tr("col_comments"), f"Header comments mismatch in {lang}"
+        assert col_2 == tr("col_alias"), f"Header alias mismatch in {lang}"
+        assert col_6 == tr("col_ping"), f"Header ping mismatch in {lang}"
+        assert col_7 == tr("col_comments"), f"Header comments mismatch in {lang}"
 
         # Check First Node (NVR)
         item_nvr = window.tree.topLevelItem(0)
@@ -194,9 +196,9 @@ def run_e2e_tests():
 
         # Check Unknown device node
         item_unknown = window.tree.topLevelItem(6)
-        vendor_text = item_unknown.text(3)
+        vendor_text = item_unknown.text(4)
         assert vendor_text == tr("unknown"), f"Fabricante desconhecido não traduzido em {lang}: {vendor_text}"
-        no_svc_text = item_unknown.text(6)
+        no_svc_text = item_unknown.text(7)
         assert no_svc_text == tr("no_services_found"), f"Comentário sem serviços não traduzido em {lang}: {no_svc_text}"
 
         # Check KPIs
@@ -260,10 +262,10 @@ def run_e2e_tests():
 
     # 6. Sorting Test
     print("\n[TEST 6] Testando ordenação da árvore por colunas...")
-    window.tree.sortByColumn(2, Qt.AscendingOrder)
-    assert window.tree.topLevelItem(0).text(2) == "192.168.1.1"
-    window.tree.sortByColumn(2, Qt.DescendingOrder)
-    assert window.tree.topLevelItem(0).text(2) == "192.168.1.250"
+    window.tree.sortByColumn(3, Qt.AscendingOrder)
+    assert window.tree.topLevelItem(0).text(3) == "192.168.1.1"
+    window.tree.sortByColumn(3, Qt.DescendingOrder)
+    assert window.tree.topLevelItem(0).text(3) == "192.168.1.250"
     print(" -> Ordenação crescente e decrescente por IP OK.")
 
     # 7. SNMP (UDP 161) Engine Test
@@ -464,8 +466,54 @@ def run_e2e_tests():
     assert "Auditoria de Infraestrutura" in full_html
     print(f" -> Relatório Executivo Autocontido (com PNG Base64 + Matriz CVE + SNMP) OK ({len(full_html)} bytes).")
 
-    # 15. Cleanup
-    print("\n[TEST 15] Fechando janelas e encerrando threads...")
+    # 15. Editable "Apelido" Column, Reorganized Menus & User Manual PDF Test
+    print("\n[TEST 15] Testando Coluna 'Apelido' Editável, Menus Separados e Manual em PDF...")
+    from scanner_engine import get_device_alias, save_device_alias
+    from manual_dialog import UserManualDialog, export_manual_to_pdf
+
+    # Verify separated menus exist
+    assert hasattr(window, "menu_scan") and window.menu_scan.actions(), "Menu Varredura deve existir"
+    assert hasattr(window, "menu_tools") and window.menu_tools.actions(), "Menu Ferramentas deve existir"
+    assert hasattr(window, "menu_security") and window.menu_security.actions(), "Menu Segurança deve existir"
+
+    # Test editing Apelido in column 2
+    target_item = None
+    for i in range(window.tree.topLevelItemCount()):
+        it = window.tree.topLevelItem(i)
+        if it.text(3) == "192.168.1.10":
+            target_item = it
+            break
+    assert target_item is not None
+    target_item.setText(2, "NVR Portaria Principal")
+    window.on_tree_item_changed(window.tree, target_item, 2)
+    assert window.records["192.168.1.10"].alias == "NVR Portaria Principal"
+    assert get_device_alias("192.168.1.10", "E0:50:8B:11:22:33") == "NVR Portaria Principal"
+
+    # Clean up test alias
+    save_device_alias("192.168.1.10", "E0:50:8B:11:22:33", "")
+
+    # Test UserManualDialog and direct PDF export
+    manual_dlg = UserManualDialog(window, is_dark=False)
+    assert manual_dlg.list_toc.count() >= 10
+    manual_dlg.txt_search.setText("Watchdog")
+    manual_dlg.on_toc_item_clicked(manual_dlg.list_toc.item(3))
+    manual_dlg.close()
+
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tf_pdf:
+        pdf_path = tf_pdf.name
+    try:
+        ok_pdf = export_manual_to_pdf(pdf_path)
+        assert ok_pdf and os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 5000
+        with open(pdf_path, "rb") as f_pdf:
+            hdr_bytes = f_pdf.read(5)
+        assert hdr_bytes == b"%PDF-", f"Arquivo gerado deve ser um PDF válido, obteve {hdr_bytes}"
+        print(f" -> Manual PDF gerado com sucesso ({os.path.getsize(pdf_path)} bytes), Coluna 'Apelido' e Menus OK.")
+    finally:
+        if os.path.exists(pdf_path):
+            os.remove(pdf_path)
+
+    # 16. Cleanup
+    print("\n[TEST 16] Fechando janelas e encerrando threads...")
     dlg.close()
     window.close()
     print(" -> Encerramento limpo e gracioso concluído sem travamentos.")

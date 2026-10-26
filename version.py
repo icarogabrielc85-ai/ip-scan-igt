@@ -6,7 +6,7 @@ import os
 import subprocess
 
 # Versão Semântica Oficial (MAJOR.MINOR.PATCH)
-APP_VERSION = "2.9.0"
+APP_VERSION = "2.9.1"
 APP_RELEASE_DATE = "26/10/2026"
 
 
@@ -73,6 +73,18 @@ def get_short_version() -> str:
 
 
 VERSION_HISTORY = [
+    {
+        "version": "v2.9.1",
+        "date": "26/10/2026",
+        "title": "Manual do Usuário em PDF Interativo, Coluna 'Apelido' Editável, Novos Menus Separados & Correção Windows python311.dll",
+        "changes": [
+            "Manual Completo do Usuário (F1 / Menu Ajuda): manual interativo integrado com Índice de Capítulos, busca instantânea, documentação de todas as funções/ferramentas e botões diretos para 'Abrir como PDF' ou 'Baixar / Salvar PDF...' nativamente.",
+            "Nova Coluna 'Apelido' Editável (logo após 'Nome'): permite definir um nome personalizado para qualquer ativo diretamente na tabela (duplo-clique na célula, tecla F2 ou menu de contexto) com salvamento automático persistente por MAC e IP.",
+            "Reorganização da Barra de Menus: separação do antigo menu Ações em menus dedicados e intuitivos: 'Varredura', 'Ferramentas' e 'Segurança' (além de Arquivo, Exibir, Idioma e Ajuda).",
+            "Padronização Global do Tema Cinza (estilo VirtualBox): aplicação uniforme da paleta cinza neutra (#dcdcdc / #d2d2d2 / #e2e2e2 / #2b6595) em todas as janelas e diálogos secundários do sistema.",
+            "Correção Definitiva no Windows ('Failed to load Python DLL python311.dll'): desativação de compressão UPX em DLLs críticas, empacotamento explícito do Visual C++ Runtime / Universal CRT (vcruntime140, msvcp140, ucrtbase) e instalador Setup nativo em modo diretório (sem extração em %TEMP%).",
+        ],
+    },
     {
         "version": "v2.9.0",
         "date": "26/10/2026",

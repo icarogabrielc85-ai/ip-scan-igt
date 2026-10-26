@@ -138,6 +138,7 @@ class HostRecord:
     ttl: int = -1
     ping_method: str = ""
     hostname: str = ""
+    alias: str = ""
     mac: str = ""
     vendor: str = ""
     device_type: str = ""
@@ -184,6 +185,63 @@ class HostRecord:
             return tuple(int(x) for x in self.ip.split("."))
         except Exception:
             return (999, 999, 999, 999)
+
+
+ALIAS_STORE_PATH = os.path.expanduser("~/.config/ipscan-igt/device_aliases.json")
+
+
+def load_device_aliases() -> Dict[str, Dict[str, str]]:
+    """Carrega o dicionário de apelidos personalizados por MAC e por IP."""
+    try:
+        if os.path.exists(ALIAS_STORE_PATH):
+            with open(ALIAS_STORE_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    return {
+                        "by_mac": dict(data.get("by_mac") or {}),
+                        "by_ip": dict(data.get("by_ip") or {}),
+                    }
+    except Exception:
+        pass
+    return {"by_mac": {}, "by_ip": {}}
+
+
+def save_device_alias(ip: str, mac: str, alias: str) -> None:
+    """Salva ou remove o apelido personalizado de um dispositivo vinculando por MAC e IP."""
+    try:
+        os.makedirs(os.path.dirname(ALIAS_STORE_PATH), exist_ok=True)
+        store = load_device_aliases()
+        clean_alias = (alias or "").strip()
+        norm_mac = (mac or "").strip().upper()
+        clean_ip = (ip or "").strip()
+
+        if norm_mac and norm_mac not in ("N/D", "N/A", "UNKNOWN", "00:00:00:00:00:00"):
+            if clean_alias:
+                store["by_mac"][norm_mac] = clean_alias
+            else:
+                store["by_mac"].pop(norm_mac, None)
+
+        if clean_ip:
+            if clean_alias:
+                store["by_ip"][clean_ip] = clean_alias
+            else:
+                store["by_ip"].pop(clean_ip, None)
+
+        with open(ALIAS_STORE_PATH, "w", encoding="utf-8") as f:
+            json.dump(store, f, indent=2, ensure_ascii=False)
+    except Exception:
+        pass
+
+
+def get_device_alias(ip: str, mac: str = "") -> str:
+    """Obtém o apelido salvo do dispositivo priorizando o endereço MAC e usando IP como fallback."""
+    store = load_device_aliases()
+    norm_mac = (mac or "").strip().upper()
+    if norm_mac and norm_mac in store["by_mac"]:
+        return store["by_mac"][norm_mac]
+    if ip and ip in store["by_ip"]:
+        return store["by_ip"][ip]
+    return ""
 
 
 def get_default_gateways() -> Dict[str, str]:
@@ -1325,6 +1383,8 @@ def scan_single_ip(
         else:
             rec.hostname = f"Host [{suffix}]"
 
+    if not rec.alias:
+        rec.alias = get_device_alias(rec.ip, rec.mac)
     rec.device_type, rec.os_family = classify_device(rec)
     rec.resources = build_resources_for_host(rec)
     return rec

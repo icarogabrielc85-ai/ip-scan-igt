@@ -471,7 +471,7 @@ class TracerouteDialog(QDialog):
 
             path = QPainterPath()
             path.addRoundedRect(rect, 8, 8)
-            card_bg = QColor("#1e293b") if self.is_dark else QColor("#ffffff")
+            card_bg = QColor("#1e293b") if self.is_dark else QColor("#e2e2e2")
             self.scene.addPath(path, QPen(n["color"], 2.0), QBrush(card_bg))
 
             # Header bar

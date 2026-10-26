@@ -325,12 +325,12 @@ class DnsEntryDialog(QDialog):
         self.setFixedSize(480, 390)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
 
-        c_bg = "#0f172a" if self.is_dark else "#f8fafc"
-        c_card = "#1e293b" if self.is_dark else "#ffffff"
-        c_text = "#f8fafc" if self.is_dark else "#0f172a"
-        c_sub = "#94a3b8" if self.is_dark else "#64748b"
-        c_border = "#334155" if self.is_dark else "#cbd5e1"
-        c_accent = "#38bdf8" if self.is_dark else "#0284c7"
+        c_bg = "#0f172a" if self.is_dark else "#dcdcdc"
+        c_card = "#1e293b" if self.is_dark else "#ededed"
+        c_text = "#f8fafc" if self.is_dark else "#1e242b"
+        c_sub = "#94a3b8" if self.is_dark else "#3b424a"
+        c_border = "#334155" if self.is_dark else "#a8a8a8"
+        c_accent = "#38bdf8" if self.is_dark else "#2b6595"
 
         self.setStyleSheet(f"""
             QDialog {{ background-color: {c_bg}; color: {c_text}; }}
@@ -881,20 +881,20 @@ class InternetQualityDialog(QDialog):
             self.c_rec_border = "#38bdf8"
             self.c_rec_text = "#f1f5f9"
         else:
-            self.c_bg = "#f8fafc"          # Slate 50
-            self.c_card_bg = "#ffffff"     # Pure White
-            self.c_card_hover = "#f1f5f9"
-            self.c_border = "#cbd5e1"       # Slate 300
-            self.c_text_main = "#0f172a"    # Slate 900 (deep black-slate)
-            self.c_text_sub = "#64748b"     # Slate 500
-            self.c_table_bg = "#ffffff"
-            self.c_table_alt = "#f8fafc"
-            self.c_header_bg = "#f1f5f9"
-            self.c_header_text = "#334155"
-            self.c_accent = "#0284c7"       # Vibrant Blue
-            self.c_rec_bg = "#f0f9ff"       # Light Sky
-            self.c_rec_border = "#0284c7"
-            self.c_rec_text = "#0c4a6e"
+            self.c_bg = "#dcdcdc"
+            self.c_card_bg = "#e2e2e2"
+            self.c_card_hover = "#d2dce6"
+            self.c_border = "#a8a8a8"
+            self.c_text_main = "#1e242b"
+            self.c_text_sub = "#3b424a"
+            self.c_table_bg = "#e8e8e8"
+            self.c_table_alt = "#dedede"
+            self.c_header_bg = "#d2d2d2"
+            self.c_header_text = "#1e242b"
+            self.c_accent = "#164e78"
+            self.c_rec_bg = "#d0dfed"
+            self.c_rec_border = "#2b6595"
+            self.c_rec_text = "#164e78"
 
     def init_ui(self):
         vbox = QVBoxLayout(self)

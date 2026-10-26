@@ -138,6 +138,7 @@ from PyQt5.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QHeaderView,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QMainWindow,
@@ -170,10 +171,12 @@ from scanner_engine import (
     classify_device,
     correlate_host_vulnerabilities,
     get_all_network_interfaces,
+    get_device_alias,
     get_local_network_info,
     probe_ping,
     read_linux_arp_table,
     robust_urlopen,
+    save_device_alias,
     scan_single_ip,
     send_wake_on_lan,
 )
@@ -197,6 +200,7 @@ from network_guard_engine import NETWORK_GUARD, NetworkGuardDialog
 from snapshot_engine import SNAPSHOT_MANAGER, SnapshotDiffDialog
 from upnp_engine import discover_upnp_devices
 from traceroute_dialog import TracerouteDialog
+from manual_dialog import UserManualDialog, export_manual_to_pdf
 
 FAVORITES_FILE = os.path.expanduser("~/.config/linux-ipscan/favorites.json")
 
@@ -624,7 +628,7 @@ class DeviceTreeWidgetItem(QTreeWidgetItem):
             return self.text(1).lower() < other.text(1).lower()
 
         tree = self.treeWidget()
-        col = tree.sortColumn() if tree else 2
+        col = tree.sortColumn() if tree else 3
 
         # Col 0: Status (Online ● before Offline ○)
         if col == 0:
@@ -638,24 +642,28 @@ class DeviceTreeWidgetItem(QTreeWidgetItem):
         elif col == 1:
             return self.text(1).lower() < other.text(1).lower()
 
-        # Col 2: IP (Numeric IPv4 sorting)
+        # Col 2: Apelido (User-defined Alias)
         elif col == 2:
-            ip1 = self.data(2, Qt.UserRole) or self.text(2)
-            ip2 = other.data(2, Qt.UserRole) or other.text(2)
+            return self.text(2).lower() < other.text(2).lower()
+
+        # Col 3: IP (Numeric IPv4 sorting)
+        elif col == 3:
+            ip1 = self.data(3, Qt.UserRole) or self.data(2, Qt.UserRole) or self.text(3)
+            ip2 = other.data(3, Qt.UserRole) or other.data(2, Qt.UserRole) or other.text(3)
             return ip_sort_tuple(str(ip1)) < ip_sort_tuple(str(ip2))
 
-        # Col 3: Fabricante (Vendor)
-        elif col == 3:
-            return self.text(3).lower() < other.text(3).lower()
-
-        # Col 4: Endereço MAC
+        # Col 4: Fabricante (Vendor)
         elif col == 4:
             return self.text(4).lower() < other.text(4).lower()
 
-        # Col 5: Ping (Numerical Latency in ms, Offline = infinity)
+        # Col 5: Endereço MAC
         elif col == 5:
-            p1 = self.data(5, Qt.UserRole)
-            p2 = other.data(5, Qt.UserRole)
+            return self.text(5).lower() < other.text(5).lower()
+
+        # Col 6: Ping (Numerical Latency in ms, Offline = infinity)
+        elif col == 6:
+            p1 = self.data(6, Qt.UserRole)
+            p2 = other.data(6, Qt.UserRole)
             try:
                 val1 = float(p1) if (p1 is not None and float(p1) >= 0) else 999999.0
             except (ValueError, TypeError):
@@ -666,9 +674,9 @@ class DeviceTreeWidgetItem(QTreeWidgetItem):
                 val2 = 999999.0
             return val1 < val2
 
-        # Col 6: Comentários / Serviços
-        elif col == 6:
-            return self.text(6).lower() < other.text(6).lower()
+        # Col 7: Comentários / Serviços
+        elif col == 7:
+            return self.text(7).lower() < other.text(7).lower()
 
         return self.text(col).lower() < other.text(col).lower()
 
@@ -758,8 +766,9 @@ class MainWindow(QMainWindow):
         self.act_exit.triggered.connect(self.close)
         self.menu_file.addAction(self.act_exit)
 
-        # 2. Ações
-        self.menu_actions = menu_bar.addMenu(tr("menu_actions"))
+        # 2. Varredura (antigo Ações subdividido para melhor organização)
+        self.menu_actions = menu_bar.addMenu(tr("menu_scan", "Varredura"))
+        self.menu_scan = self.menu_actions
         self.act_scan = QAction(tr("scan_network"), self)
         self.act_scan.setShortcut("F5")
         self.act_scan.triggered.connect(self.toggle_scan)
@@ -769,6 +778,12 @@ class MainWindow(QMainWindow):
         self.act_stop.setShortcut("Esc")
         self.act_stop.triggered.connect(self.toggle_scan)
         self.menu_actions.addAction(self.act_stop)
+
+        self.menu_actions.addSeparator()
+        self.act_iface = QAction(tr("select_interface"), self)
+        self.act_iface.setShortcut("Ctrl+I")
+        self.act_iface.triggered.connect(self.open_interface_dialog)
+        self.menu_actions.addAction(self.act_iface)
 
         self.menu_actions.addSeparator()
         self.act_expand = QAction(tr("expand_all"), self)
@@ -782,6 +797,11 @@ class MainWindow(QMainWindow):
         self.menu_actions.addAction(self.act_collapse)
 
         self.menu_actions.addSeparator()
+        self.act_edit_alias = QAction(tr("edit_alias", "✏️ Definir / Editar Apelido..."), self)
+        self.act_edit_alias.setShortcut("F2")
+        self.act_edit_alias.triggered.connect(self.edit_selected_device_alias)
+        self.menu_actions.addAction(self.act_edit_alias)
+
         self.act_add_fav = QAction(tr("add_favorite"), self)
         self.act_add_fav.setShortcut("Ctrl+D")
         self.act_add_fav.triggered.connect(self.add_selected_to_favorites)
@@ -791,56 +811,58 @@ class MainWindow(QMainWindow):
         self.act_scan_fav.triggered.connect(self.scan_favorites_only)
         self.menu_actions.addAction(self.act_scan_fav)
 
-        self.menu_actions.addSeparator()
-        self.act_iface = QAction(tr("select_interface"), self)
-        self.act_iface.setShortcut("Ctrl+I")
-        self.act_iface.triggered.connect(self.open_interface_dialog)
-        self.menu_actions.addAction(self.act_iface)
-
-        self.act_nmap = QAction(tr("nmap_scan"), self)
-        self.act_nmap.setShortcut("Ctrl+N")
-        self.act_nmap.triggered.connect(self.action_open_nmap)
-        self.menu_actions.addAction(self.act_nmap)
-
-        self.menu_actions.addSeparator()
+        # 3. Ferramentas (Acesso Remoto, Multimídia & Diagnóstico)
+        self.menu_tools = menu_bar.addMenu(tr("menu_tools", "Ferramentas"))
         self.act_rdp = QAction(tr("connect_rdp"), self)
         self.act_rdp.triggered.connect(self.action_open_rdp)
-        self.menu_actions.addAction(self.act_rdp)
+        self.menu_tools.addAction(self.act_rdp)
 
         self.act_ssh = QAction(tr("connect_ssh"), self)
         self.act_ssh.triggered.connect(self.action_open_ssh)
-        self.menu_actions.addAction(self.act_ssh)
+        self.menu_tools.addAction(self.act_ssh)
 
         self.act_wol = QAction(tr("wake_on_lan"), self)
         self.act_wol.triggered.connect(self.action_open_wol)
-        self.menu_actions.addAction(self.act_wol)
+        self.menu_tools.addAction(self.act_wol)
 
+        self.menu_tools.addSeparator()
         self.act_video_cfg = QAction(tr("config_video"), self)
         self.act_video_cfg.triggered.connect(self.open_camera_config_dialog)
-        self.menu_actions.addAction(self.act_video_cfg)
+        self.menu_tools.addAction(self.act_video_cfg)
 
-        self.act_doctor_act = QAction(tr("system_doctor"), self)
-        self.act_doctor_act.triggered.connect(self.open_system_doctor_dialog)
-        self.menu_actions.addAction(self.act_doctor_act)
-
+        self.menu_tools.addSeparator()
         self.act_net_test = QAction(tr("internet_test"), self)
         self.act_net_test.triggered.connect(self.open_internet_test_dialog)
-        self.menu_actions.addAction(self.act_net_test)
-
-        self.menu_actions.addSeparator()
-        self.act_guard = QAction(tr("menu_network_guard", "🛡️ Network Guard (Intrusos & ARP Spoofing)..."), self)
-        self.act_guard.triggered.connect(self.open_network_guard_dialog)
-        self.menu_actions.addAction(self.act_guard)
-
-        self.act_snapshots = QAction(tr("menu_snapshots", "📸 Snapshots & Comparador de Mudanças (Diff)..."), self)
-        self.act_snapshots.triggered.connect(self.open_snapshot_diff_dialog)
-        self.menu_actions.addAction(self.act_snapshots)
+        self.menu_tools.addAction(self.act_net_test)
 
         self.act_traceroute = QAction(tr("menu_traceroute", "🧭 Traceroute Visual (Rota TTL)..."), self)
         self.act_traceroute.triggered.connect(self.action_open_traceroute)
-        self.menu_actions.addAction(self.act_traceroute)
+        self.menu_tools.addAction(self.act_traceroute)
 
-        # 3. Exibir
+        self.act_doctor_act = QAction(tr("system_doctor"), self)
+        self.act_doctor_act.triggered.connect(self.open_system_doctor_dialog)
+        self.menu_tools.addAction(self.act_doctor_act)
+
+        # 4. Segurança & Auditoria (Nmap, Network Guard, Watchdog, Snapshots)
+        self.menu_security = menu_bar.addMenu(tr("menu_security", "Segurança"))
+        self.act_nmap = QAction(tr("nmap_scan"), self)
+        self.act_nmap.setShortcut("Ctrl+N")
+        self.act_nmap.triggered.connect(self.action_open_nmap)
+        self.menu_security.addAction(self.act_nmap)
+
+        self.act_guard = QAction(tr("menu_network_guard", "🛡️ Network Guard (Intrusos & ARP Spoofing)..."), self)
+        self.act_guard.triggered.connect(self.open_network_guard_dialog)
+        self.menu_security.addAction(self.act_guard)
+
+        self.act_watchdog_menu = QAction("🛡️ Watchdog (Monitoramento Contínuo em 2º Plano)...", self)
+        self.act_watchdog_menu.triggered.connect(self.open_watchdog_dialog)
+        self.menu_security.addAction(self.act_watchdog_menu)
+
+        self.act_snapshots = QAction(tr("menu_snapshots", "📸 Snapshots & Comparador de Mudanças (Diff)..."), self)
+        self.act_snapshots.triggered.connect(self.open_snapshot_diff_dialog)
+        self.menu_security.addAction(self.act_snapshots)
+
+        # 5. Exibir
         self.menu_view = menu_bar.addMenu(tr("menu_view"))
         self.act_toggle_bottom = QAction(tr("panel_ping"), self)
         self.act_toggle_bottom.setCheckable(True)
@@ -855,7 +877,7 @@ class MainWindow(QMainWindow):
         self.act_theme.triggered.connect(self.toggle_theme)
         self.menu_view.addAction(self.act_theme)
 
-        # 4. Idioma / Language (9 idiomas completos)
+        # 6. Idioma / Language (9 idiomas completos)
         self.menu_lang = menu_bar.addMenu(tr("menu_lang"))
         self.lang_action_group = QActionGroup(self)
         self.lang_action_group.setExclusive(True)
@@ -870,8 +892,18 @@ class MainWindow(QMainWindow):
             self.menu_lang.addAction(act)
             self.lang_actions[code] = act
 
-        # 5. Ajuda
+        # 7. Ajuda (com Manual do Usuário Interativo + Download PDF Direto)
         self.menu_help = menu_bar.addMenu(tr("menu_help"))
+        self.act_manual = QAction(tr("user_manual", "📖 Manual do Usuário (PDF & Guia Completo)..."), self)
+        self.act_manual.setShortcut("F1")
+        self.act_manual.triggered.connect(self.open_user_manual_dialog)
+        self.menu_help.addAction(self.act_manual)
+
+        self.act_manual_pdf = QAction(tr("download_manual_pdf", "📥 Baixar Manual do Usuário em PDF..."), self)
+        self.act_manual_pdf.triggered.connect(self.download_user_manual_pdf)
+        self.menu_help.addAction(self.act_manual_pdf)
+
+        self.menu_help.addSeparator()
         self.act_net_test_help = QAction(tr("internet_test"), self)
         self.act_net_test_help.triggered.connect(self.open_internet_test_dialog)
         self.menu_help.addAction(self.act_net_test_help)
@@ -1424,10 +1456,11 @@ class MainWindow(QMainWindow):
 
     def create_device_tree(self) -> QTreeWidget:
         tree = QTreeWidget()
-        tree.setColumnCount(7)
+        tree.setColumnCount(8)
         tree.setHeaderLabels([
             tr("col_status"),
             tr("col_hostname"),
+            tr("col_alias", "Apelido"),
             tr("col_ip"),
             tr("col_manufacturer"),
             tr("col_mac"),
@@ -1437,27 +1470,31 @@ class MainWindow(QMainWindow):
         tree.setAlternatingRowColors(True)
         tree.setUniformRowHeights(True)
         tree.setIndentation(16)
+        tree.setEditTriggers(QTreeWidget.EditKeyPressed)
 
         # Enable clickable column header sorting (Ascending / Descending)
         tree.setSortingEnabled(True)
         tree.header().setSectionsClickable(True)
         tree.header().setSortIndicatorShown(True)
-        tree.header().setSortIndicator(2, Qt.AscendingOrder)
+        tree.header().setSortIndicator(3, Qt.AscendingOrder)
         tree.header().sectionClicked.connect(lambda col, t=tree: self.on_tree_header_clicked(t, col))
+        tree.itemChanged.connect(lambda it, col, t=tree: self.on_tree_item_changed(t, it, col))
 
         tree.header().setSectionResizeMode(0, QHeaderView.Fixed)
-        tree.header().resizeSection(0, 56)
+        tree.header().resizeSection(0, 54)
         tree.header().setSectionResizeMode(1, QHeaderView.Interactive)
-        tree.header().resizeSection(1, 250)
+        tree.header().resizeSection(1, 215)
         tree.header().setSectionResizeMode(2, QHeaderView.Interactive)
-        tree.header().resizeSection(2, 140)
+        tree.header().resizeSection(2, 165)
         tree.header().setSectionResizeMode(3, QHeaderView.Interactive)
-        tree.header().resizeSection(3, 195)
+        tree.header().resizeSection(3, 135)
         tree.header().setSectionResizeMode(4, QHeaderView.Interactive)
-        tree.header().resizeSection(4, 150)
+        tree.header().resizeSection(4, 185)
         tree.header().setSectionResizeMode(5, QHeaderView.Interactive)
-        tree.header().resizeSection(5, 85)
-        tree.header().setSectionResizeMode(6, QHeaderView.Stretch)
+        tree.header().resizeSection(5, 145)
+        tree.header().setSectionResizeMode(6, QHeaderView.Interactive)
+        tree.header().resizeSection(6, 82)
+        tree.header().setSectionResizeMode(7, QHeaderView.Stretch)
         return tree
 
     def on_lang_combo_changed(self):
@@ -1497,7 +1534,7 @@ class MainWindow(QMainWindow):
             self.act_txt.setText(tr("export_txt"))
             self.act_exit.setText(tr("exit"))
 
-            self.menu_actions.setTitle(tr("menu_actions"))
+            self.menu_actions.setTitle(tr("menu_scan", "Varredura"))
             if self.scan_worker and self.scan_worker.isRunning():
                 self.act_scan.setText(tr("stop_scan"))
             else:
@@ -1505,9 +1542,17 @@ class MainWindow(QMainWindow):
             self.act_stop.setText(tr("stop_scan"))
             self.act_expand.setText(tr("expand_all"))
             self.act_collapse.setText(tr("collapse_all"))
+            if hasattr(self, "act_edit_alias"):
+                self.act_edit_alias.setText(tr("edit_alias", "✏️ Definir / Editar Apelido..."))
             self.act_add_fav.setText(tr("add_favorite"))
             self.act_scan_fav.setText(tr("scan_favorites"))
             self.act_iface.setText(tr("select_interface"))
+
+            if hasattr(self, "menu_tools"):
+                self.menu_tools.setTitle(tr("menu_tools", "Ferramentas"))
+            if hasattr(self, "menu_security"):
+                self.menu_security.setTitle(tr("menu_security", "Segurança"))
+
             self.act_nmap.setText(tr("nmap_scan"))
             self.act_rdp.setText(tr("connect_rdp"))
             self.act_ssh.setText(tr("connect_ssh"))
@@ -1523,6 +1568,10 @@ class MainWindow(QMainWindow):
             self.menu_lang.setTitle(tr("menu_lang"))
 
             self.menu_help.setTitle(tr("menu_help"))
+            if hasattr(self, "act_manual"):
+                self.act_manual.setText(tr("user_manual", "📖 Manual do Usuário (PDF & Guia Completo)..."))
+            if hasattr(self, "act_manual_pdf"):
+                self.act_manual_pdf.setText(tr("download_manual_pdf", "📥 Baixar Manual do Usuário em PDF..."))
             self.act_net_test_help.setText(tr("internet_test"))
             self.act_doctor.setText(tr("system_doctor"))
             self.act_update.setText(tr("check_updates"))
@@ -1568,6 +1617,7 @@ class MainWindow(QMainWindow):
         headers = [
             tr("col_status"),
             tr("col_hostname"),
+            tr("col_alias", "Apelido"),
             tr("col_ip"),
             tr("col_manufacturer"),
             tr("col_mac"),
@@ -1636,6 +1686,7 @@ class MainWindow(QMainWindow):
         col_names = [
             tr("col_status", "Status"),
             tr("col_hostname", "Nome"),
+            tr("col_alias", "Apelido"),
             tr("col_ip", "IP"),
             tr("col_manufacturer", "Fabricante"),
             tr("col_mac", "Endereço MAC"),
@@ -1647,7 +1698,11 @@ class MainWindow(QMainWindow):
         self.lbl_stats.setText(tpl.format(col=name, order=order_str))
 
     def apply_theme(self):
-        self.setStyleSheet(DARK_STYLESHEET if self.is_dark_mode else LIGHT_STYLESHEET)
+        style = DARK_STYLESHEET if self.is_dark_mode else LIGHT_STYLESHEET
+        app = QApplication.instance()
+        if app:
+            app.setStyleSheet(style)
+        self.setStyleSheet(style)
         self.btn_theme.setText(tr("theme_light", "☀️ Claro") if self.is_dark_mode else tr("theme_dark", "🌙 Escuro"))
         self.oscilloscope.is_dark = self.is_dark_mode
         self.oscilloscope.update()
@@ -2037,115 +2092,211 @@ class MainWindow(QMainWindow):
         self.lbl_stats.setText(tr("stat_scan_finished", "Concluído em {sec:.1f}s • {count} dispositivo(s) online encontrado(s)").format(sec=elapsed_sec, count=found_count))
         col = self.tree.sortColumn()
         order = self.tree.header().sortIndicatorOrder()
-        self.tree.sortItems(col if col >= 0 else 2, order)
+        self.tree.sortItems(col if col >= 0 else 3, order)
         self.update_status_stats()
         if hasattr(self, "topology_widget"):
             self.topology_widget.set_network_data(self.records, self.local_info)
 
     def add_or_update_tree_node(self, target_tree: QTreeWidget, rec: HostRecord):
         correlate_host_vulnerabilities(rec)
-        parent_item = None
-        for i in range(target_tree.topLevelItemCount()):
-            it = target_tree.topLevelItem(i)
-            if it.data(2, Qt.UserRole) == rec.ip:
-                parent_item = it
-                break
+        if not rec.alias:
+            rec.alias = get_device_alias(rec.ip, rec.mac)
 
-        if not parent_item:
-            parent_item = DeviceTreeWidgetItem(target_tree)
+        self._updating_tree_node = True
+        try:
+            parent_item = None
+            for i in range(target_tree.topLevelItemCount()):
+                it = target_tree.topLevelItem(i)
+                if (it.data(3, Qt.UserRole) or it.data(2, Qt.UserRole)) == rec.ip:
+                    parent_item = it
+                    break
 
-        parent_item.setData(0, Qt.UserRole, 1 if rec.alive else 0)
-        parent_item.setData(2, Qt.UserRole, rec.ip)
-        parent_item.setData(5, Qt.UserRole, rec.rtt_ms)
+            if not parent_item:
+                parent_item = DeviceTreeWidgetItem(target_tree)
 
-        # Col 0: Status Orb (Green circle for online, muted circle for offline)
-        parent_item.setText(0, "●" if rec.alive else "○")
-        parent_item.setTextAlignment(0, Qt.AlignCenter)
-        orb_col = QColor("#10b981") if rec.alive else (QColor("#64748b") if self.is_dark_mode else QColor("#7c8794"))
-        parent_item.setForeground(0, orb_col)
-        font_status = QFont("Segoe UI", 9, QFont.Bold)
-        parent_item.setFont(0, font_status)
+            parent_item.setFlags(parent_item.flags() | Qt.ItemIsEditable)
+            parent_item.setData(0, Qt.UserRole, 1 if rec.alive else 0)
+            parent_item.setData(2, Qt.UserRole, rec.ip)
+            parent_item.setData(3, Qt.UserRole, rec.ip)
+            parent_item.setData(5, Qt.UserRole, rec.rtt_ms)
+            parent_item.setData(6, Qt.UserRole, rec.rtt_ms)
 
-        # Col 1: Nome (Hostname or device type)
-        display_name = rec.hostname or f"Host [{rec.ip}]"
-        parent_item.setText(1, display_name)
+            # Col 0: Status Orb (Green circle for online, muted circle for offline)
+            parent_item.setText(0, "●" if rec.alive else "○")
+            parent_item.setTextAlignment(0, Qt.AlignCenter)
+            orb_col = QColor("#10b981") if rec.alive else (QColor("#64748b") if self.is_dark_mode else QColor("#7c8794"))
+            parent_item.setForeground(0, orb_col)
+            font_status = QFont("Segoe UI", 9, QFont.Bold)
+            parent_item.setFont(0, font_status)
 
-        # Col 2: IP
-        parent_item.setText(2, rec.ip)
+            # Col 1: Nome (Hostname or device type)
+            display_name = rec.hostname or f"Host [{rec.ip}]"
+            parent_item.setText(1, display_name)
 
-        # Col 3: Fabricante
-        parent_item.setText(3, rec.vendor or tr("unknown", "Desconhecido"))
+            # Col 2: Apelido (User-editable Alias)
+            parent_item.setText(2, rec.alias or "")
+            parent_item.setToolTip(2, "Dê duplo-clique aqui ou pressione F2 para editar o Apelido deste dispositivo")
+            if rec.alias:
+                parent_item.setForeground(2, QColor("#38bdf8") if self.is_dark_mode else QColor("#164e78"))
+                parent_item.setFont(2, QFont("Segoe UI", 9, QFont.Bold))
 
-        # Col 4: MAC
-        parent_item.setText(4, rec.mac or tr("not_available", "N/D"))
+            # Col 3: IP
+            parent_item.setText(3, rec.ip)
 
-        # Col 5: Ping
-        parent_item.setText(5, rec.format_ping())
-        if rec.rtt_ms >= 0:
-            if rec.rtt_ms < 2.0:
-                parent_item.setForeground(5, QColor("#10b981") if self.is_dark_mode else QColor("#059669"))
-            elif rec.rtt_ms < 25.0:
-                parent_item.setForeground(5, QColor("#38bdf8") if self.is_dark_mode else QColor("#0284c7"))
+            # Col 4: Fabricante
+            parent_item.setText(4, rec.vendor or tr("unknown", "Desconhecido"))
+
+            # Col 5: MAC
+            parent_item.setText(5, rec.mac or tr("not_available", "N/D"))
+
+            # Col 6: Ping
+            parent_item.setText(6, rec.format_ping())
+            if rec.rtt_ms >= 0:
+                if rec.rtt_ms < 2.0:
+                    parent_item.setForeground(6, QColor("#10b981") if self.is_dark_mode else QColor("#059669"))
+                elif rec.rtt_ms < 25.0:
+                    parent_item.setForeground(6, QColor("#38bdf8") if self.is_dark_mode else QColor("#0284c7"))
+                else:
+                    parent_item.setForeground(6, QColor("#fbbf24") if self.is_dark_mode else QColor("#d97706"))
+
+            # Col 7: Comentários / Serviços / SNMP / UPnP / CVEs / Network Guard
+            comment_parts = []
+            if rec.guard_badge:
+                comment_parts.append(rec.guard_badge)
+            if rec.risk_badge:
+                comment_parts.append(rec.risk_badge)
+            if rec.device_type and rec.device_type != tr("dev_host_online", "🖧 Host Online"):
+                comment_parts.append(rec.device_type)
+            if rec.snmp_info:
+                comment_parts.append(f"SNMP: {rec.snmp_info}")
+            if rec.upnp_info:
+                comment_parts.append(f"UPnP: {rec.upnp_info}")
+            if rec.http_info:
+                comment_parts.append(rec.http_info)
+            elif rec.ssl_info:
+                comment_parts.append(f"SSL: {rec.ssl_info}")
+            elif rec.ssh_banner:
+                comment_parts.append(rec.ssh_banner)
+            if rec.open_ports:
+                comment_parts.append(f"{tr('ports_label', 'Portas')}: {rec.format_ports()}")
+
+            parent_item.setText(7, " • ".join(comment_parts) if comment_parts else tr("no_services_found", "Nenhum serviço identificado"))
+            if rec.risk_level in ("CRITICAL", "HIGH") or "[🚨" in (rec.guard_badge or ""):
+                parent_item.setForeground(7, QColor("#f87171") if self.is_dark_mode else QColor("#dc2626"))
             else:
-                parent_item.setForeground(5, QColor("#fbbf24") if self.is_dark_mode else QColor("#d97706"))
+                parent_item.setForeground(7, QColor("#cbd5e1") if self.is_dark_mode else QColor("#1e293b"))
 
-        # Col 6: Comentários / Serviços / SNMP / UPnP / CVEs / Network Guard
-        comment_parts = []
-        if rec.guard_badge:
-            comment_parts.append(rec.guard_badge)
-        if rec.risk_badge:
-            comment_parts.append(rec.risk_badge)
-        if rec.device_type and rec.device_type != tr("dev_host_online", "🖧 Host Online"):
-            comment_parts.append(rec.device_type)
-        if rec.snmp_info:
-            comment_parts.append(f"SNMP: {rec.snmp_info}")
-        if rec.upnp_info:
-            comment_parts.append(f"UPnP: {rec.upnp_info}")
-        if rec.http_info:
-            comment_parts.append(rec.http_info)
-        elif rec.ssl_info:
-            comment_parts.append(f"SSL: {rec.ssl_info}")
-        elif rec.ssh_banner:
-            comment_parts.append(rec.ssh_banner)
-        if rec.open_ports:
-            comment_parts.append(f"{tr('ports_label', 'Portas')}: {rec.format_ports()}")
+            # Sub-items [ + ] for individual services (HTTP, HTTPS, SMB, SNMP, CVEs, etc.)
+            parent_item.takeChildren()
+            link_color = QColor("#164e78") if not self.is_dark_mode else QColor("#38bdf8")
+            text_color = QColor("#3b424a") if not self.is_dark_mode else QColor("#cbd5e1")
 
-        parent_item.setText(6, " • ".join(comment_parts) if comment_parts else tr("no_services_found", "Nenhum serviço identificado"))
-        if rec.risk_level in ("CRITICAL", "HIGH") or "[🚨" in (rec.guard_badge or ""):
-            parent_item.setForeground(6, QColor("#f87171") if self.is_dark_mode else QColor("#dc2626"))
-        else:
-            parent_item.setForeground(6, QColor("#cbd5e1") if self.is_dark_mode else QColor("#1e293b"))
+            rec.resources = build_resources_for_host(rec)
+            for res in rec.resources:
+                child = QTreeWidgetItem(parent_item)
+                child.setText(1, f"    {res.icon}  {res.title}")
+                child.setText(3, res.url or "")
+                child.setText(7, res.detail)
+                child.setData(2, Qt.UserRole, rec.ip)
+                child.setData(3, Qt.UserRole, rec.ip)
+                child.setData(1, Qt.UserRole, res.url)
+                if res.icon in ("🚨", "⚠️"):
+                    child.setForeground(1, QColor("#f87171") if self.is_dark_mode else QColor("#dc2626"))
+                else:
+                    child.setForeground(1, link_color if res.url else text_color)
+                if res.url:
+                    child.setForeground(3, link_color)
 
-        # Sub-items [ + ] for individual services (HTTP, HTTPS, SMB, SNMP, CVEs, etc.)
-        parent_item.takeChildren()
-        link_color = QColor("#0969da") if not self.is_dark_mode else QColor("#38bdf8")
-        text_color = QColor("#475569") if not self.is_dark_mode else QColor("#cbd5e1")
-
-        rec.resources = build_resources_for_host(rec)
-        for res in rec.resources:
-            child = QTreeWidgetItem(parent_item)
-            child.setText(1, f"    {res.icon}  {res.title}")
-            child.setText(2, res.url or "")
-            child.setText(6, res.detail)
-            child.setData(2, Qt.UserRole, rec.ip)
-            child.setData(1, Qt.UserRole, res.url)
-            if res.icon in ("🚨", "⚠️"):
-                child.setForeground(1, QColor("#f87171") if self.is_dark_mode else QColor("#dc2626"))
-            else:
-                child.setForeground(1, link_color if res.url else text_color)
-            if res.url:
-                child.setForeground(2, link_color)
-
-        # Keep collapsed by default for clean and uncluttered UI/UX
-        parent_item.setExpanded(False)
+            # Keep collapsed by default for clean and uncluttered UI/UX
+            parent_item.setExpanded(False)
+        finally:
+            self._updating_tree_node = False
 
         if target_tree == self.tree and hasattr(self, "topology_widget") and (not self.scan_worker or not self.scan_worker.isRunning()):
             self.topology_widget.set_network_data(self.records, self.local_info)
 
+    def on_tree_item_changed(self, tree: QTreeWidget, item: QTreeWidgetItem, column: int):
+        if getattr(self, "_updating_tree_node", False):
+            return
+        if item.parent() is not None:
+            return
+        ip = item.data(3, Qt.UserRole) or item.data(2, Qt.UserRole)
+        if not ip:
+            return
+        rec = self.records.get(ip) or self.fav_records.get(ip)
+        if not rec:
+            return
+
+        if column != 2:
+            # Somente a coluna 2 (Apelido) é editável pelo usuário; restaura o valor original nas demais
+            self.add_or_update_tree_node(tree, rec)
+            return
+
+        new_alias = item.text(2).strip()
+        rec.alias = new_alias
+        if ip in self.records:
+            self.records[ip].alias = new_alias
+        if ip in self.fav_records:
+            self.fav_records[ip].alias = new_alias
+            self.save_favorites_to_disk()
+
+        save_device_alias(rec.ip, rec.mac, new_alias)
+
+        # Sincroniza a outra árvore caso o host esteja presente em ambas
+        other_tree = self.fav_tree if tree == self.tree else self.tree
+        other_pool = self.fav_records if tree == self.tree else self.records
+        if ip in other_pool:
+            self.add_or_update_tree_node(other_tree, other_pool[ip])
+
+        self._updating_tree_node = True
+        try:
+            if new_alias:
+                item.setForeground(2, QColor("#38bdf8") if self.is_dark_mode else QColor("#164e78"))
+                item.setFont(2, QFont("Segoe UI", 9, QFont.Bold))
+                self.lbl_stats.setText(f"✏️ Apelido de {ip} salvo como: '{new_alias}'")
+            else:
+                self.lbl_stats.setText(f"✏️ Apelido de {ip} removido.")
+        finally:
+            self._updating_tree_node = False
+
+    def edit_selected_device_alias(self, target_tree: Optional[QTreeWidget] = None):
+        tree = target_tree or self.get_active_tree()
+        items = tree.selectedItems()
+        if not items:
+            QMessageBox.information(self, "Editar Apelido", "Selecione um dispositivo na lista primeiro.")
+            return
+        item = items[0]
+        if item.parent() is not None:
+            item = item.parent()
+        ip = item.data(3, Qt.UserRole) or item.data(2, Qt.UserRole)
+        rec = self.records.get(ip) or self.fav_records.get(ip)
+        if not rec:
+            return
+
+        new_alias, ok = QInputDialog.getText(
+            self,
+            "✏️ Definir / Editar Apelido do Dispositivo",
+            f"Digite o Apelido personalizado para {rec.hostname or rec.ip} ({rec.ip}):",
+            QLineEdit.Normal,
+            rec.alias or "",
+        )
+        if ok:
+            item.setText(2, new_alias.strip())
+            self.on_tree_item_changed(tree, item, 2)
+
+    def open_user_manual_dialog(self):
+        dlg = UserManualDialog(self, is_dark=self.is_dark_mode)
+        dlg.showMaximized()
+        dlg.exec_()
+
+    def download_user_manual_pdf(self):
+        dlg = UserManualDialog(self, is_dark=self.is_dark_mode)
+        dlg.download_pdf_as()
+
     def sort_tree_by_ip(self, target_tree: QTreeWidget):
         col = target_tree.sortColumn()
         order = target_tree.header().sortIndicatorOrder()
-        target_tree.sortItems(col if col >= 0 else 2, order)
+        target_tree.sortItems(col if col >= 0 else 3, order)
 
     def update_status_stats(self):
         tree = self.get_active_tree()
@@ -2197,6 +2348,7 @@ class MainWindow(QMainWindow):
         props = [
             (tr("prop_ip", "Endereço IP"), rec.ip),
             (tr("prop_hostname", "Nome / Hostname"), rec.hostname or tr("not_configured", "Não configurado")),
+            (tr("col_alias", "Apelido"), rec.alias or tr("none", "Nenhum")),
             (tr("prop_type_sys", "Tipo / Sistema"), f"{rec.device_type} • {rec.os_family}"),
             (tr("prop_vendor", "Fabricante (OUI)"), rec.vendor or tr("not_identified", "Não identificado")),
             (tr("prop_mac", "Endereço MAC"), rec.mac or na),
@@ -2249,14 +2401,19 @@ class MainWindow(QMainWindow):
 
                 # Update ping cell in current active tree
                 tree = self.get_active_tree()
-                for i in range(tree.topLevelItemCount()):
-                    it = tree.topLevelItem(i)
-                    if it.data(2, Qt.UserRole) == ip:
-                        it.setText(5, f"{rtt:.2f} ms")
-                        it.setData(5, Qt.UserRole, rtt)
-                        ping_col = QColor("#107c41") if not self.is_dark_mode else QColor("#10b981")
-                        it.setForeground(5, ping_col if rtt < 2.0 else (QColor("#0969da") if not self.is_dark_mode else QColor("#38bdf8")))
-                        break
+                self._updating_tree_node = True
+                try:
+                    for i in range(tree.topLevelItemCount()):
+                        it = tree.topLevelItem(i)
+                        if (it.data(3, Qt.UserRole) or it.data(2, Qt.UserRole)) == ip:
+                            it.setText(6, f"{rtt:.2f} ms")
+                            it.setData(5, Qt.UserRole, rtt)
+                            it.setData(6, Qt.UserRole, rtt)
+                            ping_col = QColor("#107c41") if not self.is_dark_mode else QColor("#10b981")
+                            it.setForeground(6, ping_col if rtt < 2.0 else (QColor("#164e78") if not self.is_dark_mode else QColor("#38bdf8")))
+                            break
+                finally:
+                    self._updating_tree_node = False
 
     def sweep_table_pings(self):
         """Lightweight non-blocking background ping sweep to keep table latencies fresh."""
@@ -2279,15 +2436,20 @@ class MainWindow(QMainWindow):
     def on_sweep_results(self, results: list):
         tree = self.get_active_tree()
         records_pool = self.records if tree == self.tree else self.fav_records
-        for ip, rtt in results:
-            if rtt >= 0 and ip in records_pool:
-                records_pool[ip].rtt_ms = rtt
-                for i in range(tree.topLevelItemCount()):
-                    it = tree.topLevelItem(i)
-                    if it.data(2, Qt.UserRole) == ip:
-                        it.setText(5, f"{rtt:.2f} ms")
-                        it.setData(5, Qt.UserRole, rtt)
-                        break
+        self._updating_tree_node = True
+        try:
+            for ip, rtt in results:
+                if rtt >= 0 and ip in records_pool:
+                    records_pool[ip].rtt_ms = rtt
+                    for i in range(tree.topLevelItemCount()):
+                        it = tree.topLevelItem(i)
+                        if (it.data(3, Qt.UserRole) or it.data(2, Qt.UserRole)) == ip:
+                            it.setText(6, f"{rtt:.2f} ms")
+                            it.setData(5, Qt.UserRole, rtt)
+                            it.setData(6, Qt.UserRole, rtt)
+                            break
+        finally:
+            self._updating_tree_node = False
 
     def launch_rtsp_stream(self, rtsp_url: str, ip: str = ""):
         target_ip = ip
@@ -2321,8 +2483,15 @@ class MainWindow(QMainWindow):
             )
 
     def on_tree_item_double_clicked(self, item: QTreeWidgetItem, column: int):
+        # Se o usuário deu duplo-clique na coluna 2 (Apelido) de um item principal, abre edição direta na célula
+        if column == 2 and item.parent() is None:
+            tree = item.treeWidget()
+            if tree:
+                tree.editItem(item, 2)
+            return
+
         url = item.data(1, Qt.UserRole)
-        ip = item.data(2, Qt.UserRole) or ""
+        ip = item.data(3, Qt.UserRole) or item.data(2, Qt.UserRole) or ""
         if url:
             if url.startswith("rtsp://"):
                 self.launch_rtsp_stream(url, ip=ip)
@@ -2363,6 +2532,7 @@ class MainWindow(QMainWindow):
         rec = self.records[ip]
 
         menu = QMenu(self)
+        a_alias = menu.addAction(tr("edit_alias", "✏️ Definir / Editar Apelido..."))
         a_add_fav = menu.addAction(f"★ {tr('ctx_add_fav')}")
         menu.addSeparator()
 
@@ -2401,7 +2571,9 @@ class MainWindow(QMainWindow):
         a_term_ping = menu.addAction(tr("ctx_ping"))
 
         action = menu.exec_(self.tree.viewport().mapToGlobal(pos))
-        if action == a_add_fav:
+        if action == a_alias:
+            self.edit_selected_device_alias(self.tree)
+        elif action == a_add_fav:
             self.add_record_to_favorites(rec)
         elif a_rtsp and action == a_rtsp:
             self.launch_rtsp_stream(rec.rtsp_url or f"rtsp://{rec.ip}:554/", ip=rec.ip)
@@ -2451,6 +2623,7 @@ class MainWindow(QMainWindow):
         rec = self.fav_records[ip]
 
         menu = QMenu(self)
+        a_alias = menu.addAction(tr("edit_alias", "✏️ Definir / Editar Apelido..."))
         a_remove = menu.addAction(f"★ {tr('ctx_remove_fav')}")
         menu.addSeparator()
         a_rtsp = None
@@ -2470,7 +2643,9 @@ class MainWindow(QMainWindow):
         a_copy_ip = menu.addAction(tr("ctx_copy_ip"))
 
         action = menu.exec_(self.fav_tree.viewport().mapToGlobal(pos))
-        if action == a_remove:
+        if action == a_alias:
+            self.edit_selected_device_alias(self.fav_tree)
+        elif action == a_remove:
             self.remove_favorite_ip(rec.ip)
         elif a_rtsp and action == a_rtsp:
             self.launch_rtsp_stream(rec.rtsp_url or f"rtsp://{rec.ip}:554/", ip=rec.ip)
@@ -3081,10 +3256,12 @@ class MainWindow(QMainWindow):
             status_badge = '<span style="color:#059669; font-weight:bold;">● Online</span>' if r.alive else '<span style="color:#94a3b8;">○ Offline</span>'
             ports_badges = "".join(f'<span style="background:#e0f2fe; color:#0369a1; padding:2px 6px; border-radius:4px; font-size:11px; margin-right:4px;">{p}</span>' for p in r.open_ports) or '<span style="color:#cbd5e1;">--</span>'
             cve_tag = f' <span style="background:#fee2e2; color:#991b1b; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;">{r.risk_badge}</span>' if getattr(r, "risk_badge", "") else ""
+            alias_cell = f'<b style="color:#164e78;">{r.alias}</b>' if getattr(r, "alias", "") else '<span style="color:#94a3b8;">--</span>'
             rows.append(f"""
             <tr style="border-bottom: 1px solid #f1f5f9;">
                 <td style="padding: 10px 12px;">{status_badge}</td>
                 <td style="padding: 10px 12px; font-weight: 600;">{r.hostname or '--'}{cve_tag}</td>
+                <td style="padding: 10px 12px;">{alias_cell}</td>
                 <td style="padding: 10px 12px; font-family: monospace; color:#0969da; font-weight:bold;">{r.ip}</td>
                 <td style="padding: 10px 12px;">{r.vendor or '<span style="color:#94a3b8;">Desconhecido</span>'}</td>
                 <td style="padding: 10px 12px; font-family: monospace; color:#475569;">{r.mac or '--'}</td>
@@ -3246,6 +3423,7 @@ class MainWindow(QMainWindow):
                 <tr>
                     <th>Status</th>
                     <th>Nome do Host</th>
+                    <th>Apelido</th>
                     <th>Endereço IP</th>
                     <th>Fabricante</th>
                     <th>Endereço MAC</th>
@@ -3310,13 +3488,13 @@ class MainWindow(QMainWindow):
                 with open(path, "w", encoding="utf-8") as f:
                     f.write("IP SCAN IGT — RELATÓRIO DE REDE\n" + "=" * 55 + "\n\n")
                     for r in records_to_export.values():
-                        f.write(f"IP: {r.ip:16} | Host: {r.hostname:25} | MAC: {r.mac:18} | Fabricante: {r.vendor:25} | Ping: {r.format_ping()}\n")
+                        f.write(f"IP: {r.ip:16} | Host: {r.hostname:22} | Apelido: {(r.alias or '--'):16} | MAC: {r.mac:18} | Fabricante: {r.vendor:22} | Ping: {r.format_ping()}\n")
             else:
                 with open(path, "w", newline="", encoding="utf-8") as f:
                     writer = csv.writer(f)
-                    writer.writerow(["Status", "Nome", "IP", "Fabricante", "Endereço MAC", "Ping", "Tipo / SO", "Portas Abertas"])
+                    writer.writerow(["Status", "Nome", "Apelido", "IP", "Fabricante", "Endereço MAC", "Ping", "Tipo / SO", "Portas Abertas"])
                     for r in records_to_export.values():
-                        writer.writerow(["Online" if r.alive else "Offline", r.hostname, r.ip, r.vendor, r.mac, r.format_ping(), r.device_type, r.format_ports()])
+                        writer.writerow(["Online" if r.alive else "Offline", r.hostname, r.alias, r.ip, r.vendor, r.mac, r.format_ping(), r.device_type, r.format_ports()])
 
             QMessageBox.information(self, "Sucesso", f"Resultados salvos com sucesso em:\n{path}")
         except Exception as e:
@@ -3332,11 +3510,13 @@ class MainWindow(QMainWindow):
                         ip = item.get("ip", "").strip()
                         if not ip:
                             continue
+                        mac = item.get("mac", "")
                         rec = HostRecord(
                             ip=ip,
                             hostname=item.get("hostname", ""),
+                            alias=item.get("alias", "") or get_device_alias(ip, mac),
                             vendor=item.get("vendor", ""),
-                            mac=item.get("mac", ""),
+                            mac=mac,
                             alive=item.get("alive", True),
                             rtt_ms=item.get("rtt_ms", 0.0),
                             device_type=item.get("device_type", ""),
@@ -3355,6 +3535,7 @@ class MainWindow(QMainWindow):
                 data.append({
                     "ip": r.ip,
                     "hostname": r.hostname,
+                    "alias": r.alias,
                     "vendor": r.vendor,
                     "mac": r.mac,
                     "alive": r.alive,
@@ -3374,10 +3555,10 @@ class MainWindow(QMainWindow):
         vbox.setContentsMargins(18, 18, 18, 18)
         vbox.setSpacing(12)
 
-        title_color = "#38bdf8" if self.is_dark_mode else "#0969da"
-        sub_color = "#94a3b8" if self.is_dark_mode else "#64748b"
-        border_color = "#334155" if self.is_dark_mode else "#e2e8f0"
-        body_color = "#f1f5f9" if self.is_dark_mode else "#1e293b"
+        title_color = "#38bdf8" if self.is_dark_mode else "#164e78"
+        sub_color = "#94a3b8" if self.is_dark_mode else "#3b424a"
+        border_color = "#334155" if self.is_dark_mode else "#a8a8a8"
+        body_color = "#f1f5f9" if self.is_dark_mode else "#1e242b"
 
         lbl_hdr = QLabel(f"<h2>Histórico de Versões do IP Scan IGT</h2><p style='color: {sub_color}; font-size: 13px;'>Versão ativa no sistema: <b style='color: {title_color};'>{get_full_version()}</b></p>")
         vbox.addWidget(lbl_hdr)

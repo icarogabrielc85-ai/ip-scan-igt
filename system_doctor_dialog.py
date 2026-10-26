@@ -406,14 +406,14 @@ class SystemDoctorDialog(QDialog):
             self.c_scroll_bg = "#0b1120"
             self.c_accent = "#38bdf8"
         else:
-            self.c_bg = "#f8fafc"
-            self.c_card_bg = "#ffffff"
-            self.c_border = "#cbd5e1"
-            self.c_text_main = "#0f172a"
-            self.c_text_sub = "#64748b"
-            self.c_row_bg = "#ffffff"
-            self.c_scroll_bg = "#f1f5f9"
-            self.c_accent = "#0284c7"
+            self.c_bg = "#dcdcdc"
+            self.c_card_bg = "#e2e2e2"
+            self.c_border = "#a8a8a8"
+            self.c_text_main = "#1e242b"
+            self.c_text_sub = "#3b424a"
+            self.c_row_bg = "#e8e8e8"
+            self.c_scroll_bg = "#d6d6d6"
+            self.c_accent = "#164e78"
 
     def init_ui(self):
         vbox = QVBoxLayout(self)

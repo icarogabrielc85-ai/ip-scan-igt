@@ -106,31 +106,38 @@ class VideoConfigDialog(QDialog):
         vbox.setContentsMargins(18, 16, 18, 16)
         vbox.setSpacing(12)
 
+        is_dark = getattr(self.parent(), "is_dark_mode", False) if self.parent() else False
+        hdr_bg = "#162032" if is_dark else "#d2d2d2"
+        hdr_border = "#1f2937" if is_dark else "#a8a8a8"
+        title_col = "#38bdf8" if is_dark else "#164e78"
+        sub_col = "#94a3b8" if is_dark else "#3b424a"
+        prev_bg = "#0f172a" if is_dark else "#d0d0d0"
+
         # Header card
         hdr = QFrame()
         hdr.setObjectName("videoHeaderFrame")
-        hdr.setStyleSheet("""
-            QFrame#videoHeaderFrame {
-                background-color: #162032;
-                border: 1px solid #1f2937;
-                border-radius: 8px;
+        hdr.setStyleSheet(f"""
+            QFrame#videoHeaderFrame {{
+                background-color: {hdr_bg};
+                border: 1px solid {hdr_border};
+                border-radius: 6px;
                 padding: 10px;
-            }
+            }}
         """)
         h_layout = QHBoxLayout(hdr)
         h_layout.setContentsMargins(6, 4, 6, 4)
         h_layout.setSpacing(12)
 
         lbl_icon = QLabel("🎥")
-        lbl_icon.setStyleSheet("font-size: 28px;")
+        lbl_icon.setStyleSheet("font-size: 28px; border: none;")
         h_layout.addWidget(lbl_icon)
 
         info_box = QVBoxLayout()
         info_box.setSpacing(2)
         lbl_title = QLabel("Configuração de Visualização de Câmeras (RTSP)")
-        lbl_title.setStyleSheet("font-weight: bold; font-size: 14px; color: #38bdf8;")
+        lbl_title.setStyleSheet(f"font-weight: bold; font-size: 14px; color: {title_col}; border: none;")
         lbl_sub = QLabel("Defina a resolução de exibição, player preferido e parâmetros de latência.")
-        lbl_sub.setStyleSheet("font-size: 12px; color: #94a3b8;")
+        lbl_sub.setStyleSheet(f"font-size: 12px; color: {sub_col}; border: none;")
         info_box.addWidget(lbl_title)
         info_box.addWidget(lbl_sub)
         h_layout.addLayout(info_box)
@@ -226,7 +233,9 @@ class VideoConfigDialog(QDialog):
 
         # Preview label
         self.lbl_preview = QLabel("Comando: ffplay -rtsp_transport tcp -x 800 -y 600 ...")
-        self.lbl_preview.setStyleSheet("font-family: monospace; font-size: 11px; color: #38bdf8; background: #0f172a; padding: 6px; border-radius: 4px; border: 1px solid #1e293b;")
+        self.lbl_preview.setStyleSheet(
+            f"font-family: monospace; font-size: 11px; color: {title_col}; background: {prev_bg}; padding: 6px; border-radius: 4px; border: 1px solid {hdr_border};"
+        )
         self.lbl_preview.setWordWrap(True)
         form_layout.addWidget(self.lbl_preview)
 

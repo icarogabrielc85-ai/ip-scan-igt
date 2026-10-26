@@ -69,14 +69,22 @@ class NmapDialog(QDialog):
         main_layout.setContentsMargins(14, 12, 14, 12)
         main_layout.setSpacing(10)
 
+        is_dark = getattr(self.parent(), "is_dark_mode", False) if self.parent() else False
+        card_bg = "#162032" if is_dark else "#d4d4d4"
+        pane_bg = "#0e141f" if is_dark else "#e2e2e2"
+        input_bg = "#1e293b" if is_dark else "#ededed"
+        border_col = "#243447" if is_dark else "#a8a8a8"
+        text_col = "#f1f5f9" if is_dark else "#1e242b"
+        sub_col = "#94a3b8" if is_dark else "#3b424a"
+
         # 1. Top Configuration Frame
         cfg_frame = QFrame()
-        cfg_frame.setStyleSheet("""
-            QFrame {
-                background-color: #f8fafc;
-                border: 1px solid #cbd5e1;
-                border-radius: 8px;
-            }
+        cfg_frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: {card_bg};
+                border: 1px solid {border_col};
+                border-radius: 6px;
+            }}
         """)
         cfg_layout = QVBoxLayout(cfg_frame)
         cfg_layout.setContentsMargins(12, 10, 12, 10)
@@ -85,25 +93,25 @@ class NmapDialog(QDialog):
         # Row 1: Target, Profile, and Start Button
         row1 = QHBoxLayout()
         lbl_target = QLabel("Alvo (IP/Host):")
-        lbl_target.setStyleSheet("font-weight: bold; color: #1e293b;")
+        lbl_target.setStyleSheet(f"font-weight: bold; color: {text_col}; border: none;")
         self.txt_target = QLineEdit(self.target or "192.168.111.100")
         self.txt_target.setMinimumWidth(160)
-        self.txt_target.setFixedHeight(32)
+        self.txt_target.setFixedHeight(30)
 
         lbl_profile = QLabel("Perfil:")
-        lbl_profile.setStyleSheet("font-weight: bold; color: #1e293b; margin-left: 10px;")
+        lbl_profile.setStyleSheet(f"font-weight: bold; color: {text_col}; margin-left: 10px; border: none;")
         self.combo_profile = QComboBox()
-        self.combo_profile.setFixedHeight(32)
+        self.combo_profile.setFixedHeight(30)
         for name, _ in SCAN_PROFILES:
             self.combo_profile.addItem(name)
         self.combo_profile.currentIndexChanged.connect(self.on_profile_changed)
 
         self.btn_run = QPushButton("▶  Iniciar Varredura")
-        self.btn_run.setFixedHeight(32)
+        self.btn_run.setFixedHeight(30)
         self.btn_run.setMinimumWidth(160)
         self.btn_run.setStyleSheet("""
             QPushButton {
-                background-color: #0969da;
+                background-color: #2b6595;
                 color: #ffffff;
                 font-weight: bold;
                 border: none;
@@ -111,7 +119,7 @@ class NmapDialog(QDialog):
                 padding: 4px 16px;
             }
             QPushButton:hover {
-                background-color: #0856b3;
+                background-color: #1d4f7a;
             }
         """)
         self.btn_run.clicked.connect(self.toggle_scan)
@@ -126,10 +134,10 @@ class NmapDialog(QDialog):
         # Row 2: Parameters editable
         row2 = QHBoxLayout()
         lbl_args = QLabel("Parâmetros:")
-        lbl_args.setStyleSheet("font-size: 11px; color: #64748b; font-weight: 600;")
+        lbl_args.setStyleSheet(f"font-size: 11px; color: {sub_col}; font-weight: 600; border: none;")
         self.txt_args = QLineEdit(SCAN_PROFILES[0][1])
         self.txt_args.setFixedHeight(28)
-        self.txt_args.setStyleSheet("font-family: monospace; font-size: 11px; background-color: #ffffff;")
+        self.txt_args.setStyleSheet(f"font-family: monospace; font-size: 11px; background-color: {input_bg};")
         row2.addWidget(lbl_args)
         row2.addWidget(self.txt_args, 1)
         cfg_layout.addLayout(row2)
@@ -146,22 +154,22 @@ class NmapDialog(QDialog):
 
         # 2. Main Tabbed Results View (UI/UX clean)
         self.tabs = QTabWidget()
-        self.tabs.setStyleSheet("""
-            QTabWidget::pane {
-                border: 1px solid #cbd5e1;
+        self.tabs.setStyleSheet(f"""
+            QTabWidget::pane {{
+                border: 1px solid {border_col};
                 border-radius: 6px;
-                background-color: #ffffff;
-            }
-            QTabBar::tab {
+                background-color: {pane_bg};
+            }}
+            QTabBar::tab {{
                 font-weight: bold;
-                padding: 8px 20px;
+                padding: 6px 18px;
                 font-size: 12px;
-            }
-            QTabBar::tab:selected {
-                background-color: #ffffff;
-                border-bottom: 2px solid #0969da;
-                color: #0969da;
-            }
+            }}
+            QTabBar::tab:selected {{
+                background-color: {pane_bg};
+                border-bottom: 2px solid #2b6595;
+                color: {"#38bdf8" if is_dark else "#164e78"};
+            }}
         """)
 
         # TAB 1: Relatório Estruturado & Portas (Modern, clean, organized)
@@ -172,26 +180,28 @@ class NmapDialog(QDialog):
 
         # Diagnostic Banner Card
         self.diag_card = QFrame()
-        self.diag_card.setStyleSheet("""
-            QFrame {
-                background-color: #f0f9ff;
-                border: 1px solid #bae6fd;
-                border-radius: 8px;
+        diag_bg = "#162032" if is_dark else "#d0dfed"
+        diag_border = "#0284c7" if is_dark else "#8eb4d9"
+        self.diag_card.setStyleSheet(f"""
+            QFrame {{
+                background-color: {diag_bg};
+                border: 1px solid {diag_border};
+                border-radius: 6px;
                 padding: 8px;
-            }
+            }}
         """)
         diag_layout = QHBoxLayout(self.diag_card)
         diag_layout.setContentsMargins(10, 8, 10, 8)
 
         self.lbl_diag_icon = QLabel("💡")
-        self.lbl_diag_icon.setStyleSheet("font-size: 28px;")
+        self.lbl_diag_icon.setStyleSheet("font-size: 28px; border: none;")
         diag_layout.addWidget(self.lbl_diag_icon)
 
         diag_text_box = QVBoxLayout()
         self.lbl_diag_title = QLabel("Aguardando varredura...")
-        self.lbl_diag_title.setStyleSheet("font-weight: bold; font-size: 13px; color: #0369a1;")
+        self.lbl_diag_title.setStyleSheet(f"font-weight: bold; font-size: 13px; color: {'#38bdf8' if is_dark else '#164e78'}; border: none;")
         self.lbl_diag_desc = QLabel("Selecione o perfil desejado e clique em 'Iniciar Varredura' para auditar o dispositivo.")
-        self.lbl_diag_desc.setStyleSheet("color: #334155; font-size: 12px;")
+        self.lbl_diag_desc.setStyleSheet(f"color: {text_col}; font-size: 12px; border: none;")
         self.lbl_diag_desc.setWordWrap(True)
         diag_text_box.addWidget(self.lbl_diag_title)
         diag_text_box.addWidget(self.lbl_diag_desc)
@@ -279,19 +289,6 @@ class NmapDialog(QDialog):
         self.table_ports.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
         self.table_ports.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
         self.table_ports.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        self.table_ports.setStyleSheet("""
-            QTableWidget {
-                border: 1px solid #e2e8f0;
-                border-radius: 6px;
-                gridline-color: #f1f5f9;
-            }
-            QHeaderView::section {
-                background-color: #f8fafc;
-                font-weight: bold;
-                padding: 6px;
-                border: 1px solid #e2e8f0;
-            }
-        """)
         report_layout.addWidget(self.table_ports, 1)
 
         self.tabs.addTab(tab_report, "📊 Relatório Estruturado")

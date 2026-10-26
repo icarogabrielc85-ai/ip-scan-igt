@@ -1,6 +1,6 @@
 ; IP Scan IGT — Inno Setup Script
 #define MyAppName "IP Scan IGT"
-#define MyAppVersion "2.9.0"
+#define MyAppVersion "2.9.1"
 #define MyAppPublisher "IGT"
 #define MyAppURL "https://github.com/icarogabrielc85-ai/ip-scan-igt"
 #define MyAppExeName "IPScanIGT.exe"
@@ -31,7 +31,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
-Source: "dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "dist\IPScanIGT_dir\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "mac-vendors.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "icon.png"; DestDir: "{app}"; Flags: ignoreversion
 Source: "icon.ico"; DestDir: "{app}"; Flags: ignoreversion

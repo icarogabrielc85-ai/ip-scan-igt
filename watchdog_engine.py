@@ -283,10 +283,10 @@ class WatchdogDialog(QDialog):
         layout.setContentsMargins(16, 14, 16, 14)
         layout.setSpacing(12)
 
-        bg_card = "#1e293b" if self.is_dark else "#f8fafc"
-        border_col = "#334155" if self.is_dark else "#cbd5e1"
-        text_col = "#f1f5f9" if self.is_dark else "#0f172a"
-        sub_col = "#94a3b8" if self.is_dark else "#475569"
+        bg_card = "#1e293b" if self.is_dark else "#d6d6d6"
+        border_col = "#334155" if self.is_dark else "#a8a8a8"
+        text_col = "#f1f5f9" if self.is_dark else "#1e242b"
+        sub_col = "#94a3b8" if self.is_dark else "#3b424a"
 
         # 1. Header & Settings Card
         cfg_frame = QFrame()
