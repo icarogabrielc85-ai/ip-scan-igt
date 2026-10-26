@@ -149,6 +149,7 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QSplitter,
     QStatusBar,
+    QSystemTrayIcon,
     QTabWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -167,6 +168,7 @@ from scanner_engine import (
     ResourceItem,
     build_resources_for_host,
     classify_device,
+    correlate_host_vulnerabilities,
     get_all_network_interfaces,
     get_local_network_info,
     probe_ping,
@@ -181,6 +183,20 @@ from nmap_dialog import NmapDialog
 from interface_dialog import NetworkInterfaceDialog
 from ui_theme import DARK_STYLESHEET, LIGHT_STYLESHEET, LivePingOscilloscope
 from version import APP_RELEASE_DATE, APP_VERSION, VERSION_HISTORY, get_full_version, get_short_version
+from watchdog_engine import (
+    WatchdogDialog,
+    WatchdogEvent,
+    WatchdogWorker,
+    append_watchdog_event,
+    load_watchdog_config,
+    save_watchdog_config,
+    send_desktop_notification,
+)
+from topology_widget import NetworkTopologyWidget
+from network_guard_engine import NETWORK_GUARD, NetworkGuardDialog
+from snapshot_engine import SNAPSHOT_MANAGER, SnapshotDiffDialog
+from upnp_engine import discover_upnp_devices
+from traceroute_dialog import TracerouteDialog
 
 FAVORITES_FILE = os.path.expanduser("~/.config/linux-ipscan/favorites.json")
 
@@ -213,13 +229,21 @@ class ScanWorker(QThread):
             except Exception as e:
                 print(f"ONVIF discovery error: {e}")
 
+        upnp_cache = {}
+        if self._is_running:
+            self.progress_updated.emit(0, len(self.ip_list), tr("stat_upnp_discovery", "Buscando ativos UPnP / SSDP (UDP 1900)..."))
+            try:
+                upnp_cache = discover_upnp_devices(timeout=0.9)
+            except Exception as e:
+                print(f"UPnP discovery error: {e}")
+
         found_count = 0
         total = len(self.ip_list)
         processed = 0
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             future_to_ip = {
-                executor.submit(scan_single_ip, ip, arp_cache, self.local_info, onvif_cache): ip
+                executor.submit(scan_single_ip, ip, arp_cache, self.local_info, onvif_cache, False, upnp_cache): ip
                 for ip in self.ip_list
             }
 
@@ -656,17 +680,13 @@ class MainWindow(QMainWindow):
         primary = QApplication.primaryScreen()
         if primary:
             geo = primary.availableGeometry()
-            # Geometria restaurada proporcional à resolução da tela (caso o usuário desmaximize)
-            w = max(800, min(1440, int(geo.width() * 0.90)))
-            h = max(600, min(920, int(geo.height() * 0.88)))
-            x = geo.x() + (geo.width() - w) // 2
-            y = geo.y() + (geo.height() - h) // 2
-            self.setGeometry(x, y, w, h)
+            self.setGeometry(geo)
         else:
-            self.resize(1280, 760)
+            self.resize(1366, 768)
 
-        # Iniciar maximizado por padrão auto-ajustado à tela
+        # Iniciar em tela cheia / maximizado por padrão
         self.setWindowState(Qt.WindowMaximized)
+        QTimer.singleShot(0, self.showMaximized)
 
         icon_path = get_resource_path("icon.ico") if IS_WINDOWS else get_resource_path("icon.png")
         if not os.path.exists(icon_path):
@@ -691,10 +711,21 @@ class MainWindow(QMainWindow):
         self.table_sweep_timer.start(2500)
 
         self.current_lang = get_current_language()
+        self.watchdog_cfg = load_watchdog_config()
+        self.watchdog_worker = WatchdogWorker(
+            interval_sec=self.watchdog_cfg.get("interval_sec", 15),
+            failure_threshold=self.watchdog_cfg.get("failure_threshold", 2),
+        )
+        self.watchdog_worker.host_checked.connect(self.on_watchdog_host_checked)
+        self.watchdog_worker.state_changed.connect(self.on_watchdog_state_changed)
+        self.watchdog_worker.cycle_finished.connect(self.on_watchdog_cycle_finished)
+        self.tray_icon: Optional[QSystemTrayIcon] = None
 
         self.init_menu_bar()
         self.init_ui()
         self.load_favorites()
+        self.init_system_tray()
+        self.sync_watchdog_state()
         self.apply_theme()
         self.retranslate_ui()
 
@@ -795,6 +826,19 @@ class MainWindow(QMainWindow):
         self.act_net_test = QAction(tr("internet_test"), self)
         self.act_net_test.triggered.connect(self.open_internet_test_dialog)
         self.menu_actions.addAction(self.act_net_test)
+
+        self.menu_actions.addSeparator()
+        self.act_guard = QAction(tr("menu_network_guard", "🛡️ Network Guard (Intrusos & ARP Spoofing)..."), self)
+        self.act_guard.triggered.connect(self.open_network_guard_dialog)
+        self.menu_actions.addAction(self.act_guard)
+
+        self.act_snapshots = QAction(tr("menu_snapshots", "📸 Snapshots & Comparador de Mudanças (Diff)..."), self)
+        self.act_snapshots.triggered.connect(self.open_snapshot_diff_dialog)
+        self.menu_actions.addAction(self.act_snapshots)
+
+        self.act_traceroute = QAction(tr("menu_traceroute", "🧭 Traceroute Visual (Rota TTL)..."), self)
+        self.act_traceroute.triggered.connect(self.action_open_traceroute)
+        self.menu_actions.addAction(self.act_traceroute)
 
         # 3. Exibir
         self.menu_view = menu_bar.addMenu(tr("menu_view"))
@@ -924,7 +968,7 @@ class MainWindow(QMainWindow):
 
         self.txt_start_ip = QLineEdit(self.local_info.get("start_ip", "192.168.1.1"))
         self.txt_start_ip.setObjectName("txtStartIp")
-        self.txt_start_ip.setFixedWidth(145)
+        self.txt_start_ip.setFixedWidth(135)
         self.txt_start_ip.setFixedHeight(30)
         self.txt_start_ip.setAlignment(Qt.AlignCenter)
         self.txt_start_ip.setToolTip("Endereço IP inicial da faixa de varredura")
@@ -936,7 +980,7 @@ class MainWindow(QMainWindow):
 
         self.txt_end_ip = QLineEdit(self.local_info.get("end_ip", "192.168.1.254"))
         self.txt_end_ip.setObjectName("txtEndIp")
-        self.txt_end_ip.setFixedWidth(145)
+        self.txt_end_ip.setFixedWidth(135)
         self.txt_end_ip.setFixedHeight(30)
         self.txt_end_ip.setAlignment(Qt.AlignCenter)
         self.txt_end_ip.setToolTip("Endereço IP final da faixa de varredura")
@@ -947,7 +991,7 @@ class MainWindow(QMainWindow):
         top_layout.addWidget(self.lbl_mask)
 
         self.combo_mask = QComboBox()
-        self.combo_mask.setMinimumWidth(235)
+        self.combo_mask.setMinimumWidth(195)
         self.combo_mask.setFixedHeight(30)
         self.combo_mask.setToolTip("Máscara de sub-rede / Prefixo CIDR da rede")
         self.populate_mask_combo()
@@ -963,7 +1007,7 @@ class MainWindow(QMainWindow):
         self.txt_search.setPlaceholderText("🔍 Filtrar (Nome, IP, MAC)...")
         self.txt_search.setClearButtonEnabled(True)
         self.txt_search.setFixedHeight(30)
-        self.txt_search.setMinimumWidth(150)
+        self.txt_search.setMinimumWidth(130)
         self.txt_search.setToolTip("Filtrar dispositivos por nome, IP, MAC ou fabricante")
         self.txt_search.textChanged.connect(self.filter_current_tree)
         top_layout.addWidget(self.txt_search, 1)
@@ -971,8 +1015,8 @@ class MainWindow(QMainWindow):
         # 1-Click Update Button
         self.btn_update = QPushButton("🔄 Atualizar")
         self.btn_update.setObjectName("btnUpdate")
-        self.btn_update.setFixedHeight(32)
-        self.btn_update.setMinimumWidth(95)
+        self.btn_update.setFixedHeight(30)
+        self.btn_update.setMinimumWidth(90)
         self.btn_update.setToolTip("Verificar e aplicar atualizações do repositório em 1 clique")
         self.btn_update.clicked.connect(self.check_and_apply_update)
         top_layout.addWidget(self.btn_update)
@@ -985,8 +1029,8 @@ class MainWindow(QMainWindow):
         ribbon_bar = QFrame()
         ribbon_bar.setObjectName("ribbonBar")
         ribbon_layout = QHBoxLayout(ribbon_bar)
-        ribbon_layout.setContentsMargins(12, 4, 12, 4)
-        ribbon_layout.setSpacing(6)
+        ribbon_layout.setContentsMargins(8, 3, 8, 3)
+        ribbon_layout.setSpacing(4)
 
         # Quick Expand/Collapse buttons
         self.btn_expand = QPushButton("⊞ Expandir")
@@ -1019,7 +1063,7 @@ class MainWindow(QMainWindow):
         ribbon_layout.addWidget(self.chk_onvif)
 
         # Camera Video resolution / playback config button
-        self.btn_camera_cfg = QPushButton("⚙️ Resolução")
+        self.btn_camera_cfg = QPushButton("⚙️ Vídeo")
         self.btn_camera_cfg.setObjectName("ribbonBtn")
         self.btn_camera_cfg.setFixedHeight(28)
         self.btn_camera_cfg.setToolTip("Configurar resolução de exibição, player preferido e latência de câmeras (RTSP)")
@@ -1035,12 +1079,36 @@ class MainWindow(QMainWindow):
         ribbon_layout.addWidget(self.btn_nmap)
 
         # Internet Health & DNS Quality Test button
-        self.btn_net_test = QPushButton("🌐 Testar Internet")
+        self.btn_net_test = QPushButton("🌐 Internet")
         self.btn_net_test.setObjectName("ribbonBtn")
         self.btn_net_test.setFixedHeight(28)
         self.btn_net_test.setToolTip("Testar conexão de internet, gateway, DNS da placa e benchmark dos principais servidores DNS mundiais")
         self.btn_net_test.clicked.connect(self.open_internet_test_dialog)
         ribbon_layout.addWidget(self.btn_net_test)
+
+        # Watchdog Continuous Monitoring button
+        self.btn_watchdog = QPushButton("🛡️ Watchdog")
+        self.btn_watchdog.setObjectName("ribbonBtn")
+        self.btn_watchdog.setFixedHeight(28)
+        self.btn_watchdog.setToolTip("Monitoramento contínuo em segundo plano dos dispositivos em Favoritos com alertas nativos no desktop")
+        self.btn_watchdog.clicked.connect(self.open_watchdog_dialog)
+        ribbon_layout.addWidget(self.btn_watchdog)
+
+        # Network Guard (ARP Spoofing / IP Conflict / Intruder Detection)
+        self.btn_guard = QPushButton("🚨 Guard")
+        self.btn_guard.setObjectName("ribbonBtn")
+        self.btn_guard.setFixedHeight(28)
+        self.btn_guard.setToolTip("Detecção de Intrusos (Novos MACs), Conflitos de IP e ataques de ARP Spoofing")
+        self.btn_guard.clicked.connect(self.open_network_guard_dialog)
+        ribbon_layout.addWidget(self.btn_guard)
+
+        # Audit Snapshots & Baseline Diff button
+        self.btn_snapshots = QPushButton("📸 Snapshots")
+        self.btn_snapshots.setObjectName("ribbonBtn")
+        self.btn_snapshots.setFixedHeight(28)
+        self.btn_snapshots.setToolTip("Salvar Snapshot Base da rede e comparar mudanças (Novos hosts, Ausentes, Portas e CVEs)")
+        self.btn_snapshots.clicked.connect(self.open_snapshot_diff_dialog)
+        ribbon_layout.addWidget(self.btn_snapshots)
 
         # Executive Report Export Menu button
         self.btn_report = QPushButton("📑 Relatório ▾")
@@ -1058,7 +1126,7 @@ class MainWindow(QMainWindow):
         ribbon_layout.addWidget(sep_r2)
 
         # Bottom panel toggle button
-        self.btn_panel_toggle = QPushButton("📈 Monitor & Detalhes")
+        self.btn_panel_toggle = QPushButton("📈 Monitor")
         self.btn_panel_toggle.setObjectName("ribbonBtn")
         self.btn_panel_toggle.setFixedHeight(28)
         self.btn_panel_toggle.setCheckable(True)
@@ -1068,7 +1136,7 @@ class MainWindow(QMainWindow):
         ribbon_layout.addWidget(self.btn_panel_toggle)
 
         # Quick Theme button
-        self.btn_theme = QPushButton("Modo Escuro")
+        self.btn_theme = QPushButton("🌙 Escuro")
         self.btn_theme.setObjectName("ribbonBtn")
         self.btn_theme.setFixedHeight(28)
         self.btn_theme.setToolTip("Alternar Tema Claro / Escuro (Ctrl+T)")
@@ -1079,6 +1147,7 @@ class MainWindow(QMainWindow):
         self.combo_lang = QComboBox()
         self.combo_lang.setObjectName("comboLang")
         self.combo_lang.setFixedHeight(28)
+        self.combo_lang.setMinimumWidth(135)
         self.combo_lang.setToolTip("Alterar idioma da aplicação (Change application language)")
         for code, lang_info in SUPPORTED_LANGUAGES.items():
             self.combo_lang.addItem(f"{lang_info['flag']}  {lang_info['native']}", code)
@@ -1110,13 +1179,22 @@ class MainWindow(QMainWindow):
         self.kpi_services.setFixedHeight(24)
         ribbon_layout.addWidget(self.kpi_services)
 
+        self.kpi_cves = QLabel("⚠️ 0 CVEs")
+        self.kpi_cves.setObjectName("kpiCves")
+        self.kpi_cves.setAlignment(Qt.AlignCenter)
+        self.kpi_cves.setFixedHeight(24)
+        self.kpi_cves.setStyleSheet(
+            "background-color: #fee2e2; color: #991b1b; font-weight: bold; font-size: 11px; padding: 2px 8px; border-radius: 10px; border: 1px solid #fecaca;"
+        )
+        ribbon_layout.addWidget(self.kpi_cves)
+
         main_layout.addWidget(ribbon_bar)
 
         # --- 2. MAIN CENTRAL SPLITTER (Vertical) ---
         self.main_splitter = QSplitter(Qt.Vertical)
         self.main_splitter.setHandleWidth(5)
 
-        # Upper Area: Main Tabs [Resultados] & [Favoritos] (Takes full horizontal width)
+        # Upper Area: Main Tabs [Resultados], [Favoritos] & [Topologia da Rede]
         self.main_tabs = QTabWidget()
         self.main_tabs.setObjectName("mainTabs")
 
@@ -1132,7 +1210,7 @@ class MainWindow(QMainWindow):
         self.tree.customContextMenuRequested.connect(self.show_results_context_menu)
         results_layout.addWidget(self.tree)
 
-        self.main_tabs.addTab(tab_results, "Resultados")
+        self.main_tabs.addTab(tab_results, tr("tab_results", "Resultado Scan"))
 
         # Tab 2: Favoritos
         tab_favorites = QWidget()
@@ -1151,9 +1229,23 @@ class MainWindow(QMainWindow):
         self.btn_clear_fav = QPushButton("Limpar Todos")
         self.btn_clear_fav.setFixedHeight(28)
         self.btn_clear_fav.clicked.connect(self.clear_all_favorites)
+
+        self.btn_fav_watchdog = QPushButton("🛡️ Watchdog Contínuo: OFF")
+        self.btn_fav_watchdog.setFixedHeight(28)
+        self.btn_fav_watchdog.setCheckable(True)
+        self.btn_fav_watchdog.setToolTip("Ativar/Desativar monitoramento contínuo de ping em segundo plano para os Favoritos")
+        self.btn_fav_watchdog.clicked.connect(self.toggle_watchdog_quick)
+
+        self.btn_fav_watchdog_log = QPushButton("📋 Eventos & Config...")
+        self.btn_fav_watchdog_log.setFixedHeight(28)
+        self.btn_fav_watchdog_log.clicked.connect(self.open_watchdog_dialog)
+
         fav_bar.addWidget(self.btn_scan_fav)
         fav_bar.addWidget(self.btn_del_fav)
         fav_bar.addWidget(self.btn_clear_fav)
+        fav_bar.addSpacing(12)
+        fav_bar.addWidget(self.btn_fav_watchdog)
+        fav_bar.addWidget(self.btn_fav_watchdog_log)
         fav_bar.addStretch()
         fav_layout.addLayout(fav_bar)
 
@@ -1164,7 +1256,15 @@ class MainWindow(QMainWindow):
         self.fav_tree.customContextMenuRequested.connect(self.show_fav_context_menu)
         fav_layout.addWidget(self.fav_tree)
 
-        self.main_tabs.addTab(tab_favorites, "Favoritos")
+        self.main_tabs.addTab(tab_favorites, tr("tab_favorites", "Favoritos"))
+
+        # Tab 3: Mapeamento Visual de Topologia
+        self.topology_widget = NetworkTopologyWidget(self, is_dark=self.is_dark_mode)
+        self.topology_widget.host_selected.connect(self.on_topology_host_selected)
+        self.topology_widget.host_double_clicked.connect(self.on_topology_host_double_clicked)
+        self.topology_widget.host_context_menu.connect(self.on_topology_host_context_menu)
+        self.main_tabs.addTab(self.topology_widget, tr("tab_topology", "🗺️ Topologia"))
+
         self.main_splitter.addWidget(self.main_tabs)
 
         # Lower Area: Retractable Live Ping Oscilloscope & Properties Inspector
@@ -1262,6 +1362,11 @@ class MainWindow(QMainWindow):
         btn_nmap_bottom.setToolTip("Executar auditoria profunda de portas com Nmap neste host")
         btn_nmap_bottom.clicked.connect(self.action_open_nmap)
 
+        btn_traceroute_bottom = QPushButton("🧭 Traceroute")
+        btn_traceroute_bottom.setObjectName("btnActionDiag")
+        btn_traceroute_bottom.setToolTip("Rastrear rota visual (saltos TTL) até este dispositivo")
+        btn_traceroute_bottom.clicked.connect(self.action_open_traceroute)
+
         btn_copy_ip = QPushButton("📋 Copiar IP")
         btn_copy_ip.setObjectName("btnActionDiag")
         btn_copy_ip.setToolTip("Copiar endereço IP para a área de transferência")
@@ -1283,6 +1388,7 @@ class MainWindow(QMainWindow):
         actions_row2.addWidget(btn_rtsp)
         actions_row2.addWidget(btn_cam_cfg_bottom)
         actions_row2.addWidget(btn_nmap_bottom)
+        actions_row2.addWidget(btn_traceroute_bottom)
         actions_row2.addWidget(btn_copy_ip)
         actions_row2.addStretch()
 
@@ -1329,6 +1435,8 @@ class MainWindow(QMainWindow):
             tr("col_comments"),
         ])
         tree.setAlternatingRowColors(True)
+        tree.setUniformRowHeights(True)
+        tree.setIndentation(16)
 
         # Enable clickable column header sorting (Ascending / Descending)
         tree.setSortingEnabled(True)
@@ -1338,15 +1446,15 @@ class MainWindow(QMainWindow):
         tree.header().sectionClicked.connect(lambda col, t=tree: self.on_tree_header_clicked(t, col))
 
         tree.header().setSectionResizeMode(0, QHeaderView.Fixed)
-        tree.header().resizeSection(0, 68)
+        tree.header().resizeSection(0, 56)
         tree.header().setSectionResizeMode(1, QHeaderView.Interactive)
-        tree.header().resizeSection(1, 260)
+        tree.header().resizeSection(1, 250)
         tree.header().setSectionResizeMode(2, QHeaderView.Interactive)
-        tree.header().resizeSection(2, 145)
+        tree.header().resizeSection(2, 140)
         tree.header().setSectionResizeMode(3, QHeaderView.Interactive)
-        tree.header().resizeSection(3, 200)
+        tree.header().resizeSection(3, 195)
         tree.header().setSectionResizeMode(4, QHeaderView.Interactive)
-        tree.header().resizeSection(4, 155)
+        tree.header().resizeSection(4, 150)
         tree.header().setSectionResizeMode(5, QHeaderView.Interactive)
         tree.header().resizeSection(5, 85)
         tree.header().setSectionResizeMode(6, QHeaderView.Stretch)
@@ -1431,19 +1539,24 @@ class MainWindow(QMainWindow):
             self.lbl_mask.setText(tr("lbl_mask"))
             self.txt_search.setPlaceholderText(f"🔍 {tr('filter_placeholder')}")
             self.btn_update.setText(tr("btn_update"))
-            self.btn_expand.setText(f"⊞ {tr('expand_all')}")
-            self.btn_collapse.setText(f"⊟ {tr('collapse_all')}")
+            self.btn_expand.setText(tr("btn_expand_short", "⊞ Expandir"))
+            self.btn_collapse.setText(tr("btn_collapse_short", "⊟ Recolher"))
             self.btn_camera_cfg.setText(tr("btn_video"))
             self.btn_nmap.setText(tr("btn_nmap"))
             self.btn_net_test.setText(tr("btn_net_test"))
             self.btn_report.setText(tr("report_menu"))
-            self.btn_panel_toggle.setText(tr("panel_ping"))
+            self.btn_panel_toggle.setText(tr("btn_panel_short", "📈 Monitor"))
             self.btn_theme.setText(tr("theme_light") if self.is_dark_mode else tr("theme_dark"))
 
         # Tabs
         if hasattr(self, "main_tabs"):
-            self.main_tabs.setTabText(0, tr("tab_results"))
-            self.main_tabs.setTabText(1, tr("tab_favorites"))
+            self.main_tabs.setTabText(0, tr("tab_results", "Resultado Scan"))
+            self.main_tabs.setTabText(1, tr("tab_favorites", "Favoritos"))
+            if self.main_tabs.count() >= 3:
+                self.main_tabs.setTabText(2, tr("tab_topology", "🗺️ Topologia"))
+
+        if hasattr(self, "btn_watchdog"):
+            self.btn_watchdog.setText(tr("btn_watchdog", "🛡️ Watchdog"))
 
         # Favorites Bar
         if hasattr(self, "btn_scan_fav"):
@@ -1506,6 +1619,9 @@ class MainWindow(QMainWindow):
         menu = QMenu(self)
         act_html = menu.addAction(f"📑  {tr('export_html')}")
         act_html.triggered.connect(lambda: self.export_results("html"))
+        act_snap = menu.addAction(f"📸  {tr('menu_snapshots', 'Snapshots & Comparador de Mudanças (Diff)...')}")
+        act_snap.triggered.connect(self.open_snapshot_diff_dialog)
+        menu.addSeparator()
         act_csv = menu.addAction(f"📊  {tr('export_csv')}")
         act_csv.triggered.connect(lambda: self.export_results("csv"))
         act_json = menu.addAction(f"🗄️  {tr('export_json')}")
@@ -1532,12 +1648,14 @@ class MainWindow(QMainWindow):
 
     def apply_theme(self):
         self.setStyleSheet(DARK_STYLESHEET if self.is_dark_mode else LIGHT_STYLESHEET)
-        self.btn_theme.setText("Modo Claro" if self.is_dark_mode else "Modo Escuro")
+        self.btn_theme.setText(tr("theme_light", "☀️ Claro") if self.is_dark_mode else tr("theme_dark", "🌙 Escuro"))
         self.oscilloscope.is_dark = self.is_dark_mode
         self.oscilloscope.update()
+        if hasattr(self, "topology_widget"):
+            self.topology_widget.apply_theme(self.is_dark_mode)
         self.lbl_threads.setStyleSheet(
             "color: #38bdf8; font-weight: bold; margin-left: 10px;" if self.is_dark_mode
-            else "color: #0969da; font-weight: bold; margin-left: 10px;"
+            else "color: #164e78; font-weight: bold; margin-left: 10px;"
         )
 
     def toggle_theme(self):
@@ -1877,13 +1995,38 @@ class MainWindow(QMainWindow):
         self.prog_bar.setValue(current)
         self.lbl_stats.setText(tr("stat_scan_checking", "Verificando: {ip} ({curr}/{total})...").format(ip=current_ip, curr=current, total=total))
 
+    def inspect_record_guard(self, rec: HostRecord):
+        gw_ip = self.local_info.get("gateway", "")
+        alerts = NETWORK_GUARD.inspect_host(
+            ip=rec.ip,
+            mac=rec.mac,
+            hostname=rec.hostname,
+            vendor=rec.vendor,
+            gateway_ip=gw_ip,
+        )
+        rec.guard_alerts = alerts
+        if alerts:
+            rec.guard_badge = " ".join(a.badge_text() for a in alerts[:2])
+            for a in alerts:
+                if a.severity in ("CRITICAL", "HIGH") and self.watchdog_cfg.get("notify_desktop", True):
+                    send_desktop_notification(
+                        title=f"🚨 Network Guard: {a.alert_type} ({rec.ip})",
+                        message=a.details,
+                        is_critical=(a.severity == "CRITICAL"),
+                        tray_icon=getattr(self, "tray_icon", None),
+                    )
+        else:
+            rec.guard_badge = ""
+
     @pyqtSlot(object)
     def on_host_found(self, rec: HostRecord):
+        self.inspect_record_guard(rec)
         self.records[rec.ip] = rec
         self.add_or_update_tree_node(self.tree, rec)
         self.update_status_stats()
 
     def on_fav_host_found(self, rec: HostRecord):
+        self.inspect_record_guard(rec)
         self.fav_records[rec.ip] = rec
         self.add_or_update_tree_node(self.fav_tree, rec)
         self.update_status_stats()
@@ -1896,8 +2039,11 @@ class MainWindow(QMainWindow):
         order = self.tree.header().sortIndicatorOrder()
         self.tree.sortItems(col if col >= 0 else 2, order)
         self.update_status_stats()
+        if hasattr(self, "topology_widget"):
+            self.topology_widget.set_network_data(self.records, self.local_info)
 
     def add_or_update_tree_node(self, target_tree: QTreeWidget, rec: HostRecord):
+        correlate_host_vulnerabilities(rec)
         parent_item = None
         for i in range(target_tree.topLevelItemCount()):
             it = target_tree.topLevelItem(i)
@@ -1915,9 +2061,9 @@ class MainWindow(QMainWindow):
         # Col 0: Status Orb (Green circle for online, muted circle for offline)
         parent_item.setText(0, "●" if rec.alive else "○")
         parent_item.setTextAlignment(0, Qt.AlignCenter)
-        orb_col = QColor("#10b981") if rec.alive else (QColor("#64748b") if self.is_dark_mode else QColor("#94a3b8"))
+        orb_col = QColor("#10b981") if rec.alive else (QColor("#64748b") if self.is_dark_mode else QColor("#7c8794"))
         parent_item.setForeground(0, orb_col)
-        font_status = QFont("Segoe UI", 12, QFont.Bold)
+        font_status = QFont("Segoe UI", 9, QFont.Bold)
         parent_item.setFont(0, font_status)
 
         # Col 1: Nome (Hostname or device type)
@@ -1943,10 +2089,18 @@ class MainWindow(QMainWindow):
             else:
                 parent_item.setForeground(5, QColor("#fbbf24") if self.is_dark_mode else QColor("#d97706"))
 
-        # Col 6: Comentários / Serviços
+        # Col 6: Comentários / Serviços / SNMP / UPnP / CVEs / Network Guard
         comment_parts = []
+        if rec.guard_badge:
+            comment_parts.append(rec.guard_badge)
+        if rec.risk_badge:
+            comment_parts.append(rec.risk_badge)
         if rec.device_type and rec.device_type != tr("dev_host_online", "🖧 Host Online"):
             comment_parts.append(rec.device_type)
+        if rec.snmp_info:
+            comment_parts.append(f"SNMP: {rec.snmp_info}")
+        if rec.upnp_info:
+            comment_parts.append(f"UPnP: {rec.upnp_info}")
         if rec.http_info:
             comment_parts.append(rec.http_info)
         elif rec.ssl_info:
@@ -1957,8 +2111,12 @@ class MainWindow(QMainWindow):
             comment_parts.append(f"{tr('ports_label', 'Portas')}: {rec.format_ports()}")
 
         parent_item.setText(6, " • ".join(comment_parts) if comment_parts else tr("no_services_found", "Nenhum serviço identificado"))
+        if rec.risk_level in ("CRITICAL", "HIGH") or "[🚨" in (rec.guard_badge or ""):
+            parent_item.setForeground(6, QColor("#f87171") if self.is_dark_mode else QColor("#dc2626"))
+        else:
+            parent_item.setForeground(6, QColor("#cbd5e1") if self.is_dark_mode else QColor("#1e293b"))
 
-        # Sub-items [ + ] for individual services (HTTP, HTTPS, SMB, etc.)
+        # Sub-items [ + ] for individual services (HTTP, HTTPS, SMB, SNMP, CVEs, etc.)
         parent_item.takeChildren()
         link_color = QColor("#0969da") if not self.is_dark_mode else QColor("#38bdf8")
         text_color = QColor("#475569") if not self.is_dark_mode else QColor("#cbd5e1")
@@ -1971,12 +2129,18 @@ class MainWindow(QMainWindow):
             child.setText(6, res.detail)
             child.setData(2, Qt.UserRole, rec.ip)
             child.setData(1, Qt.UserRole, res.url)
-            child.setForeground(1, link_color if res.url else text_color)
+            if res.icon in ("🚨", "⚠️"):
+                child.setForeground(1, QColor("#f87171") if self.is_dark_mode else QColor("#dc2626"))
+            else:
+                child.setForeground(1, link_color if res.url else text_color)
             if res.url:
                 child.setForeground(2, link_color)
 
         # Keep collapsed by default for clean and uncluttered UI/UX
         parent_item.setExpanded(False)
+
+        if target_tree == self.tree and hasattr(self, "topology_widget") and (not self.scan_worker or not self.scan_worker.isRunning()):
+            self.topology_widget.set_network_data(self.records, self.local_info)
 
     def sort_tree_by_ip(self, target_tree: QTreeWidget):
         col = target_tree.sortColumn()
@@ -1986,9 +2150,10 @@ class MainWindow(QMainWindow):
     def update_status_stats(self):
         tree = self.get_active_tree()
         online_count = tree.topLevelItemCount()
-        records_pool = self.records if self.main_tabs.currentIndex() == 0 else self.fav_records
+        records_pool = self.records if self.main_tabs.currentIndex() != 1 else self.fav_records
 
         services_count = sum(1 for r in records_pool.values() if r.open_ports)
+        cve_count = sum(len(getattr(r, "vulnerabilities", []) or []) for r in records_pool.values())
         rtts = [r.rtt_ms for r in records_pool.values() if r.rtt_ms >= 0]
         avg_rtt = f"{sum(rtts)/len(rtts):.2f} ms" if rtts else "-- ms"
 
@@ -2002,6 +2167,9 @@ class MainWindow(QMainWindow):
         if hasattr(self, "kpi_services"):
             tpl = tr("kpi_services", "🛡️ {count} Serviços")
             self.kpi_services.setText(tpl.format(count=services_count))
+        if hasattr(self, "kpi_cves"):
+            tpl = tr("kpi_cves", "⚠️ {count} CVEs")
+            self.kpi_cves.setText(tpl.format(count=cve_count))
 
     def on_tree_selection_changed(self, tree: QTreeWidget):
         items = tree.selectedItems()
@@ -2041,6 +2209,16 @@ class MainWindow(QMainWindow):
             (tr("prop_netbios", "NetBIOS / Grupo SMB"), rec.netbios_domain or na),
         ]
 
+        if rec.snmp_info:
+            props.append((tr("prop_snmp", "Auditoria SNMP (UDP 161)"), rec.snmp_info))
+        if rec.upnp_info:
+            props.append((tr("prop_upnp", "Descoberta UPnP / SSDP (UDP 1900)"), rec.upnp_info))
+        if rec.vulnerabilities:
+            cve_str = " | ".join(f"{v.cve_id} ({v.severity} CVSS {v.cvss:.1f}: {v.title})" for v in rec.vulnerabilities)
+            props.append((tr("prop_cves", "Vulnerabilidades (CVEs)"), cve_str))
+        if rec.guard_alerts:
+            g_str = " | ".join(f"{getattr(a, 'alert_type', '')}: {getattr(a, 'details', '')}" for a in rec.guard_alerts)
+            props.append((tr("prop_guard", "Network Guard (Segurança L2)"), g_str))
         if rec.onvif_url or rec.onvif_model:
             props.append((tr("prop_onvif", "ONVIF Câmera / NVR"), f"{rec.onvif_model} ({rec.onvif_url})"))
         if rec.rtsp_url or 554 in rec.open_ports:
@@ -2199,6 +2377,10 @@ class MainWindow(QMainWindow):
             a_onvif = menu.addAction(f"🎥 {tr('col_cameras')}")
 
         a_nmap = menu.addAction(f"🔍 {tr('ctx_nmap')}")
+        a_traceroute = menu.addAction(f"🧭 {tr('ctx_traceroute', 'Traceroute Visual (Rota TTL)...')}")
+        a_trust_mac = None
+        if rec.mac and rec.mac != "N/D":
+            a_trust_mac = menu.addAction(f"🛡️ {tr('ctx_trust_mac', 'Marcar MAC como Confiável (Network Guard)')}")
         menu.addSeparator()
 
         a_rdp = menu.addAction(f"🖥️ {tr('ctx_rdp')}")
@@ -2229,6 +2411,14 @@ class MainWindow(QMainWindow):
             QDesktopServices.openUrl(QUrl(rec.onvif_url))
         elif action == a_nmap:
             self.open_nmap_dialog(rec.ip, rec.hostname)
+        elif action == a_traceroute:
+            self.open_traceroute_dialog(rec.ip)
+        elif a_trust_mac and action == a_trust_mac:
+            NETWORK_GUARD.trust_mac(rec.mac, trusted=True, ip=rec.ip, hostname=rec.hostname, vendor=rec.vendor)
+            rec.guard_alerts = []
+            rec.guard_badge = ""
+            self.add_or_update_tree_node(self.tree, rec)
+            self.lbl_stats.setText(f"🛡️ MAC {rec.mac} ({rec.ip}) marcado como Confiável no Network Guard.")
         elif action == a_rdp:
             self.open_rdp_connection(rec.ip)
         elif action == a_ssh:
@@ -2318,6 +2508,7 @@ class MainWindow(QMainWindow):
         self.fav_records[rec.ip] = rec
         self.add_or_update_tree_node(self.fav_tree, rec)
         self.save_favorites_to_disk()
+        self.sync_watchdog_state()
         self.lbl_stats.setText(tr("stat_fav_added", "Dispositivo {ip} ({host}) adicionado aos Favoritos.").format(ip=rec.ip, host=rec.hostname or rec.ip))
 
     def remove_selected_favorite(self):
@@ -2337,6 +2528,7 @@ class MainWindow(QMainWindow):
                     self.fav_tree.takeTopLevelItem(i)
                     break
             self.save_favorites_to_disk()
+            self.sync_watchdog_state()
             self.lbl_stats.setText(tr("stat_fav_removed", "Dispositivo {ip} removido dos Favoritos.").format(ip=ip))
 
     def clear_all_favorites(self):
@@ -2347,6 +2539,201 @@ class MainWindow(QMainWindow):
             self.fav_records.clear()
             self.fav_tree.clear()
             self.save_favorites_to_disk()
+            self.sync_watchdog_state()
+
+    def init_system_tray(self):
+        try:
+            if not QSystemTrayIcon.isSystemTrayAvailable():
+                return
+            icon_path = get_resource_path("icon.ico") if IS_WINDOWS else get_resource_path("icon.png")
+            if not os.path.exists(icon_path):
+                icon_path = get_resource_path("icon.png")
+            self.tray_icon = QSystemTrayIcon(self)
+            if os.path.exists(icon_path):
+                self.tray_icon.setIcon(QIcon(icon_path))
+            self.tray_icon.setToolTip(f"IP Scan IGT — {get_short_version()}")
+
+            tray_menu = QMenu(self)
+            act_show = tray_menu.addAction("🖧 Abrir IP Scan IGT")
+            act_show.triggered.connect(self.restore_from_tray)
+            act_wd = tray_menu.addAction("🛡️ Configurar Watchdog...")
+            act_wd.triggered.connect(self.open_watchdog_dialog)
+            tray_menu.addSeparator()
+            act_quit = tray_menu.addAction("✕ Sair Completamente")
+            act_quit.triggered.connect(self.force_quit_app)
+            self.tray_icon.setContextMenu(tray_menu)
+            self.tray_icon.activated.connect(self.on_tray_activated)
+            self.tray_icon.show()
+        except Exception:
+            self.tray_icon = None
+
+    def on_tray_activated(self, reason):
+        if reason in (QSystemTrayIcon.Trigger, QSystemTrayIcon.DoubleClick):
+            self.restore_from_tray()
+
+    def restore_from_tray(self):
+        self.showNormal()
+        self.showMaximized()
+        self.raise_()
+        self.activateWindow()
+
+    def force_quit_app(self):
+        self._force_quit = True
+        self.close()
+
+    def sync_watchdog_state(self):
+        enabled = bool(self.watchdog_cfg.get("enabled", False))
+        fav_map = {ip: (rec.hostname or ip) for ip, rec in self.fav_records.items()}
+        initial_states = {ip: bool(rec.alive) for ip, rec in self.fav_records.items()}
+        self.watchdog_worker.update_settings(
+            self.watchdog_cfg.get("interval_sec", 15),
+            self.watchdog_cfg.get("failure_threshold", 2),
+        )
+        self.watchdog_worker.set_targets(fav_map, initial_states)
+
+        if hasattr(self, "btn_fav_watchdog"):
+            self.btn_fav_watchdog.blockSignals(True)
+            self.btn_fav_watchdog.setChecked(enabled)
+            if enabled:
+                self.btn_fav_watchdog.setText(f"🛡️ Watchdog: ATIVO ({len(fav_map)} alvos)")
+                self.btn_fav_watchdog.setStyleSheet(
+                    "QPushButton { background-color: #16a34a; color: #ffffff; font-weight: bold; border-radius: 4px; padding: 2px 10px; }"
+                )
+            else:
+                self.btn_fav_watchdog.setText("🛡️ Watchdog Contínuo: OFF")
+                self.btn_fav_watchdog.setStyleSheet("")
+            self.btn_fav_watchdog.blockSignals(False)
+
+        if enabled:
+            if not self.watchdog_worker.isRunning():
+                self.watchdog_worker.start()
+        else:
+            if self.watchdog_worker.isRunning():
+                self.watchdog_worker.stop()
+                self.watchdog_worker.wait(500)
+
+    def toggle_watchdog_quick(self, checked: bool):
+        self.watchdog_cfg["enabled"] = bool(checked)
+        save_watchdog_config(self.watchdog_cfg)
+        self.sync_watchdog_state()
+        state_str = "ATIVADO" if checked else "DESATIVADO"
+        self.lbl_stats.setText(f"🛡️ Monitoramento Contínuo (Watchdog) {state_str} para os dispositivos em Favoritos.")
+
+    def open_watchdog_dialog(self):
+        dlg = WatchdogDialog(self, is_dark=self.is_dark_mode)
+        dlg.config_Updated.connect(self.on_watchdog_config_updated)
+        dlg.trigger_manual_check.connect(self.watchdog_worker.run_single_cycle)
+        dlg.exec_()
+
+    def on_watchdog_config_updated(self, new_cfg: dict):
+        self.watchdog_cfg = dict(new_cfg)
+        self.sync_watchdog_state()
+
+    @pyqtSlot(str, bool, float, int)
+    def on_watchdog_host_checked(self, ip: str, alive: bool, rtt: float, fail_streak: int):
+        if ip in self.fav_records:
+            rec = self.fav_records[ip]
+            threshold = int(self.watchdog_cfg.get("failure_threshold", 2))
+            if alive:
+                rec.alive = True
+                rec.rtt_ms = rtt
+            elif fail_streak >= threshold:
+                rec.alive = False
+                rec.rtt_ms = -1.0
+            self.add_or_update_tree_node(self.fav_tree, rec)
+
+    @pyqtSlot(str, str, bool, float, str)
+    def on_watchdog_state_changed(self, ip: str, hostname: str, is_online: bool, rtt: float, timestamp: str):
+        ev_type = "UP" if is_online else "DOWN"
+        if is_online:
+            details = f"Ativo recuperado e respondendo ao ping ({rtt:.2f} ms)."
+            title = f"🟢 Ativo Recuperado: {hostname} ({ip})"
+        else:
+            details = f"Servidor crítico parou de responder após {self.watchdog_cfg.get('failure_threshold', 2)} tentativas consecutivas."
+            title = f"🔴 ALERTA DE QUEDA: {hostname} ({ip})"
+
+        ev = WatchdogEvent(
+            timestamp=timestamp,
+            ip=ip,
+            hostname=hostname,
+            event_type=ev_type,
+            details=details,
+            rtt_ms=rtt,
+        )
+        append_watchdog_event(ev)
+        self.lbl_stats.setText(f"{title} — {details}")
+
+        if self.watchdog_cfg.get("notify_desktop", True):
+            send_desktop_notification(
+                title=title,
+                message=details,
+                is_critical=not is_online,
+                tray_icon=self.tray_icon,
+            )
+
+    @pyqtSlot(int, int, str)
+    def on_watchdog_cycle_finished(self, online_count: int, offline_count: int, timestamp: str):
+        if self.main_tabs.currentIndex() == 1:
+            self.lbl_stats.setText(
+                f"🛡️ Watchdog [{timestamp}]: {online_count} Favorito(s) Online • {offline_count} Offline"
+            )
+
+    def on_topology_host_selected(self, ip: str):
+        rec = self.records.get(ip) or self.fav_records.get(ip)
+        if not rec:
+            return
+        self.lbl_panel_title.setText(
+            f"● {tr('details_header', 'Monitor de Ping Dinâmico & Detalhes')}: {rec.ip} — {rec.hostname or tr('dev_network_dev', 'Dispositivo')}"
+        )
+        self.oscilloscope.clear(ip)
+        self.live_ping_worker.set_target(ip)
+        self.populate_details_table(rec)
+
+    def on_topology_host_double_clicked(self, ip: str):
+        rec = self.records.get(ip) or self.fav_records.get(ip)
+        if not rec:
+            return
+        if rec.rtsp_url or 554 in rec.open_ports:
+            self.launch_rtsp_stream(rec.rtsp_url or f"rtsp://{ip}:554/", ip=ip)
+        elif 80 in rec.open_ports:
+            QDesktopServices.openUrl(QUrl(f"http://{ip}/"))
+        elif 443 in rec.open_ports:
+            QDesktopServices.openUrl(QUrl(f"https://{ip}/"))
+        elif 22 in rec.open_ports:
+            self.open_ssh_connection(ip)
+        elif 3389 in rec.open_ports:
+            self.open_rdp_connection(ip)
+        else:
+            self.open_nmap_dialog(ip, rec.hostname)
+
+    def on_topology_host_context_menu(self, ip: str, global_pos: QPoint):
+        rec = self.records.get(ip) or self.fav_records.get(ip)
+        if not rec:
+            return
+        menu = QMenu(self)
+        a_fav = menu.addAction(f"★ {tr('ctx_add_fav')}")
+        a_nmap = menu.addAction(f"🔍 {tr('ctx_nmap')}")
+        menu.addSeparator()
+        a_http = menu.addAction(tr("ctx_open_http"))
+        a_https = menu.addAction(tr("ctx_open_https"))
+        a_ssh = menu.addAction(f"💻 {tr('ctx_ssh')}")
+        a_rdp = menu.addAction(f"🖥️ {tr('ctx_rdp')}")
+        a_ping = menu.addAction(tr("ctx_ping"))
+        action = menu.exec_(global_pos)
+        if action == a_fav:
+            self.add_record_to_favorites(rec)
+        elif action == a_nmap:
+            self.open_nmap_dialog(rec.ip, rec.hostname)
+        elif action == a_http:
+            QDesktopServices.openUrl(QUrl(f"http://{rec.ip}/"))
+        elif action == a_https:
+            QDesktopServices.openUrl(QUrl(f"https://{rec.ip}/"))
+        elif action == a_ssh:
+            self.open_ssh_connection(rec.ip)
+        elif action == a_rdp:
+            self.open_rdp_connection(rec.ip)
+        elif action == a_ping:
+            open_terminal_ping(rec.ip)
 
     def action_open_http(self):
         ip = self.oscilloscope.current_ip
@@ -2512,12 +2899,78 @@ class MainWindow(QMainWindow):
             QApplication.clipboard().setText(ip)
             self.lbl_stats.setText(f"Endereço IP {ip} copiado para a área de transferência.")
 
+    def open_network_guard_dialog(self):
+        gw = self.local_info.get("gateway", "")
+        dlg = NetworkGuardDialog(self, records=self.records, gateway_ip=gw, is_dark=self.is_dark_mode)
+        dlg.guard_updated.connect(self.on_guard_updated)
+        dlg.exec_()
+
+    def on_guard_updated(self):
+        for rec in self.records.values():
+            self.add_or_update_tree_node(self.tree, rec)
+        self.update_status_stats()
+
+    def open_snapshot_diff_dialog(self):
+        iface_str = f"{self.local_info.get('name', 'eth0')} ({self.local_info.get('ip', '')}/{self.local_info.get('cidr', '24')})"
+        dlg = SnapshotDiffDialog(
+            self,
+            current_records=self.records,
+            interface_str=iface_str,
+            is_dark=self.is_dark_mode,
+        )
+        dlg.exec_()
+
+    def action_open_traceroute(self):
+        target = self.get_selected_or_current_ip() or self.local_info.get("gateway", "") or self.txt_start_ip.text().strip()
+        self.open_traceroute_dialog(target)
+
+    def open_traceroute_dialog(self, target_ip: str = ""):
+        dlg = TracerouteDialog(
+            self,
+            target_ip=target_ip,
+            known_records=self.records,
+            local_ip=self.local_info.get("ip", ""),
+            gateway_ip=self.local_info.get("gateway", ""),
+            is_dark=self.is_dark_mode,
+        )
+        dlg.exec_()
+
     def generate_executive_html_report(self, records: dict) -> str:
         rec_list = list(records.values())
+        for r in rec_list:
+            correlate_host_vulnerabilities(r)
+
         total = len(rec_list)
         online = sum(1 for r in rec_list if r.alive)
         offline = total - online
         onvif_count = sum(1 for r in rec_list if r.onvif_url or 554 in r.open_ports or 8899 in r.open_ports)
+        snmp_upnp_count = sum(1 for r in rec_list if r.snmp_info or r.upnp_info)
+
+        all_cves = []
+        crit_count = 0
+        high_count = 0
+        med_count = 0
+        for r in rec_list:
+            for v in (getattr(r, "vulnerabilities", []) or []):
+                all_cves.append((r, v))
+                if v.severity == "CRITICAL":
+                    crit_count += 1
+                elif v.severity == "HIGH":
+                    high_count += 1
+                else:
+                    med_count += 1
+
+        # Cálculo do Score de Segurança da Rede (0 - 100)
+        penalty = (crit_count * 18) + (high_count * 9) + (med_count * 4)
+        security_score = max(0, min(100, 100 - penalty))
+        if security_score >= 90:
+            sec_grade, sec_color = "A (Excelente)", "#059669"
+        elif security_score >= 75:
+            sec_grade, sec_color = "B (Bom)", "#0284c7"
+        elif security_score >= 55:
+            sec_grade, sec_color = "C (Atenção)", "#d97706"
+        else:
+            sec_grade, sec_color = "D/F (Crítico)", "#dc2626"
 
         vendors = {}
         for r in rec_list:
@@ -2530,14 +2983,108 @@ class MainWindow(QMainWindow):
         iface_str = f"{self.local_info.get('name', 'eth0')} ({self.local_info.get('ip', '')}/{self.local_info.get('cidr', '24')})"
         full_ver = get_full_version()
 
+        # Renderiza o Mapa de Topologia em Base64 PNG para embutir no HTML/PDF
+        topo_b64 = ""
+        if hasattr(self, "topology_widget") and self.topology_widget:
+            try:
+                self.topology_widget.set_network_data(records, self.local_info)
+                topo_b64 = self.topology_widget.render_to_base64_png()
+            except Exception:
+                topo_b64 = ""
+
+        topo_section_html = ""
+        if topo_b64:
+            topo_section_html = f"""
+            <h2 style="font-size:17px; color:#0f172a; border-left:4px solid #0969da; padding-left:10px; margin:28px 0 12px 0;">
+                🗺️ Mapa Visual de Topologia da Rede (NOC)
+            </h2>
+            <div style="text-align:center; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:14px; margin-bottom:24px;">
+                <img src="data:image/png;base64,{topo_b64}" alt="Topologia da Rede" style="max-width:100%; height:auto; border-radius:6px;" />
+            </div>
+            """
+
+        # Matriz de Vulnerabilidades (CVEs)
+        cve_section_html = ""
+        if all_cves:
+            cve_rows = []
+            for r, v in all_cves:
+                sev_bg = "#fee2e2" if v.severity == "CRITICAL" else ("#ffedd5" if v.severity == "HIGH" else "#fef9c3")
+                sev_fg = "#991b1b" if v.severity == "CRITICAL" else ("#9a3412" if v.severity == "HIGH" else "#854d0e")
+                cve_rows.append(f"""
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                    <td style="padding:8px 10px; font-family:monospace; font-weight:bold; color:#0969da;">{r.ip} ({r.hostname or '--'})</td>
+                    <td style="padding:8px 10px; font-weight:bold;">{v.cve_id}</td>
+                    <td style="padding:8px 10px;"><span style="background:{sev_bg}; color:{sev_fg}; padding:2px 8px; border-radius:4px; font-weight:bold; font-size:11px;">{v.severity} (CVSS {v.cvss:.1f})</span></td>
+                    <td style="padding:8px 10px;"><b>{v.title}</b><br><span style="color:#64748b; font-size:12px;">{v.description}</span></td>
+                    <td style="padding:8px 10px; color:#059669; font-size:12px;">{v.remediation}</td>
+                </tr>
+                """)
+            cve_section_html = f"""
+            <h2 style="font-size:17px; color:#991b1b; border-left:4px solid #dc2626; padding-left:10px; margin:28px 0 12px 0;">
+                ⚠️ Matriz de Vulnerabilidades e Riscos Detectados ({len(all_cves)} CVEs)
+            </h2>
+            <table style="margin-bottom:24px;">
+                <thead>
+                    <tr>
+                        <th>Host Afetado</th>
+                        <th>Código CVE</th>
+                        <th>Severidade / CVSS</th>
+                        <th>Vulnerabilidade</th>
+                        <th>Recomendação de Mitigação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {''.join(cve_rows)}
+                </tbody>
+            </table>
+            """
+
+        # Seção de Infraestrutura SNMP, Impressoras e UPnP
+        infra_rows = []
+        for r in rec_list:
+            if r.snmp_info or r.upnp_info:
+                telemetry = " • ".join(x for x in [
+                    f"<b>SNMP:</b> {r.snmp_info}" if r.snmp_info else "",
+                    f"<b>UPnP:</b> {r.upnp_info}" if r.upnp_info else "",
+                ] if x)
+                infra_rows.append(f"""
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                    <td style="padding:8px 10px; font-family:monospace; font-weight:bold; color:#0969da;">{r.ip}</td>
+                    <td style="padding:8px 10px; font-weight:600;">{r.hostname or '--'}</td>
+                    <td style="padding:8px 10px;">{r.device_type or '--'}</td>
+                    <td style="padding:8px 10px;">{telemetry}</td>
+                </tr>
+                """)
+        infra_section_html = ""
+        if infra_rows:
+            infra_section_html = f"""
+            <h2 style="font-size:17px; color:#0f172a; border-left:4px solid #0d9488; padding-left:10px; margin:28px 0 12px 0;">
+                📊 Auditoria de Infraestrutura (SNMP, Impressoras & UPnP/SSDP)
+            </h2>
+            <table style="margin-bottom:24px;">
+                <thead>
+                    <tr>
+                        <th>Endereço IP</th>
+                        <th>Ativo</th>
+                        <th>Categoria</th>
+                        <th>Telemetria SNMP (Uptime / Portas / Toner / Páginas) & UPnP</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {''.join(infra_rows)}
+                </tbody>
+            </table>
+            """
+
         rows = []
         for r in rec_list:
             status_badge = '<span style="color:#059669; font-weight:bold;">● Online</span>' if r.alive else '<span style="color:#94a3b8;">○ Offline</span>'
             ports_badges = "".join(f'<span style="background:#e0f2fe; color:#0369a1; padding:2px 6px; border-radius:4px; font-size:11px; margin-right:4px;">{p}</span>' for p in r.open_ports) or '<span style="color:#cbd5e1;">--</span>'
+            cve_tag = f' <span style="background:#fee2e2; color:#991b1b; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;">{r.risk_badge}</span>' if getattr(r, "risk_badge", "") else ""
             rows.append(f"""
             <tr style="border-bottom: 1px solid #f1f5f9;">
                 <td style="padding: 10px 12px;">{status_badge}</td>
-                <td style="padding: 10px 12px; font-weight: 600;">{r.hostname or '--'}</td>
+                <td style="padding: 10px 12px; font-weight: 600;">{r.hostname or '--'}{cve_tag}</td>
                 <td style="padding: 10px 12px; font-family: monospace; color:#0969da; font-weight:bold;">{r.ip}</td>
                 <td style="padding: 10px 12px;">{r.vendor or '<span style="color:#94a3b8;">Desconhecido</span>'}</td>
                 <td style="padding: 10px 12px; font-family: monospace; color:#475569;">{r.mac or '--'}</td>
@@ -2551,7 +3098,7 @@ class MainWindow(QMainWindow):
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Relatório de Auditoria de Rede — IP Scan IGT</title>
+    <title>Relatório Executivo de Auditoria de Rede — IP Scan IGT</title>
     <style>
         body {{
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -2561,7 +3108,7 @@ class MainWindow(QMainWindow):
             padding: 30px;
         }}
         .container {{
-            max-width: 1200px;
+            max-width: 1240px;
             margin: 0 auto;
             background: #ffffff;
             border-radius: 12px;
@@ -2588,25 +3135,25 @@ class MainWindow(QMainWindow):
         }}
         .cards {{
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 16px;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 12px;
             margin-bottom: 24px;
         }}
         .card {{
             background: #f8fafc;
             border: 1px solid #e2e8f0;
             border-radius: 8px;
-            padding: 16px;
+            padding: 14px 10px;
             text-align: center;
         }}
         .card .value {{
-            font-size: 28px;
+            font-size: 24px;
             font-weight: bold;
             color: #0969da;
             margin-top: 4px;
         }}
         .card .label {{
-            font-size: 12px;
+            font-size: 11px;
             color: #64748b;
             text-transform: uppercase;
             font-weight: 600;
@@ -2648,7 +3195,7 @@ class MainWindow(QMainWindow):
     <div class="container">
         <div class="header">
             <div class="title">
-                <h1>🌐 IP Scan IGT — Relatório de Auditoria de Rede</h1>
+                <h1>🌐 IP Scan IGT — Relatório Executivo de Auditoria & Segurança</h1>
                 <p>Gerado em: <b>{now_str}</b> • Interface: <b>{iface_str}</b> • Versão: <b>{full_ver}</b></p>
             </div>
             <div>
@@ -2666,8 +3213,16 @@ class MainWindow(QMainWindow):
                 <div class="value" style="color: #059669;">{online}</div>
             </div>
             <div class="card">
-                <div class="label">Dispositivos Offline</div>
-                <div class="value" style="color: #64748b;">{offline}</div>
+                <div class="label">Score de Segurança</div>
+                <div class="value" style="color: {sec_color}; font-size:20px;">{security_score}/100 ({sec_grade})</div>
+            </div>
+            <div class="card">
+                <div class="label">Vulnerabilidades (CVE)</div>
+                <div class="value" style="color: #dc2626;">{len(all_cves)}</div>
+            </div>
+            <div class="card">
+                <div class="label">Ativos SNMP / UPnP</div>
+                <div class="value" style="color: #0d9488;">{snmp_upnp_count}</div>
             </div>
             <div class="card">
                 <div class="label">Câmeras / NVR ONVIF</div>
@@ -2679,6 +3234,13 @@ class MainWindow(QMainWindow):
             <b>Principais Fabricantes na Rede:</b> {top_vendors_html}
         </p>
 
+        {topo_section_html}
+        {cve_section_html}
+        {infra_section_html}
+
+        <h2 style="font-size:17px; color:#0f172a; border-left:4px solid #0969da; padding-left:10px; margin:28px 0 12px 0;">
+            📋 Inventário Completo de Dispositivos e Portas Abertas
+        </h2>
         <table>
             <thead>
                 <tr>
@@ -2737,6 +3299,11 @@ class MainWindow(QMainWindow):
                 data = [dict(r.__dict__) for r in records_to_export.values()]
                 for d in data:
                     d.pop("resources", None)
+                    if "vulnerabilities" in d and isinstance(d["vulnerabilities"], list):
+                        d["vulnerabilities"] = [
+                            v.to_dict() if hasattr(v, "to_dict") else str(v)
+                            for v in d["vulnerabilities"]
+                        ]
                 with open(path, "w", encoding="utf-8") as f:
                     json.dump(data, f, indent=2, ensure_ascii=False)
             elif fmt == "txt":
@@ -2861,7 +3428,29 @@ class MainWindow(QMainWindow):
         )
 
     def closeEvent(self, event):
+        if (
+            not getattr(self, "_force_quit", False)
+            and self.watchdog_cfg.get("minimize_to_tray", False)
+            and self.tray_icon
+            and self.tray_icon.isVisible()
+            and os.environ.get("QT_QPA_PLATFORM") != "offscreen"
+        ):
+            self.hide()
+            send_desktop_notification(
+                "IP Scan IGT — Executando em Segundo Plano",
+                "O aplicativo continua monitorando os ativos na Bandeja do Sistema.",
+                is_critical=False,
+                tray_icon=self.tray_icon,
+            )
+            event.ignore()
+            return
+
         self.table_sweep_timer.stop()
+        if hasattr(self, "watchdog_worker") and self.watchdog_worker and self.watchdog_worker.isRunning():
+            self.watchdog_worker.stop()
+            self.watchdog_worker.wait(500)
+        if hasattr(self, "tray_icon") and self.tray_icon:
+            self.tray_icon.hide()
         if hasattr(self, "_sweep_worker") and self._sweep_worker and self._sweep_worker.isRunning():
             self._sweep_worker.stop()
             self._sweep_worker.wait(500)

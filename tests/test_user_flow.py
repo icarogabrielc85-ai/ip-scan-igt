@@ -266,8 +266,206 @@ def run_e2e_tests():
     assert window.tree.topLevelItem(0).text(2) == "192.168.1.250"
     print(" -> Ordenação crescente e decrescente por IP OK.")
 
-    # 7. Cleanup
-    print("\n[TEST 7] Fechando janelas e encerrando threads...")
+    # 7. SNMP (UDP 161) Engine Test
+    print("\n[TEST 7] Testando Motor de Auditoria SNMP (UDP 161 ASN.1 BER)...")
+    from snmp_engine import (
+        OID_SYS_DESCR,
+        OID_SYS_NAME,
+        OID_SYS_UPTIME,
+        SnmpAuditResult,
+        build_snmp_get_packet,
+        format_timeticks,
+    )
+    pkt = build_snmp_get_packet([OID_SYS_DESCR, OID_SYS_UPTIME, OID_SYS_NAME], community="public", version=1)
+    assert pkt.startswith(b"\x30") and b"public" in pkt
+    assert format_timeticks(8640000 + 360000) == "1d 01h 00m"
+    snmp_sample = SnmpAuditResult(
+        enabled=True,
+        sys_name="SW-CORE-01",
+        sys_descr="Cisco IOS Software, C2960X",
+        uptime_str="45d 12h 10m",
+        if_count=28,
+        toner_percent=85,
+        printer_pages=14230,
+    )
+    summary_snmp = snmp_sample.format_summary()
+    assert "SW-CORE-01" in summary_snmp and "45d 12h 10m" in summary_snmp and "Portas/Ifaces: 28" in summary_snmp
+    print(" -> Codificação ASN.1 BER e resumo de auditoria SNMP OK.")
+
+    # 8. CVE Vulnerability Correlation Engine (SQLite) Test
+    print("\n[TEST 8] Testando Motor de Correlação de Vulnerabilidades (CVEs SQLite)...")
+    from cve_engine import CVE_DB, compute_risk_summary
+    from nmap_engine import parse_nmap_output
+    vulns = CVE_DB.correlate_host(
+        open_ports=[21, 22, 23, 80, 8291],
+        http_info="Apache/2.4.49 (Unix)",
+        ssh_banner="OpenSSH_8.9p1 Ubuntu-3ubuntu0.1",
+        snmp_info="SNMPv2c Switch",
+    )
+    cve_ids = {v.cve_id for v in vulns}
+    assert "CVE-2021-41773" in cve_ids, "Deve detectar falha crítica do Apache 2.4.49"
+    assert "CVE-2024-6387" in cve_ids, "Deve detectar RegreSSHion no OpenSSH 8.9"
+    assert "CVE-1999-0619" in cve_ids, "Deve detectar Telnet exposto na porta 23"
+    assert "CVE-2018-14847" in cve_ids, "Deve detectar MikroTik Winbox na porta 8291"
+    rlvl, max_cvss, badge = compute_risk_summary(vulns)
+    assert rlvl == "CRITICAL" and max_cvss >= 9.0
+
+    nmap_txt = (
+        "PORT   STATE SERVICE VERSION\n"
+        "22/tcp open  ssh     OpenSSH 9.1p1 Debian\n"
+        "80/tcp open  http    Apache httpd 2.4.50\n"
+    )
+    parsed_nmap = parse_nmap_output(nmap_txt, "192.168.1.99")
+    assert parsed_nmap["risk_level"] == "CRITICAL"
+    assert any(v.cve_id == "CVE-2021-41773" for v in parsed_nmap["vulnerabilities"])
+    print(f" -> Correlação SQLite detectou {len(vulns)} CVEs com precisão ({badge}).")
+
+    # 9. Watchdog Continuous Monitoring Test
+    print("\n[TEST 9] Testando Monitoramento Contínuo (Watchdog) e Diálogo de Eventos...")
+    from watchdog_engine import WatchdogDialog, WatchdogEvent, WatchdogWorker, append_watchdog_event, load_watchdog_events
+    wd_dlg = WatchdogDialog(window, is_dark=False)
+    assert wd_dlg is not None
+    ev_test = WatchdogEvent(
+        timestamp="25/10/2026 23:00:00",
+        ip="192.168.1.10",
+        hostname="nvr-intelbras-01",
+        event_type="DOWN",
+        details="Teste automatizado de alerta de queda",
+    )
+    append_watchdog_event(ev_test)
+    wd_dlg.refresh_events_table()
+    assert wd_dlg.table.rowCount() >= 1
+    wd_dlg.close()
+    print(" -> Watchdog Worker, persistência de incidentes e diálogo de controle OK.")
+
+    # 10. Visual Network Topology Mapping Test
+    print("\n[TEST 10] Testando Mapeamento Visual Interativo de Topologia...")
+    topo = window.topology_widget
+    topo.set_network_data(window.records, window.local_info)
+    assert len(topo.node_items) >= len(devices_data)
+    # Test switching layout to tiered and back to radial
+    topo.combo_layout.setCurrentIndex(1)
+    assert len(topo.node_items) >= len(devices_data)
+    topo.combo_layout.setCurrentIndex(0)
+    # Test filtering by risk (CVEs)
+    topo.combo_filter.setCurrentIndex(3)
+    assert len(topo.node_items) >= 2
+    topo.combo_filter.setCurrentIndex(0)
+    print(f" -> Grafo de Topologia renderizado com {len(topo.node_items)} nós interativos (Radial & Camadas) OK.")
+
+    # 11. Network Guard (Intruder, IP Conflict & ARP Spoofing) Test
+    print("\n[TEST 11] Testando Network Guard (Intrusos, Conflito de IP e ARP Spoofing)...")
+    import tempfile
+    from network_guard_engine import NetworkGuardDialog, NetworkGuardEngine
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tf:
+        guard_tmp = tf.name
+    try:
+        eng = NetworkGuardEngine(storage_path=guard_tmp)
+        # 1. Establish Gateway MAC
+        gw_alerts = eng.inspect_host("192.168.1.1", "AA:BB:CC:00:00:01", hostname="Gateway", gateway_ip="192.168.1.1")
+        assert any(a.alert_type == "INTRUDER_NEW_MAC" for a in gw_alerts)
+        eng.trust_mac("AA:BB:CC:00:00:01", trusted=True, ip="192.168.1.1")
+
+        # 2. Simulate ARP Spoofing (different IP claiming Gateway MAC)
+        spoof_alerts = eng.inspect_host("192.168.1.99", "AA:BB:CC:00:00:01", hostname="Attacker", gateway_ip="192.168.1.1")
+        assert any(a.alert_type == "ARP_SPOOFING" and a.severity == "CRITICAL" for a in spoof_alerts)
+
+        # 3. Simulate IP Conflict (same IP switching MAC)
+        eng.inspect_host("192.168.1.50", "11:22:33:44:55:66", hostname="Srv-01", gateway_ip="192.168.1.1")
+        conflict_alerts = eng.inspect_host("192.168.1.50", "11:22:33:99:99:99", hostname="Srv-01", gateway_ip="192.168.1.1")
+        assert any(a.alert_type == "IP_CONFLICT" and a.severity == "HIGH" for a in conflict_alerts)
+
+        g_dlg = NetworkGuardDialog(window, records=window.records, gateway_ip="192.168.1.1", is_dark=False)
+        assert g_dlg is not None
+        g_dlg.close()
+    finally:
+        if os.path.exists(guard_tmp):
+            os.remove(guard_tmp)
+    print(" -> Detecção de ARP Spoofing, Conflito de IP, Intrusos L2 e Diálogo Network Guard OK.")
+
+    # 12. Audit Snapshots & Baseline Diff Engine Test
+    print("\n[TEST 12] Testando Snapshots de Auditoria e Comparador de Mudanças (Baseline Diff)...")
+    from snapshot_engine import SnapshotDiffDialog, SnapshotManager, compare_host_maps
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tf_s:
+        snap_tmp = tf_s.name
+    try:
+        sm = SnapshotManager(storage_path=snap_tmp)
+        snap = sm.create_snapshot(window.records, name="Baseline Produção", interface_str="eth0")
+        assert snap["host_count"] == len(window.records)
+
+        # Create modified state: remove 192.168.1.250, add 192.168.1.222, add port 8080 to 192.168.1.50
+        curr_map = {}
+        for ip, r in window.records.items():
+            if ip == "192.168.1.250":
+                continue
+            copy_d = dict(r.__dict__)
+            if ip == "192.168.1.50":
+                copy_d["open_ports"] = sorted(list(set(r.open_ports + [8080])))
+            curr_map[ip] = copy_d
+        curr_map["192.168.1.222"] = HostRecord(ip="192.168.1.222", alive=True, hostname="novo-servidor", open_ports=[22, 80])
+
+        diff_res = compare_host_maps(snap["hosts"], curr_map)
+        assert len(diff_res.added_hosts) == 1 and diff_res.added_hosts[0].ip == "192.168.1.222"
+        assert len(diff_res.removed_hosts) == 1 and diff_res.removed_hosts[0].ip == "192.168.1.250"
+        assert any(m.ip == "192.168.1.50" and 8080 in m.added_ports for m in diff_res.modified_hosts)
+
+        s_dlg = SnapshotDiffDialog(window, current_records=window.records, interface_str="eth0")
+        assert s_dlg is not None
+        s_dlg.close()
+    finally:
+        if os.path.exists(snap_tmp):
+            os.remove(snap_tmp)
+    print(" -> Comparador de Snapshots (+Novos, -Ausentes, ~Portas/CVEs Modificadas) OK.")
+
+    # 13. UPnP / SSDP Discovery & Visual Traceroute Test
+    print("\n[TEST 13] Testando Descoberta UPnP / SSDP (UDP 1900) e Traceroute Visual...")
+    from upnp_engine import UpnpDeviceInfo, parse_ssdp_headers, parse_upnp_xml
+    from traceroute_dialog import TraceHop, TracerouteDialog
+
+    raw_ssdp = (
+        "HTTP/1.1 200 OK\r\n"
+        "LOCATION: http://192.168.1.55:1900/rootDesc.xml\r\n"
+        "SERVER: Linux/5.15 UPnP/1.1 MiniUPnPd/2.3\r\n"
+        "ST: upnp:rootdevice\r\n\r\n"
+    )
+    hdrs = parse_ssdp_headers(raw_ssdp)
+    assert hdrs["location"] == "http://192.168.1.55:1900/rootDesc.xml"
+
+    sample_xml = """<?xml version="1.0"?>
+    <root xmlns="urn:schemas-upnp-org:device-1-0">
+      <device>
+        <friendlyName>Smart TV LG OLED65</friendlyName>
+        <manufacturer>LG Electronics</manufacturer>
+        <modelName>OLED65C3PSA</modelName>
+        <serialNumber>LG-99887766</serialNumber>
+      </device>
+    </root>"""
+    xml_info = parse_upnp_xml(sample_xml)
+    assert xml_info["friendly_name"] == "Smart TV LG OLED65"
+    assert xml_info["manufacturer"] == "LG Electronics"
+    assert xml_info["serial_number"] == "LG-99887766"
+
+    tr_dlg = TracerouteDialog(window, target_ip="", known_records=window.records, local_ip="192.168.1.100", gateway_ip="192.168.1.1")
+    tr_dlg.on_hop_discovered(TraceHop(ttl=1, ip="192.168.1.1", rtt_ms=0.85, hostname="Gateway Padrão", reached_target=False))
+    tr_dlg.on_hop_discovered(TraceHop(ttl=2, ip="192.168.1.10", rtt_ms=1.45, hostname="nvr-intelbras-01", reached_target=True))
+    assert tr_dlg.tbl_hops.rowCount() == 2
+    tr_dlg.close()
+    print(" -> Parser SSDP/UPnP XML e Grafo de Traceroute Visual por Saltos (TTL) OK.")
+
+    # 14. Enhanced Self-Contained Executive Report (with Base64 Topology PNG & Security Score)
+    print("\n[TEST 14] Testando Relatório Executivo Autocontido com Topologia em Base64 e Score...")
+    window.records["192.168.1.1"].snmp_info = "Cisco IOS • Uptime: 45d • Portas/Ifaces: 28"
+    window.records["192.168.1.50"].http_info = "Apache/2.4.49 (Unix)"
+    full_html = window.generate_executive_html_report(window.records)
+    assert "data:image/png;base64," in full_html, "Relatório HTML deve embutir imagem PNG da Topologia em Base64!"
+    assert "Score de Segurança" in full_html
+    assert "Matriz de Vulnerabilidades" in full_html
+    assert "CVE-2021-41773" in full_html
+    assert "Auditoria de Infraestrutura" in full_html
+    print(f" -> Relatório Executivo Autocontido (com PNG Base64 + Matriz CVE + SNMP) OK ({len(full_html)} bytes).")
+
+    # 15. Cleanup
+    print("\n[TEST 15] Fechando janelas e encerrando threads...")
     dlg.close()
     window.close()
     print(" -> Encerramento limpo e gracioso concluído sem travamentos.")

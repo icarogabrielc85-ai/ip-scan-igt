@@ -84,6 +84,9 @@ def robust_urlopen(url_or_req, timeout: float = 10, **kwargs):
 
 from oui_db import OUI_DB
 from onvif_engine import discover_onvif_devices, probe_onvif_unicast, probe_rtsp
+from snmp_engine import probe_snmp
+from cve_engine import CVE_DB, compute_risk_summary
+from upnp_engine import UpnpDeviceInfo, discover_upnp_devices, probe_upnp_unicast
 
 DEFAULT_PORTS = [
     21, 22, 23, 53, 80, 111, 139, 443, 445, 554,
@@ -153,6 +156,14 @@ class HostRecord:
     onvif_type: str = ""
     rtsp_url: str = ""
     nmap_services: Dict[int, str] = field(default_factory=dict)
+    snmp_data: Dict[str, Any] = field(default_factory=dict)
+    upnp_data: Dict[str, Any] = field(default_factory=dict)
+    vulnerabilities: List[Any] = field(default_factory=list)
+    risk_level: str = "NONE"
+    max_cvss: float = 0.0
+    risk_badge: str = ""
+    guard_alerts: List[Any] = field(default_factory=list)
+    guard_badge: str = ""
 
     def format_ping(self) -> str:
         if not self.alive or self.rtt_ms < 0:
@@ -1011,10 +1022,29 @@ def _is_generic_title(s: str) -> bool:
     return any(b in low for b in bad)
 
 
+def correlate_host_vulnerabilities(rec: HostRecord):
+    """Cruza os metadados do host com a base SQLite de CVEs e atualiza os indicadores de risco."""
+    vulns = CVE_DB.correlate_host(
+        open_ports=rec.open_ports,
+        http_info=rec.http_info,
+        ssh_banner=rec.ssh_banner,
+        ssl_info=rec.ssl_info,
+        snmp_info=rec.snmp_info,
+        vendor=rec.vendor,
+        onvif_model=rec.onvif_model,
+        nmap_services=rec.nmap_services,
+    )
+    rec.vulnerabilities = vulns
+    rec.risk_level, rec.max_cvss, rec.risk_badge = compute_risk_summary(vulns)
+
+
 def classify_device(rec: HostRecord) -> Tuple[str, str]:
+    correlate_host_vulnerabilities(rec)
     v = (rec.vendor or "").lower()
     h = (rec.http_info or "").lower()
     s = (rec.ssl_info or "").lower()
+    snmp = (rec.snmp_info or "").lower()
+    upnp = (rec.upnp_info or "").lower()
     p = rec.open_ports
 
     # ONVIF Security Cameras & NVRs
@@ -1039,10 +1069,14 @@ def classify_device(rec: HostRecord) -> Tuple[str, str]:
         if 22 in p:
             return tr("dev_vm_linux", "🐧 VM / LXC Linux (Proxmox)"), f"Linux ({rec.ssh_banner or 'Proxmox VM'})"
         return tr("dev_vm_container", "🖥️ VM / Contêiner (Proxmox)"), "Virtualizado Proxmox VE"
+    if 9100 in p or 631 in p or any(k in snmp for k in ["laserjet", "officejet", "printer", "toner"]):
+        return tr("dev_printer", "🖨️ Impressora de Rede"), "IPP / JetDirect / SNMP"
+    if 8291 in p or any(k in snmp for k in ["routeros", "mikrotik", "cisco ios", "edgeos", "procurve", "jetstream"]):
+        return tr("dev_switch_router", "🖧 Switch / Roteador de Rede"), rec.snmp_info.split("•")[0].strip() if rec.snmp_info else "Network OS"
+    if upnp and any(k in upnp for k in ["tv", "bravia", "webos", "tizen", "roku", "chromecast", "dlna", "mediarenderer"]):
+        return tr("dev_smart_tv", "📺 Smart TV / Mídia UPnP"), rec.upnp_info.split("•")[0].strip()
     if rec.netbios_domain or 445 in p or 3389 in p or (64 < rec.ttl <= 128):
         return tr("dev_win", "💻 Estação / Servidor Windows"), "Microsoft Windows"
-    if 9100 in p or 631 in p:
-        return tr("dev_printer", "🖨️ Impressora de Rede"), "IPP / JetDirect"
     if 22 in p or rec.ssh_banner:
         return tr("dev_linux_ssh", "🐧 Servidor Linux / SSH"), rec.ssh_banner or "Linux / Unix"
     if rec.ttl > 128:
@@ -1055,6 +1089,7 @@ def classify_device(rec: HostRecord) -> Tuple[str, str]:
 
 
 def build_resources_for_host(rec: HostRecord) -> List[ResourceItem]:
+    correlate_host_vulnerabilities(rec)
     items: List[ResourceItem] = []
     na = tr("not_available", "N/D")
     if rec.onvif_url:
@@ -1087,6 +1122,33 @@ def build_resources_for_host(rec: HostRecord) -> List[ResourceItem]:
         items.append(ResourceItem("🖥️", tr("res_rdp_title", "Área de Trabalho Remota RDP (Porta 3389)"), tr("res_rdp_desc", "Microsoft Remote Desktop Ativo"), f"rdp://{rec.ip}"))
     if 22 in rec.open_ports or rec.ssh_banner:
         items.append(ResourceItem("💻", tr("res_ssh_title", "Servidor SSH (Porta 22)"), rec.ssh_banner or tr("res_ssh_desc", "Acesso Terminal SSH Remoto"), f"ssh://{rec.ip}"))
+    if rec.snmp_info:
+        items.append(ResourceItem("📊", tr("res_snmp_title", "Auditoria SNMP (UDP 161)"), rec.snmp_info, ""))
+    if rec.upnp_info:
+        upnp_url = (rec.upnp_data or {}).get("presentation_url") or (rec.upnp_data or {}).get("location") or ""
+        items.append(ResourceItem("📡", tr("res_upnp_title", "Descoberta UPnP / SSDP (UDP 1900)"), rec.upnp_info, upnp_url))
+    if rec.vulnerabilities:
+        for v in rec.vulnerabilities:
+            v_icon = "🚨" if v.severity == "CRITICAL" else ("⚠️" if v.severity == "HIGH" else "🛡️")
+            items.append(
+                ResourceItem(
+                    v_icon,
+                    f"{tr('res_cve_alert', 'Alerta CVE')}: {v.cve_id} ({v.severity} • CVSS {v.cvss:.1f})",
+                    f"{v.title} — {v.remediation}",
+                    "",
+                )
+            )
+    if rec.guard_alerts:
+        for ga in rec.guard_alerts:
+            g_icon = "🚨" if getattr(ga, "severity", "") == "CRITICAL" else "⚠️"
+            items.append(
+                ResourceItem(
+                    g_icon,
+                    f"Network Guard: {getattr(ga, 'alert_type', 'ALERTA')}",
+                    getattr(ga, "details", ""),
+                    "",
+                )
+            )
     if rec.mac or rec.vendor:
         items.append(ResourceItem("🏷️", tr("res_hardware_title", "Hardware / Placa de Rede"), f"MAC: {rec.mac or na}  •  {tr('col_manufacturer', 'Fabricante')}: {rec.vendor or na}", ""))
     if rec.open_ports:
@@ -1099,7 +1161,8 @@ def scan_single_ip(
     arp_table: Dict[str, str],
     local_info: Dict[str, str],
     onvif_cache: Optional[Dict[str, dict]] = None,
-    scan_dead: bool = False
+    scan_dead: bool = False,
+    upnp_cache: Optional[Dict[str, UpnpDeviceInfo]] = None,
 ) -> Optional[HostRecord]:
     rec = HostRecord(ip=ip)
     is_self = ip == local_info.get("ip")
@@ -1137,6 +1200,16 @@ def scan_single_ip(
         if not rec.hostname or rec.hostname.startswith("Host ["):
             rec.hostname = f"{rec.onvif_model} ({ip})"
 
+    # Merge UPnP / SSDP discovery info if pre-discovered via multicast
+    if upnp_cache and ip in upnp_cache:
+        up_dev = upnp_cache[ip]
+        rec.upnp_info = up_dev.format_summary()
+        rec.upnp_data = up_dev.to_dict()
+        if not rec.vendor and up_dev.manufacturer:
+            rec.vendor = up_dev.manufacturer
+        if not rec.hostname and up_dev.friendly_name:
+            rec.hostname = up_dev.friendly_name
+
     # Refresh MAC from kernel ARP table after ping triggered ARP resolution
     if not rec.mac:
         fresh_arp = read_linux_arp_table()
@@ -1144,7 +1217,7 @@ def scan_single_ip(
             rec.mac = fresh_arp[ip]
 
     if rec.mac:
-        rec.vendor = OUI_DB.lookup(rec.mac) or OUI_DB.lookup_online(rec.mac)
+        rec.vendor = OUI_DB.lookup(rec.mac) or OUI_DB.lookup_online(rec.mac) or rec.vendor
 
     # Scan TCP ports
     rec.open_ports = scan_host_ports(ip)
@@ -1187,6 +1260,25 @@ def scan_single_ip(
 
     if 22 in rec.open_ports:
         rec.ssh_banner = inspect_ssh_banner(ip)
+
+    # SNMP (UDP 161) Infrastructure & Printer Audit
+    snmp_res = probe_snmp(ip, timeout=0.30)
+    if snmp_res.enabled:
+        rec.snmp_info = snmp_res.format_summary()
+        rec.snmp_data = snmp_res.to_dict()
+        if not rec.hostname and snmp_res.sys_name:
+            rec.hostname = snmp_res.sys_name
+
+    # Unicast UPnP fallback if not pre-discovered via multicast
+    if not rec.upnp_info:
+        up_uni = probe_upnp_unicast(ip, timeout=0.22)
+        if up_uni:
+            rec.upnp_info = up_uni.format_summary()
+            rec.upnp_data = up_uni.to_dict()
+            if not rec.vendor and up_uni.manufacturer:
+                rec.vendor = up_uni.manufacturer
+            if not rec.hostname and up_uni.friendly_name:
+                rec.hostname = up_uni.friendly_name
 
     # Multi-layer Hostname resolution
     if not rec.hostname:

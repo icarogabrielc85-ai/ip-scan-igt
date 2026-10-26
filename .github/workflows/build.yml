@@ -3,6 +3,7 @@ name: Build & Package IP Scan IGT (Linux .deb & Windows .msi / .exe)
 on:
   push:
     branches: [ main, master ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
@@ -40,8 +41,13 @@ jobs:
 
       - name: Build Windows MSI Package (.msi)
         run: |
-          $wixBin = "C:\Program Files (x86)\WiX Toolset v3.11\bin"
-          if (Test-Path "$wixBin\candle.exe") {
+          $candle = Get-ChildItem -Path "C:\Program Files (x86)\WiX Toolset*\bin\candle.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $candle) {
+            choco install wixtoolset -y
+            $candle = Get-ChildItem -Path "C:\Program Files (x86)\WiX Toolset*\bin\candle.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+          if ($candle) {
+            $wixBin = $candle.DirectoryName
             & "$wixBin\candle.exe" -arch x64 ipscan_windows.wxs -out dist\ipscan_windows.wixobj
             & "$wixBin\light.exe" -ext WixUIExtension dist\ipscan_windows.wixobj -out dist\IPScanIGT.msi
           }
@@ -108,7 +114,7 @@ jobs:
     name: Publicar Release Oficial (.deb, .msi, .exe)
     needs: [build-windows, build-linux]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -124,25 +130,32 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.7.1
-          name: "IP Scan IGT v2.7.1 — Pacotes .deb (Linux), .msi e .exe (Windows)"
+          tag_name: v2.9.0
+          name: "IP Scan IGT v2.9.0 — Pacotes .deb (Linux), .msi e .exe (Windows)"
           body: |
-            ## 📦 Downloads Oficiais do IP Scan IGT (v2.7.1)
+            ## 📦 Downloads Oficiais do IP Scan IGT (v2.9.0)
 
             Selecione o pacote compatível com seu sistema operacional:
 
             ### 🐧 Linux (Ubuntu, Debian, Pop!_OS, Linux Mint, Kali):
-            - **Pacote Debian (.deb):** `ipscan-igt_2.7.1_amd64.deb`  
-              *(Instale dando duplo-clique ou pelo terminal: `sudo apt install ./ipscan-igt_2.7.1_amd64.deb`)*
+            - **Pacote Debian (.deb):** `ipscan-igt_2.9.0_amd64.deb`  
+              *(Instale dando duplo-clique ou pelo terminal: `sudo apt install ./ipscan-igt_2.9.0_amd64.deb`)*
             - **Binário Portátil:** `IPScanIGT`
 
             ### 🪟 Windows 10 e Windows 11:
             - **Instalador MSI (.msi):** `IPScanIGT.msi`  
               *(Instalação padrão corporativa do Windows)*
-            - **Instalador Assistente (.exe):** `IPScanIGT-Setup-2.7.1.exe`  
+            - **Instalador Assistente (.exe):** `IPScanIGT-Setup-2.9.0.exe`  
               *(Instala o programa e cria o atalho oficial na Área de Trabalho)*
             - **Executável Portátil (.exe):** `IPScanIGT.exe`  
               *(Executa direto com duplo-clique sem precisar instalar)*
+
+            ### 🚀 Novidades da Versão 2.9.0:
+            - **Network Guard (L2):** Detecção de Intrusos (Novos MACs), Conflitos de IP e ataques de ARP Spoofing.
+            - **Snapshots & Comparador (Diff):** Auditoria histórica da rede comparando novos hosts, ausentes, portas e CVEs.
+            - **Correlação de Vulnerabilidades (CVEs) + SNMP (UDP 161) + UPnP/SSDP (UDP 1900).**
+            - **Watchdog Contínuo & Topologia Visual Interativa + Traceroute Visual.**
+            - **Tema Claro estilo VirtualBox (tons neutros de cinza), inicialização em tela cheia e linhas compactas.**
           files: |
             release_files/*
           draft: false

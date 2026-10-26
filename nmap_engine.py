@@ -7,6 +7,7 @@ import sys
 from typing import Dict, List, Optional, Tuple
 
 from PyQt5.QtCore import QThread, pyqtSignal
+from cve_engine import CVE_DB, compute_risk_summary
 
 IS_WINDOWS = sys.platform.startswith("win") or os.name == "nt"
 
@@ -57,6 +58,10 @@ def parse_nmap_output(text: str, target: str = "") -> dict:
         "vendor": "",
         "device_diagnosis": "",
         "diagnosis_icon": "🖧",
+        "vulnerabilities": [],
+        "risk_level": "NONE",
+        "max_cvss": 0.0,
+        "risk_badge": "",
     }
 
     # Extract all ports: PORT STATE SERVICE VERSION
@@ -137,6 +142,19 @@ def parse_nmap_output(text: str, target: str = "") -> dict:
     else:
         result["diagnosis_icon"] = "🔌"
         result["device_diagnosis"] = f"Host online ({tgt}) com {len(open_p)} porta(s) aberta(s) identificada(s)."
+
+    vulns = CVE_DB.correlate_host(
+        open_ports=result["open_ports_list"],
+        vendor=result["vendor"],
+        nmap_services=result["services"],
+    )
+    result["vulnerabilities"] = vulns
+    rlvl, mcvss, rbadge = compute_risk_summary(vulns)
+    result["risk_level"] = rlvl
+    result["max_cvss"] = mcvss
+    result["risk_badge"] = rbadge
+    if vulns:
+        result["device_diagnosis"] += f" | ⚠️ Auditoria de Segurança: {len(vulns)} vulnerabilidade(s) conhecida(s) detectada(s) ({rbadge})."
 
     return result
 

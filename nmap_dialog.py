@@ -236,9 +236,21 @@ class NmapDialog(QDialog):
             border: 1px solid #bae6fd;
         """)
 
+        self.lbl_badge_cves = QLabel("🛡️ 0 CVEs")
+        self.lbl_badge_cves.setStyleSheet("""
+            background-color: #f1f5f9;
+            color: #475569;
+            font-weight: bold;
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+        """)
+
         metrics_bar.addWidget(self.lbl_badge_open)
         metrics_bar.addWidget(self.lbl_badge_closed)
         metrics_bar.addWidget(self.lbl_badge_latency)
+        metrics_bar.addWidget(self.lbl_badge_cves)
         metrics_bar.addStretch()
 
         # Checkbox to hide closed ports so it never looks messy!
@@ -284,7 +296,37 @@ class NmapDialog(QDialog):
 
         self.tabs.addTab(tab_report, "📊 Relatório Estruturado")
 
-        # TAB 2: Terminal Bruto (Log Técnico)
+        # TAB 2: Vulnerabilidades Correlacionadas (CVEs)
+        tab_cves = QWidget()
+        cves_layout = QVBoxLayout(tab_cves)
+        cves_layout.setContentsMargins(12, 12, 12, 12)
+        cves_layout.setSpacing(8)
+
+        self.lbl_cve_summary = QLabel("As versões e banners identificados pelo Nmap são cruzados automaticamente com a base local SQLite de CVEs.")
+        self.lbl_cve_summary.setStyleSheet("color: #475569; font-size: 12px; font-weight: 600;")
+        cves_layout.addWidget(self.lbl_cve_summary)
+
+        self.table_cves = QTableWidget(0, 5)
+        self.table_cves.setHorizontalHeaderLabels([
+            "CVE ID",
+            "Severidade / CVSS",
+            "Serviço / Versão",
+            "Título / Descrição da Vulnerabilidade",
+            "Recomendação de Mitigação",
+        ])
+        self.table_cves.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table_cves.setAlternatingRowColors(True)
+        self.table_cves.verticalHeader().setVisible(False)
+        self.table_cves.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.table_cves.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.table_cves.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.table_cves.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        self.table_cves.horizontalHeader().setSectionResizeMode(4, QHeaderView.Stretch)
+        cves_layout.addWidget(self.table_cves, 1)
+
+        self.tabs.addTab(tab_cves, "🛡️ Vulnerabilidades (CVEs)")
+
+        # TAB 3: Terminal Bruto (Log Técnico)
         tab_raw = QWidget()
         raw_layout = QVBoxLayout(tab_raw)
         raw_layout.setContentsMargins(10, 10, 10, 10)
@@ -469,6 +511,32 @@ class NmapDialog(QDialog):
         self.lbl_badge_closed.setText(f"⚪ {closed_count} Fechada(s)")
         self.lbl_badge_latency.setText(f"⚡ Latência: {latency}")
 
+        vulns = parsed.get("vulnerabilities", []) or []
+        if vulns:
+            self.lbl_badge_cves.setText(f"⚠️ {len(vulns)} CVE(s) ({parsed.get('risk_level', 'HIGH')})")
+            self.lbl_badge_cves.setStyleSheet("""
+                background-color: #fee2e2;
+                color: #991b1b;
+                font-weight: bold;
+                font-size: 11px;
+                padding: 4px 10px;
+                border-radius: 12px;
+                border: 1px solid #fecaca;
+            """)
+            self.tabs.setTabText(1, f"🛡️ Vulnerabilidades ({len(vulns)})")
+        else:
+            self.lbl_badge_cves.setText("🛡️ 0 CVEs (Seguro)")
+            self.lbl_badge_cves.setStyleSheet("""
+                background-color: #dcfce7;
+                color: #166534;
+                font-weight: bold;
+                font-size: 11px;
+                padding: 4px 10px;
+                border-radius: 12px;
+                border: 1px solid #bbf7d0;
+            """)
+            self.tabs.setTabText(1, "🛡️ Vulnerabilidades (0)")
+
         # Enable action buttons
         open_ports = parsed.get("open_ports_list", [])
         if open_ports:
@@ -479,8 +547,31 @@ class NmapDialog(QDialog):
                 self.btn_web.setEnabled(True)
 
         self.refresh_ports_table()
+        self.refresh_cves_table()
         # Always bring user to the clean structured tab first!
         self.tabs.setCurrentIndex(0)
+
+    def refresh_cves_table(self):
+        vulns = self.last_parsed_result.get("vulnerabilities", []) or []
+        self.table_cves.setRowCount(len(vulns))
+        if not vulns:
+            self.lbl_cve_summary.setText("✅ Nenhuma vulnerabilidade conhecida (CVE) encontrada nas versões e portas analisadas.")
+            return
+        self.lbl_cve_summary.setText(
+            f"⚠️ Atenção: {len(vulns)} vulnerabilidade(s) conhecida(s) correlacionada(s) na base SQLite (Risco: {self.last_parsed_result.get('risk_badge', '')})."
+        )
+        for row, v in enumerate(vulns):
+            it_id = QTableWidgetItem(v.cve_id)
+            it_id.setFont(QFont("Monospace", 9, QFont.Bold))
+            it_sev = QTableWidgetItem(f"{v.severity} (CVSS {v.cvss:.1f})")
+            it_sev.setFont(QFont("Noto Sans", 9, QFont.Bold))
+            it_sev.setForeground(QColor("#dc2626") if v.severity in ("CRITICAL", "HIGH") else QColor("#d97706"))
+            it_prod = QTableWidgetItem(f"{v.product} ({v.detected_version}) [:{v.port}]")
+            it_desc = QTableWidgetItem(f"{v.title} — {v.description}")
+            it_rem = QTableWidgetItem(v.remediation)
+            for col, it in enumerate([it_id, it_sev, it_prod, it_desc, it_rem]):
+                it.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+                self.table_cves.setItem(row, col, it)
 
     def refresh_ports_table(self):
         if not self.last_parsed_result:

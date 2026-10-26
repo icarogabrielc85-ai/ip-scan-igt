@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-  <Product Id="*" Name="IP Scan IGT" Language="1046" Version="2.7.1" Manufacturer="IGT" UpgradeCode="8B4294F9-3B75-4CE3-B9E2-7BE34947E97A">
+  <Product Id="*" Name="IP Scan IGT" Language="1046" Version="2.9.0" Manufacturer="IGT" UpgradeCode="8B4294F9-3B75-4CE3-B9E2-7BE34947E97A">
     <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" Platform="x64" Description="Instalador do IP Scan IGT para Windows" />
     <MajorUpgrade DowngradeErrorMessage="Uma versão mais recente do IP Scan IGT já está instalada no computador." />
     <MediaTemplate EmbedCab="yes" />

@@ -6,8 +6,8 @@ import os
 import subprocess
 
 # Versão Semântica Oficial (MAJOR.MINOR.PATCH)
-APP_VERSION = "2.7.1"
-APP_RELEASE_DATE = "24/10/2026"
+APP_VERSION = "2.9.0"
+APP_RELEASE_DATE = "26/10/2026"
 
 
 def get_git_info(repo_dir: str = None) -> tuple:
@@ -73,6 +73,29 @@ def get_short_version() -> str:
 
 
 VERSION_HISTORY = [
+    {
+        "version": "v2.9.0",
+        "date": "26/10/2026",
+        "title": "Network Guard (ARP Spoofing & Intrusos), Snapshots de Auditoria (Diff), Relatório Executivo c/ Topologia & UPnP/Traceroute",
+        "changes": [
+            "Network Guard (Segurança L2): detecção passiva e ativa de ataques de ARP Spoofing (sequestro de Gateway), Conflito de IP (troca abrupta de MAC) e Novos Dispositivos Intrusos não autorizados, com gerenciamento de Whitelist de MACs confiáveis.",
+            "Snapshots de Auditoria & Comparador de Mudanças (Baseline Diff): salvamento de fotografias da rede e comparação instantânea destacando novos dispositivos (🟢), servidores ausentes (🔴) e alterações de portas/CVEs/MAC (🟠).",
+            "Relatório Executivo HTML / PDF Autocontido Avançado: inclui cálculo do Score de Segurança da Rede (0–100), Mapa Visual de Topologia embutido em Base64 PNG, Matriz de Vulnerabilidades (CVEs) e Telemetria SNMP/Impressoras/UPnP.",
+            "Descoberta UPnP / SSDP (UDP 1900) & Traceroute Visual: extração de fabricante, modelo e número de série de Smart TVs, roteadores e IoT via XML UPnP + ferramenta gráfica de Traceroute por saltos (TTL) com grafo de latência.",
+            "Refinamento Visual & UX: Tema Claro com paleta de tons de cinza inspirada no VirtualBox, abertura automática em tela cheia, espaçamento compacto entre linhas de itens escaneados e rótulos otimizados sem cortes (ex: 'Resultado Scan').",
+        ],
+    },
+    {
+        "version": "v2.8.0",
+        "date": "25/10/2026",
+        "title": "Correlação de Vulnerabilidades (CVEs), Watchdog Contínuo, Auditoria SNMP (UDP 161) & Mapa Visual de Topologia",
+        "changes": [
+            "Auditoria via SNMP (UDP 161) em Python puro (ASN.1 BER): extração de descrição de hardware, hostname, tempo de atividade (uptime), contagem de portas de switches e nível de toner/páginas impressas (Printer-MIB).",
+            "Correlação de Vulnerabilidades (CVEs) com base SQLite local: cruzamento automático de banners HTTP/SSH/SSL/SNMP, portas expostas e versões do Nmap, destacando ativos em risco com score CVSS e recomendações de mitigação.",
+            "Monitoramento Contínuo (Watchdog): execução em segundo plano para monitorar os dispositivos da aba Favoritos com histerese de falhas, notificações nativas no desktop (QSystemTrayIcon / notify-send) e log de incidentes.",
+            "Mapeamento Visual Interativo de Topologia: nova aba com grafo interativo (QGraphicsView) conectando o Gateway padrão, infraestrutura (Switches, Proxmox, NVRs) e endpoints com zoom, arraste e exportação PNG.",
+        ],
+    },
     {
         "version": "v2.7.1",
         "date": "24/10/2026",
