@@ -130,32 +130,32 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.9.2
-          name: "IP Scan IGT v2.9.2 — Pacotes .deb (Linux), .msi e .exe (Windows)"
+          tag_name: v2.10.0
+          name: "IP Scan IGT v2.10.0 — Pacotes .deb (Linux), .msi e .exe (Windows)"
           body: |
-            ## 📦 Downloads Oficiais do IP Scan IGT (v2.9.2)
+            ## 📦 Downloads Oficiais do IP Scan IGT (v2.10.0)
 
             Selecione o pacote compatível com seu sistema operacional:
 
             ### 🐧 Linux (Ubuntu, Debian, Pop!_OS, Linux Mint, Kali):
-            - **Pacote Debian (.deb):** `ipscan-igt_2.9.2_amd64.deb`  
-              *(Instale dando duplo-clique ou pelo terminal: `sudo apt install ./ipscan-igt_2.9.2_amd64.deb`)*
+            - **Pacote Debian (.deb):** `ipscan-igt_2.10.0_amd64.deb`  
+              *(Instale dando duplo-clique ou pelo terminal: `sudo apt install ./ipscan-igt_2.10.0_amd64.deb`)*
             - **Binário Portátil:** `IPScanIGT`
 
             ### 🪟 Windows 10 e Windows 11:
-            - **Instalador Assistente Recomendado (.exe):** `IPScanIGT-Setup-2.9.2.exe`  
+            - **Instalador Assistente Recomendado (.exe):** `IPScanIGT-Setup-2.10.0.exe`  
               *(Instala o programa completo com todas as DLLs nativas em `Arquivos de Programas` e cria atalho na Área de Trabalho)*
             - **Instalador MSI (.msi):** `IPScanIGT.msi`  
               *(Instalação padrão corporativa do Windows)*
             - **Executável Portátil (.exe):** `IPScanIGT.exe`  
               *(Executa direto com duplo-clique sem precisar instalar, com VC++ Runtime e UCRT embutidos)*
 
-            ### 🚀 Novidades da Versão 2.9.2:
-            - **🌐 Auto-detecção Robusta de Sub-rede e Interface:** Resolução de IP ativo em < 0.1 ms via socket UDP de roteamento do kernel, busca resiliente de binários `iproute2`/`ipconfig`, e fallback em Python puro via ioctl (`SIOCGIFADDR`/`SIOCGIFNETMASK`) no Linux.
-            - **🪟 Compatibilidade Windows Multilíngue (OEM CP850/UTF-8):** Parser imune a erros de codificação em português, validação estrita de máscaras de sub-rede e suporte a gateways padrão multi-linha após IPv6.
-            - **⚡ Sincronização Dinâmica da Interface:** Ao digitar novo IP inicial ou notação CIDR (ex: `192.168.10.0/24`), o IP final e a máscara são recalculados instantaneamente sem deixar faixas inválidas.
-            - **🗺️ Controle de Densidade do Mapa de Topologia:** Nova barra deslizante com ajuste de 50% a 300% de espaçamento entre os equipamentos (Gateway, Switches, Servidores e Endpoints).
-            - **🏎️ Otimizações Globais de Performance:** Compilação estática de regexes no motor CVE, thread-lock de concorrência e eliminação de duplicações no System Doctor.
+            ### 🚀 Novidades da Versão 2.10.0:
+            - **🚀 Motor Nativo de Speed Test (Cloudflare Edge):** Medição de Latência (Ping), Jitter, Download (Mbps), Upload (Mbps) e taxa prática de transferência de arquivos em MB/s.
+            - **🏎️ Velocímetro Gráfico Moderno (SpeedometerWidget):** Arco gradiente com ponteiro luminoso e auto-escala dinâmica até 1000 Mbps.
+            - **⭐ Matriz de Experiência Real (QoE):** Avaliação automatizada de Streaming 4K/8K HDR, Jogos Online (gaming competitivo), Videochamadas HD (Zoom/Teams) e tempo de transferência de 1 GB.
+            - **🗂️ Nova Interface em Abas:** Separação entre [🚀 Teste de Velocidade] e [⚡ Benchmark de Servidores DNS] com sincronização automática de IP público, ISP e PoP.
+            - **📋 Relatório Executivo Unificado:** Cópia para Área de Transferência reunindo Speed Test, QoE e benchmark de todos os 30+ servidores DNS.
           files: |
             release_files/*
           draft: false

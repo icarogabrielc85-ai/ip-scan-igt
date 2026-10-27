@@ -1,4 +1,4 @@
-# 🔍 IP Scan IGT (Linux & Windows) — v2.9.2
+# 🔍 IP Scan IGT (Linux & Windows) — v2.10.0
 
 **IP Scan IGT** é uma ferramenta gráfica profissional de escaneamento, auditoria, segurança e diagnóstico de redes locais (LAN) inspirada no *Advanced IP Scanner*, desenvolvida em **Python 3** e **PyQt5** com suporte nativo multiplataforma (**Linux** e **Windows 10/11**).
 
@@ -6,6 +6,7 @@
 
 ## ✨ Principais Recursos e Motores
 
+- **🚀 Teste de Velocidade da Internet (Speed Test) & Benchmark DNS:** Motor nativo de teste de largura de banda via Cloudflare Edge medindo Latência, Jitter, Download (Mbps), Upload (Mbps) com velocímetro gráfico animado (`SpeedometerWidget`), avaliação de experiência real (QoE para Streaming 4K/8K, Jogos e Videochamadas HD) e benchmark de 30+ servidores DNS globais e locais.
 - **🌐 Auto-detecção de Sub-rede e Interface (< 0.1 ms):** Resolução de IP ativo via socket UDP de roteamento do kernel, busca dinâmica de binários `iproute2` e fallback direto em Python puro via `ioctl` (`SIOCGIFADDR`/`SIOCGIFNETMASK`) no Linux e decodificação OEM CP850/UTF-8 no Windows.
 - **⚡ Varredura Ultrarrápida Multithread (64 workers):** Varre sub-redes inteiras `/24` ou faixas CIDR customizadas em poucos segundos com ping assíncrono e tabela ARP.
 - **🗺️ Mapeamento Visual de Topologia (Grafo NOC Interativo):** Grafo dinâmico com layouts em Camadas e Radial, halos de alerta para CVEs, links coloridos por latência e **barra de ajuste de densidade/distância dos nós (50% a 300%)**.

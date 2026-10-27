@@ -6,8 +6,8 @@ import os
 import subprocess
 
 # Versão Semântica Oficial (MAJOR.MINOR.PATCH)
-APP_VERSION = "2.9.2"
-APP_RELEASE_DATE = "26/10/2026"
+APP_VERSION = "2.10.0"
+APP_RELEASE_DATE = "27/10/2026"
 
 
 def get_git_info(repo_dir: str = None) -> tuple:
@@ -73,6 +73,18 @@ def get_short_version() -> str:
 
 
 VERSION_HISTORY = [
+    {
+        "version": "v2.10.0",
+        "date": "27/10/2026",
+        "title": "Novo Motor de Teste de Velocidade da Internet (Speed Test), Velocímetro Gráfico e Overhaul UI/UX",
+        "changes": [
+            "Motor Nativo de Speed Test (Cloudflare Edge): medição em tempo real de latência (Ping), Jitter, velocidade de Download (Mbps), velocidade de Upload (Mbps) e taxa prática de transferência de arquivos em MB/s.",
+            "Velocímetro Gráfico Moderno (SpeedometerWidget): widget customizado com arco gradiente reativo, ponteiro luminoso com glow, indicação de picos instantâneos e auto-escala dinâmica (100, 250, 500 e 1000 Mbps).",
+            "Matriz de Experiência Real do Usuário (QoE): avaliação automatizada de qualidade para Streaming 4K/8K HDR, Jogos Online (baixa latência/gaming competitivo), Videochamadas HD (Zoom/Teams) e estimativa de tempo para baixar 1 GB.",
+            "Interface Reestruturada em Abas: reorganização elegante da janela de Diagnóstico em 2 abas: [🚀 Teste de Velocidade] e [⚡ Benchmark de Servidores DNS], com sincronização dinâmica de IP público, ISP e servidor PoP.",
+            "Relatório Executivo Unificado: exportação instantânea e cópia para Área de Transferência reunindo as medições completas de velocidade, QoE e benchmark de todos os 30+ servidores DNS.",
+        ],
+    },
     {
         "version": "v2.9.2",
         "date": "26/10/2026",

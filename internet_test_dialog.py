@@ -9,10 +9,12 @@ Fully adaptive to both Dark Mode and Light Mode with high-contrast, modern UI/UX
 
 import concurrent.futures
 import json
+import math
 import os
 import platform
 import re
 import socket
+import statistics
 import struct
 import subprocess
 import sys
@@ -23,13 +25,14 @@ from typing import Dict, List, Optional, Tuple
 from scanner_engine import robust_urlopen
 from i18n import tr
 
-from PyQt5.QtCore import QObject, QPoint, QSize, Qt, QThread, pyqtSignal
-from PyQt5.QtGui import QBrush, QColor, QFont, QIcon
+from PyQt5.QtCore import QObject, QPoint, QPointF, QRectF, QSize, Qt, QThread, pyqtSignal
+from PyQt5.QtGui import QBrush, QColor, QFont, QIcon, QLinearGradient, QPainter, QPen
 from PyQt5.QtWidgets import (
     QApplication,
     QComboBox,
     QDialog,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -38,9 +41,14 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QTabBar,
+    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
+    QWidget,
 )
 
 IS_WINDOWS = sys.platform.startswith("win") or os.name == "nt"
@@ -826,18 +834,459 @@ class InternetTestWorker(QThread):
         self.finished.emit(summary)
 
 
+
+
+# ==============================================================================
+# SPEED TEST ENGINE & SPEEDOMETER WIDGET
+# ==============================================================================
+
+USER_AGENT_BROWSER = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/124.0.0.0 Safari/537.36"
+)
+
+SPEED_HEADERS = {
+    "User-Agent": USER_AGENT_BROWSER,
+    "Referer": "https://speed.cloudflare.com/",
+    "Origin": "https://speed.cloudflare.com",
+    "Accept": "*/*",
+}
+
+
+def calculate_qoe(ping: float, jitter: float, download: float, upload: float) -> dict:
+    """
+    Computes Quality of Experience (QoE) metrics for real-world scenarios:
+    - 4K Streaming
+    - Online Gaming
+    - HD Video Calls
+    - Practical File Transfer Rate
+    """
+    # 1. 4K Streaming
+    if download >= 50.0:
+        stream_score = "⭐⭐⭐⭐⭐"
+        stream_status = "Excelente (4K HDR)"
+        stream_desc = "Perfeito para múltiplos streams 4K HDR simultâneos sem travamentos."
+    elif download >= 25.0:
+        stream_score = "⭐⭐⭐⭐"
+        stream_status = "Muito Bom (4K UHD)"
+        stream_desc = "Ótimo para reprodução 4K UHD individual fluida e estável."
+    elif download >= 10.0:
+        stream_score = "⭐⭐⭐"
+        stream_status = "Regular (Full HD)"
+        stream_desc = "Suficiente para Full HD 1080p; pode haver espera em 4K."
+    else:
+        stream_score = "⭐⭐"
+        stream_status = "Limitado (720p)"
+        stream_desc = "Velocidade baixa; recomendável resolução até 720p/480p."
+
+    # 2. Gaming
+    if ping <= 25.0 and jitter <= 5.0:
+        game_score = "⭐⭐⭐⭐⭐"
+        game_status = "Ultra Baixo Ping"
+        game_desc = f"Latência ultrabaixa ({ping:.1f} ms, jitter {jitter:.1f} ms). Nível competitivo para FPS/MOBA."
+    elif ping <= 50.0 and jitter <= 12.0:
+        game_score = "⭐⭐⭐⭐"
+        game_status = "Ótimo para Jogos"
+        game_desc = f"Excelente resposta ({ping:.1f} ms, jitter {jitter:.1f} ms). Jogabilidade suave e sem lag perceptível."
+    elif ping <= 90.0:
+        game_score = "⭐⭐⭐"
+        game_status = "Jogável (Casual)"
+        game_desc = f"Latência aceitável ({ping:.1f} ms). Adequado para jogos casuais e estratégicos."
+    else:
+        game_score = "⭐⭐"
+        game_status = "Alto Lag"
+        game_desc = f"Alta latência ({ping:.1f} ms) ou oscilação. Risco de atraso e delay em partidas."
+
+    # 3. Video Calls
+    if upload >= 5.0 and ping <= 60.0 and jitter <= 10.0:
+        calls_score = "⭐⭐⭐⭐⭐"
+        calls_status = "HD Cristalino"
+        calls_desc = "Áudio cristalino e vídeo Full HD sem congelamentos (Zoom, Teams, Meet)."
+    elif upload >= 2.0 and ping <= 100.0:
+        calls_score = "⭐⭐⭐⭐"
+        calls_status = "Boa Qualidade"
+        calls_desc = "Chamadas de vídeo em boa qualidade com estabilidade adequada."
+    elif upload >= 1.0:
+        calls_score = "⭐⭐⭐"
+        calls_status = "Qualidade Padrão"
+        calls_desc = "Suficiente para reuniões normais; evite compartilhamento pesado."
+    else:
+        calls_score = "⭐⭐"
+        calls_status = "Instável"
+        calls_desc = "Upload insuficiente; pode haver áudio robotizado ou cortes."
+
+    # 4. File Download Rate
+    real_mbs = download / 8.0
+    sec_1gb = int(1024 / max(0.1, real_mbs))
+    transfer_str = f"~{real_mbs:.1f} MB/s"
+    if sec_1gb < 60:
+        transfer_desc = f"Baixa um arquivo de 1 GB em aproximadamente {sec_1gb} segundos."
+    else:
+        min_1gb = sec_1gb // 60
+        rem_sec = sec_1gb % 60
+        transfer_desc = f"Baixa um arquivo de 1 GB em ~{min_1gb}min {rem_sec}s."
+
+    return {
+        "streaming": {"score": stream_score, "status": stream_status, "desc": stream_desc},
+        "gaming": {"score": game_score, "status": game_status, "desc": game_desc},
+        "calls": {"score": calls_score, "status": calls_status, "desc": calls_desc},
+        "transfer": {"rate": transfer_str, "desc": transfer_desc, "mbs": real_mbs},
+    }
+
+
+class SpeedometerWidget(QWidget):
+    """
+    Modern high-contrast gauge widget rendering real-time internet speed
+    with smooth gradient arc, glowing pointer indicator, and clean typography.
+    """
+    def __init__(self, parent=None, is_dark: bool = True):
+        super().__init__(parent)
+        self.is_dark = is_dark
+        self._value = 0.0          # Current speed or ping
+        self._max_value = 100.0    # Dynamic scale max
+        self._phase = "PRONTO"     # "AGUARDANDO", "PING", "DOWNLOAD", "UPLOAD", "CONCLUÍDO"
+        self._unit = "Mbps"
+        self._sub_text = "Pronto para iniciar"
+        self.setMinimumSize(280, 240)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+    def set_value(self, val: float, max_val: Optional[float] = None, sub_text: str = ""):
+        self._value = max(0.0, float(val))
+        if max_val is not None and max_val > 0:
+            self._max_value = max(10.0, float(max_val))
+        else:
+            # Auto-scale dynamically based on speed
+            if self._value > self._max_value * 0.85:
+                if self._max_value < 100:
+                    self._max_value = 100
+                elif self._max_value < 250:
+                    self._max_value = 250
+                elif self._max_value < 500:
+                    self._max_value = 500
+                elif self._max_value < 1000:
+                    self._max_value = 1000
+                else:
+                    self._max_value = max(self._max_value, self._value * 1.25)
+        if sub_text:
+            self._sub_text = sub_text
+        self.update()
+
+    def set_phase(self, phase: str, unit: str = "Mbps", sub_text: str = ""):
+        self._phase = phase
+        self._unit = unit
+        if sub_text:
+            self._sub_text = sub_text
+        self.update()
+
+    def reset(self):
+        self._value = 0.0
+        self._max_value = 100.0
+        self._phase = "PRONTO"
+        self._unit = "Mbps"
+        self._sub_text = "Pronto para iniciar"
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.TextAntialiasing)
+
+        w, h = self.width(), self.height()
+        cx, cy = w / 2.0, h / 2.0 + 8.0
+        r = min(w, h) * 0.38
+        if r < 40:
+            return
+
+        rect = QRectF(cx - r, cy - r, r * 2.0, r * 2.0)
+
+        # Background track arc (neutral muted color)
+        track_color = QColor("#334155" if self.is_dark else "#cbd5e1")
+        pen_track = QPen(track_color, 14, Qt.SolidLine, Qt.RoundCap)
+        painter.setPen(pen_track)
+        painter.drawArc(rect, int(225 * 16), int(-270 * 16))
+
+        # Progress arc & glowing pointer
+        frac = max(0.0, min(1.0, self._value / max(1.0, self._max_value)))
+        if frac > 0.005:
+            grad = QLinearGradient(rect.left(), rect.top(), rect.right(), rect.bottom())
+            if "UPLOAD" in self._phase:
+                grad.setColorAt(0.0, QColor("#10b981"))
+                grad.setColorAt(1.0, QColor("#06b6d4"))
+                dot_color = QColor("#34d399")
+            elif "PING" in self._phase or "LATÊNCIA" in self._phase:
+                grad.setColorAt(0.0, QColor("#a855f7"))
+                grad.setColorAt(1.0, QColor("#6366f1"))
+                dot_color = QColor("#c084fc")
+            else:  # DOWNLOAD or default
+                grad.setColorAt(0.0, QColor("#0284c7"))
+                grad.setColorAt(1.0, QColor("#38bdf8"))
+                dot_color = QColor("#7dd3fc")
+
+            pen_prog = QPen(grad, 14, Qt.SolidLine, Qt.RoundCap)
+            painter.setPen(pen_prog)
+            painter.drawArc(rect, int(225 * 16), int(-frac * 270 * 16))
+
+            # Tip glowing dot
+            deg = 225.0 - (frac * 270.0)
+            rad = math.radians(deg)
+            dot_x = cx + r * math.cos(rad)
+            dot_y = cy - r * math.sin(rad)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(dot_color.red(), dot_color.green(), dot_color.blue(), 80))
+            painter.drawEllipse(QPointF(dot_x, dot_y), 11, 11)
+            painter.setBrush(dot_color)
+            painter.drawEllipse(QPointF(dot_x, dot_y), 5, 5)
+
+        # Center Phase Badge
+        painter.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        phase_fg = QColor("#38bdf8" if self.is_dark else "#0284c7")
+        painter.setPen(phase_fg)
+        painter.drawText(QRectF(cx - 100, cy - r + 30, 200, 22), Qt.AlignCenter, self._phase)
+
+        # Main numeric speed
+        painter.setFont(QFont("Segoe UI", 32, QFont.Bold))
+        main_fg = QColor("#f8fafc" if self.is_dark else "#1e242b")
+        painter.setPen(main_fg)
+        val_str = f"{self._value:.1f}" if self._value > 0 else "---"
+        painter.drawText(QRectF(cx - 110, cy - 25, 220, 48), Qt.AlignCenter, val_str)
+
+        # Unit
+        painter.setFont(QFont("Segoe UI", 12, QFont.DemiBold))
+        unit_fg = QColor("#94a3b8" if self.is_dark else "#64748b")
+        painter.setPen(unit_fg)
+        painter.drawText(QRectF(cx - 100, cy + 24, 200, 20), Qt.AlignCenter, self._unit)
+
+        # Sub-text (peak or average)
+        painter.setFont(QFont("Segoe UI", 10, QFont.Normal))
+        painter.setPen(unit_fg)
+        painter.drawText(QRectF(cx - 130, cy + 48, 260, 20), Qt.AlignCenter, self._sub_text)
+        painter.end()
+
+
+class SpeedTestWorker(QThread):
+    """
+    High-performance internet speed test worker measuring:
+    1. Public IP, ISP, and Cloudflare edge location
+    2. Latency (Ping) and Jitter
+    3. Multi-sample Download Speed (Mbps)
+    4. Multi-sample Upload Speed (Mbps)
+    5. Real-world Quality of Experience (QoE) metrics
+    """
+    phase_changed = pyqtSignal(str)
+    meta_received = pyqtSignal(dict)
+    ping_sample = pyqtSignal(float, float)
+    sample = pyqtSignal(str, float, float, int)   # phase, current_mbps, peak_mbps, progress_pct
+    download_finished = pyqtSignal(float, float)  # avg_mbps, peak_mbps
+    upload_finished = pyqtSignal(float, float)    # avg_mbps, peak_mbps
+    finished = pyqtSignal(dict)                   # summary
+    error_occurred = pyqtSignal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._cancelled = False
+
+    def cancel(self):
+        self._cancelled = True
+
+    def run(self):
+        try:
+            # 1. Meta / ISP Identification
+            self.phase_changed.emit("meta")
+            meta = {
+                "ip": "N/D",
+                "isp": "Identificando...",
+                "city": "N/D",
+                "country": "N/D",
+                "server": "Cloudflare Edge",
+            }
+            try:
+                req_meta = urllib.request.Request("https://speed.cloudflare.com/meta", headers=SPEED_HEADERS)
+                with urllib.request.urlopen(req_meta, timeout=3.5) as resp:
+                    m = json.loads(resp.read().decode())
+                    colo = m.get("colo", {})
+                    meta = {
+                        "ip": m.get("clientIp", "N/D"),
+                        "isp": m.get("asOrganization", "N/D"),
+                        "city": m.get("city", "N/D"),
+                        "country": m.get("country", "N/D"),
+                        "server": f"{colo.get('city', 'Cloudflare Edge')} ({colo.get('iata', 'Edge')})",
+                    }
+            except Exception:
+                try:
+                    req_ip = urllib.request.Request(
+                        "http://ip-api.com/json/?fields=status,query,country,city,isp,as",
+                        headers=SPEED_HEADERS
+                    )
+                    with urllib.request.urlopen(req_ip, timeout=3.0) as resp:
+                        m2 = json.loads(resp.read().decode())
+                        if m2.get("status") == "success":
+                            meta["ip"] = m2.get("query", "N/D")
+                            meta["isp"] = m2.get("isp", m2.get("as", "N/D"))
+                            meta["city"] = m2.get("city", "N/D")
+                            meta["country"] = m2.get("country", "N/D")
+                            meta["server"] = f"{meta['city']}, {meta['country']}"
+                except Exception:
+                    pass
+
+            self.meta_received.emit(meta)
+            if self._cancelled:
+                return
+
+            # 2. Latency & Jitter
+            self.phase_changed.emit("ping")
+            rtts = []
+            for i in range(8):
+                if self._cancelled:
+                    return
+                t_p = time.time()
+                try:
+                    req_p = urllib.request.Request("https://speed.cloudflare.com/__down?bytes=0", headers=SPEED_HEADERS)
+                    with urllib.request.urlopen(req_p, timeout=2.5) as resp:
+                        resp.read()
+                    rtt = (time.time() - t_p) * 1000.0
+                    rtts.append(rtt)
+                    cur_jitter = (
+                        statistics.mean([abs(rtts[j] - rtts[j-1]) for j in range(1, len(rtts))])
+                        if len(rtts) > 1 else 0.0
+                    )
+                    self.ping_sample.emit(rtt, cur_jitter)
+                except Exception:
+                    pass
+                time.sleep(0.04)
+
+            ping_avg = statistics.median(rtts) if rtts else 999.0
+            jitter_avg = (
+                statistics.mean([abs(rtts[j] - rtts[j-1]) for j in range(1, len(rtts))])
+                if len(rtts) > 1 else 0.0
+            )
+
+            if self._cancelled:
+                return
+
+            # 3. Download Speed Test (~4.0 seconds)
+            self.phase_changed.emit("download")
+            t_down_start = time.time()
+            total_down_bytes = 0
+            down_samples = []
+            target_down_dur = 4.0
+
+            url_down = "https://speed.cloudflare.com/__down?bytes=25000000"
+            while (time.time() - t_down_start) < target_down_dur and not self._cancelled:
+                try:
+                    req_d = urllib.request.Request(url_down, headers=SPEED_HEADERS)
+                    with urllib.request.urlopen(req_d, timeout=5.0) as resp:
+                        last_t = time.time()
+                        last_b = total_down_bytes
+                        while not self._cancelled:
+                            chunk = resp.read(65536)
+                            if not chunk:
+                                break
+                            total_down_bytes += len(chunk)
+                            now = time.time()
+                            if (now - last_t) >= 0.12:
+                                dt = now - last_t
+                                db = total_down_bytes - last_b
+                                cur_mbps = (db * 8) / (dt * 1_000_000)
+                                down_samples.append(cur_mbps)
+                                peak_mbps = max(down_samples) if down_samples else cur_mbps
+                                elapsed = now - t_down_start
+                                pct = min(98, int((elapsed / target_down_dur) * 100))
+                                self.sample.emit("download", cur_mbps, peak_mbps, pct)
+                                last_t = now
+                                last_b = total_down_bytes
+                            if (now - t_down_start) >= target_down_dur:
+                                break
+                except Exception:
+                    break
+
+            down_duration = max(0.2, time.time() - t_down_start)
+            final_down_mbps = (total_down_bytes * 8) / (down_duration * 1_000_000)
+            final_down_peak = max(down_samples) if down_samples else final_down_mbps
+            self.download_finished.emit(final_down_mbps, final_down_peak)
+
+            if self._cancelled:
+                return
+
+            # 4. Upload Speed Test (~3.5 seconds)
+            self.phase_changed.emit("upload")
+            t_up_start = time.time()
+            total_up_bytes = 0
+            up_samples = []
+            target_up_dur = 3.5
+
+            payload_512k = b"0" * (1024 * 512)
+            payload_1m = b"0" * (1024 * 1024)
+
+            while (time.time() - t_up_start) < target_up_dur and not self._cancelled:
+                payload = payload_1m if (time.time() - t_up_start) > 1.0 else payload_512k
+                t_chunk = time.time()
+                try:
+                    req_u = urllib.request.Request(
+                        "https://speed.cloudflare.com/__up",
+                        data=payload,
+                        headers=SPEED_HEADERS,
+                        method="POST",
+                    )
+                    with urllib.request.urlopen(req_u, timeout=4.0) as resp:
+                        resp.read()
+                    dur_chunk = max(0.001, time.time() - t_chunk)
+                    total_up_bytes += len(payload)
+                    cur_mbps = (len(payload) * 8) / (dur_chunk * 1_000_000)
+                    up_samples.append(cur_mbps)
+                    peak_up_mbps = max(up_samples) if up_samples else cur_mbps
+                    elapsed = time.time() - t_up_start
+                    pct = min(98, int((elapsed / target_up_dur) * 100))
+                    self.sample.emit("upload", cur_mbps, peak_up_mbps, pct)
+                except Exception:
+                    break
+
+            up_duration = max(0.2, time.time() - t_up_start)
+            final_up_mbps = (total_up_bytes * 8) / (up_duration * 1_000_000)
+            final_up_peak = max(up_samples) if up_samples else final_up_mbps
+            self.upload_finished.emit(final_up_mbps, final_up_peak)
+
+            if self._cancelled:
+                return
+
+            # 5. QoE & Summary Formulation
+            qoe = calculate_qoe(ping_avg, jitter_avg, final_down_mbps, final_up_mbps)
+            summary = {
+                "meta": meta,
+                "ping": ping_avg,
+                "jitter": jitter_avg,
+                "download": final_down_mbps,
+                "download_peak": final_down_peak,
+                "upload": final_up_mbps,
+                "upload_peak": final_up_peak,
+                "download_mb_s": final_down_mbps / 8.0,
+                "qoe": qoe,
+            }
+            self.phase_changed.emit("finished")
+            self.finished.emit(summary)
+
+        except Exception as e:
+            self.error_occurred.emit(str(e))
+
+
 class InternetQualityDialog(QDialog):
     """
-    Modern modal dialog for evaluating Internet Health, Gateway, Local DNS,
-    and Global Public DNS benchmarks with live metrics and recommendations.
+    Modern modal dialog featuring:
+    - Tab 0: High-performance Internet Speed Test with animated speedometer gauge,
+             Ping, Jitter, Download/Upload bandwidth and QoE matrix.
+    - Tab 1: Comprehensive DNS Benchmark evaluating local router/DHCP and 30+ public DNS
+             resolvers with ICMP and UDP 53 latency and custom server manager.
     Dynamically styled for both Dark Mode and Light Mode with high-contrast UI/UX.
     """
     def __init__(self, parent=None, gateway_ip: str = "", is_dark: Optional[bool] = None):
         super().__init__(parent)
         self.gateway_ip = gateway_ip.strip()
         self.worker = None
+        self.speed_worker = None
         self.results_list = []
         self.dns_targets = load_dns_targets()
+        self.speed_summary = {}
+        self.speed_meta = {}
 
         if is_dark is None:
             self.is_dark = getattr(parent, "is_dark_mode", False)
@@ -845,25 +1294,23 @@ class InternetQualityDialog(QDialog):
             self.is_dark = is_dark
 
         self.setWindowTitle(tr("net_test_title"))
-        # Permitir maximizar, restaurar e fechar com botões nativos no título da janela
         self.setWindowFlags(self.windowFlags() | Qt.WindowMinMaxButtonsHint | Qt.WindowCloseButtonHint)
 
-        # Geometria padrão ao desmaximizar (auto-ajustada proporcionalmente à resolução)
         screen = QApplication.primaryScreen()
         if screen:
             geo = screen.availableGeometry()
-            w = max(880, min(1360, int(geo.width() * 0.88)))
-            h = max(640, min(860, int(geo.height() * 0.86)))
+            w = max(920, min(1400, int(geo.width() * 0.90)))
+            h = max(680, min(900, int(geo.height() * 0.88)))
             x = geo.x() + (geo.width() - w) // 2
             y = geo.y() + (geo.height() - h) // 2
             self.setGeometry(x, y, w, h)
         else:
-            self.resize(960, 680)
+            self.resize(1000, 720)
 
         self.init_palette_and_styles()
         self.init_ui()
         self.showMaximized()
-        self.start_test()
+        self.start_speed_test()
 
     def init_palette_and_styles(self):
         """Sets up high-contrast design tokens matching the active theme."""
@@ -879,6 +1326,7 @@ class InternetQualityDialog(QDialog):
             self.c_header_bg = "#1e293b"
             self.c_header_text = "#cbd5e1"
             self.c_accent = "#38bdf8"       # Sky Blue
+            self.c_accent_dark = "#0284c7"
             self.c_rec_bg = "#162032"
             self.c_rec_border = "#38bdf8"
             self.c_rec_text = "#f1f5f9"
@@ -894,14 +1342,15 @@ class InternetQualityDialog(QDialog):
             self.c_header_bg = "#d2d2d2"
             self.c_header_text = "#1e242b"
             self.c_accent = "#164e78"
+            self.c_accent_dark = "#0d3553"
             self.c_rec_bg = "#d0dfed"
             self.c_rec_border = "#2b6595"
             self.c_rec_text = "#164e78"
 
     def init_ui(self):
         vbox = QVBoxLayout(self)
-        vbox.setContentsMargins(18, 16, 18, 16)
-        vbox.setSpacing(12)
+        vbox.setContentsMargins(18, 14, 18, 14)
+        vbox.setSpacing(10)
 
         self.setStyleSheet(f"""
             QDialog {{
@@ -910,7 +1359,7 @@ class InternetQualityDialog(QDialog):
             }}
         """)
 
-        # 1. Header card
+        # 1. Dialog Header Card
         self.hdr = QFrame()
         self.hdr.setObjectName("netTestHdr")
         self.hdr.setStyleSheet(f"""
@@ -918,22 +1367,22 @@ class InternetQualityDialog(QDialog):
                 background-color: {self.c_card_bg};
                 border: 1px solid {self.c_border};
                 border-radius: 8px;
-                padding: 10px;
+                padding: 6px;
             }}
         """)
         h_layout = QHBoxLayout(self.hdr)
-        h_layout.setContentsMargins(8, 6, 8, 6)
+        h_layout.setContentsMargins(10, 6, 10, 6)
         h_layout.setSpacing(14)
 
         lbl_icon = QLabel("🌐")
-        lbl_icon.setStyleSheet("font-size: 34px;")
+        lbl_icon.setStyleSheet("font-size: 32px;")
         h_layout.addWidget(lbl_icon)
 
         info_box = QVBoxLayout()
-        info_box.setSpacing(3)
+        info_box.setSpacing(2)
         lbl_title = QLabel(tr("net_test_title"))
         lbl_title.setStyleSheet(f"font-weight: bold; font-size: 15px; color: {self.c_accent};")
-        lbl_sub = QLabel(tr("net_test_sub"))
+        lbl_sub = QLabel("Medição de velocidade em tempo real (Cloudflare Edge) e diagnóstico comparativo de servidores DNS.")
         lbl_sub.setStyleSheet(f"font-size: 12px; color: {self.c_text_sub};")
         info_box.addWidget(lbl_title)
         info_box.addWidget(lbl_sub)
@@ -941,14 +1390,326 @@ class InternetQualityDialog(QDialog):
 
         vbox.addWidget(self.hdr)
 
-        # 2. KPI Badges Summary Row (4 spacious cards)
+        # 2. Main Tab Widget
+        self.tabs = QTabWidget()
+        tab_bar_style = f"""
+            QTabWidget::pane {{
+                border: 1px solid {self.c_border};
+                border-radius: 8px;
+                background-color: {self.c_bg};
+                padding: 4px;
+            }}
+            QTabBar::tab {{
+                background-color: {self.c_card_bg};
+                color: {self.c_text_sub};
+                border: 1px solid {self.c_border};
+                border-bottom: none;
+                border-top-left-radius: 6px;
+                border-top-right-radius: 6px;
+                padding: 8px 18px;
+                font-size: 13px;
+                font-weight: bold;
+                margin-right: 4px;
+            }}
+            QTabBar::tab:selected {{
+                background-color: {self.c_accent if self.is_dark else self.c_card_hover};
+                color: {"#ffffff" if self.is_dark else self.c_accent};
+                border-color: {self.c_accent};
+                border-bottom: 2px solid {self.c_accent};
+            }}
+            QTabBar::tab:hover:!selected {{
+                background-color: {self.c_card_hover};
+                color: {self.c_text_main};
+            }}
+        """
+        self.tabs.setStyleSheet(tab_bar_style)
+
+        # Tab 0: Speed Test
+        self.tab_speed = self._create_speed_test_tab()
+        self.tabs.addTab(self.tab_speed, tr("tab_speed_test"))
+
+        # Tab 1: DNS Benchmark
+        self.tab_dns = self._create_dns_benchmark_tab()
+        self.tabs.addTab(self.tab_dns, tr("tab_dns_benchmark"))
+
+        self.tabs.currentChanged.connect(self.on_tab_changed)
+        vbox.addWidget(self.tabs, 1)
+
+        # 3. Dialog Bottom Bar
+        btn_box = QHBoxLayout()
+        btn_box.setSpacing(10)
+
+        self.btn_copy = QPushButton(tr("btn_copy_report"))
+        self.btn_copy.setFixedHeight(34)
+        self.btn_copy.setCursor(Qt.PointingHandCursor)
+        self.btn_copy.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {self.c_card_bg};
+                color: {self.c_text_main};
+                border: 1px solid {self.c_border};
+                border-radius: 6px;
+                padding: 4px 16px;
+                font-size: 12px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {self.c_card_hover};
+                border-color: {self.c_accent};
+            }}
+        """)
+        self.btn_copy.clicked.connect(self.copy_report)
+        btn_box.addWidget(self.btn_copy)
+
+        btn_box.addStretch()
+
+        btn_close = QPushButton(tr("btn_close"))
+        btn_close.setFixedHeight(34)
+        btn_close.setFixedWidth(100)
+        btn_close.setCursor(Qt.PointingHandCursor)
+        btn_close.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {self.c_card_bg};
+                color: {self.c_text_main};
+                border: 1px solid {self.c_border};
+                border-radius: 6px;
+                padding: 4px 16px;
+                font-size: 12px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {self.c_card_hover};
+            }}
+        """)
+        btn_close.clicked.connect(self.accept)
+        btn_box.addWidget(btn_close)
+
+        vbox.addLayout(btn_box)
+
+    def _create_speed_test_tab(self) -> QWidget:
+        widget = QWidget()
+        vbox = QVBoxLayout(widget)
+        vbox.setContentsMargins(12, 10, 12, 10)
+        vbox.setSpacing(10)
+
+        # Top Metadata Card (Public IP, ISP, Server PoP)
+        self.card_speed_meta = QFrame()
+        self.card_speed_meta.setStyleSheet(f"""
+            QFrame {{
+                background-color: {self.c_card_bg};
+                border: 1px solid {self.c_border};
+                border-radius: 6px;
+                padding: 4px;
+            }}
+        """)
+        meta_layout = QHBoxLayout(self.card_speed_meta)
+        meta_layout.setContentsMargins(12, 6, 12, 6)
+        meta_layout.setSpacing(16)
+
+        self.lbl_speed_wan = QLabel("🌐 IP: Identificando...")
+        self.lbl_speed_wan.setStyleSheet(f"font-size: 12px; font-weight: bold; color: {self.c_text_main};")
+        self.lbl_speed_isp = QLabel("🏢 Provedor: Identificando...")
+        self.lbl_speed_isp.setStyleSheet(f"font-size: 12px; font-weight: bold; color: {self.c_accent};")
+        self.lbl_speed_server = QLabel("📍 Servidor: Cloudflare Edge")
+        self.lbl_speed_server.setStyleSheet(f"font-size: 12px; font-weight: 500; color: {self.c_text_sub};")
+
+        meta_layout.addWidget(self.lbl_speed_wan)
+        meta_layout.addWidget(self.lbl_speed_isp, 1)
+        meta_layout.addWidget(self.lbl_speed_server)
+        vbox.addWidget(self.card_speed_meta)
+
+        # Center Main Area: Speedometer (Left) + 4 Large KPI Cards (Right)
+        mid_layout = QHBoxLayout()
+        mid_layout.setSpacing(14)
+
+        # Speedometer Gauge
+        self.speedometer = SpeedometerWidget(self, is_dark=self.is_dark)
+        mid_layout.addWidget(self.speedometer, 1)
+
+        # KPI Cards (2x2 Grid)
+        kpi_grid = QGridLayout()
+        kpi_grid.setSpacing(10)
+
+        self.card_speed_ping = self._create_kpi_card(
+            tr("speed_kpi_ping"), "--- ms", "#a855f7" if self.is_dark else "#7e22ce", sub_val="Jitter: --- ms"
+        )
+        self.card_speed_down = self._create_kpi_card(
+            tr("speed_kpi_download"), "--- Mbps", "#38bdf8" if self.is_dark else "#0284c7", sub_val="Pico: --- Mbps"
+        )
+        self.card_speed_up = self._create_kpi_card(
+            tr("speed_kpi_upload"), "--- Mbps", "#10b981" if self.is_dark else "#16a34a", sub_val="Pico: --- Mbps"
+        )
+        self.card_speed_transfer = self._create_kpi_card(
+            tr("speed_qoe_transfer"), "--- MB/s", "#f59e0b" if self.is_dark else "#d97706", sub_val="1 GB em ---"
+        )
+
+        kpi_grid.addWidget(self.card_speed_ping, 0, 0)
+        kpi_grid.addWidget(self.card_speed_down, 0, 1)
+        kpi_grid.addWidget(self.card_speed_up, 1, 0)
+        kpi_grid.addWidget(self.card_speed_transfer, 1, 1)
+
+        mid_layout.addLayout(kpi_grid, 1)
+        vbox.addLayout(mid_layout)
+
+        # QoE Matrix Card (Real-World Experience Assessment)
+        self.card_speed_qoe = QFrame()
+        self.card_speed_qoe.setStyleSheet(f"""
+            QFrame {{
+                background-color: {self.c_card_bg};
+                border: 1px solid {self.c_border};
+                border-radius: 8px;
+                padding: 6px;
+            }}
+        """)
+        qoe_box = QVBoxLayout(self.card_speed_qoe)
+        qoe_box.setContentsMargins(12, 8, 12, 8)
+        qoe_box.setSpacing(8)
+
+        lbl_qoe_title = QLabel(f"⭐ {tr('speed_qoe_title')}")
+        lbl_qoe_title.setStyleSheet(f"font-size: 12px; font-weight: bold; color: {self.c_accent};")
+        qoe_box.addWidget(lbl_qoe_title)
+
+        qoe_grid = QGridLayout()
+        qoe_grid.setSpacing(10)
+
+        def _build_qoe_panel(icon: str, title: str):
+            p = QFrame()
+            p.setStyleSheet(f"""
+                QFrame {{
+                    background-color: {self.c_bg};
+                    border: 1px solid {self.c_border};
+                    border-radius: 6px;
+                    padding: 4px;
+                }}
+            """)
+            b = QVBoxLayout(p)
+            b.setContentsMargins(8, 6, 8, 6)
+            b.setSpacing(2)
+            lt = QLabel(f"{icon}  {title}")
+            lt.setStyleSheet(f"font-size: 11px; font-weight: bold; color: {self.c_text_sub};")
+            ls = QLabel("Aguardando teste...")
+            ls.setStyleSheet(f"font-size: 12px; font-weight: bold; color: {self.c_text_main};")
+            ls.setObjectName("qoe_score")
+            ld = QLabel("As métricas serão avaliadas ao final do Speed Test.")
+            ld.setStyleSheet(f"font-size: 10px; color: {self.c_text_sub};")
+            ld.setWordWrap(True)
+            ld.setObjectName("qoe_desc")
+            b.addWidget(lt)
+            b.addWidget(ls)
+            b.addWidget(ld)
+            return p
+
+        self.panel_qoe_stream = _build_qoe_panel("🎬", tr("speed_qoe_streaming"))
+        self.panel_qoe_game = _build_qoe_panel("🎮", tr("speed_qoe_gaming"))
+        self.panel_qoe_calls = _build_qoe_panel("📞", tr("speed_qoe_calls"))
+        self.panel_qoe_trans = _build_qoe_panel("📁", tr("speed_qoe_transfer"))
+
+        qoe_grid.addWidget(self.panel_qoe_stream, 0, 0)
+        qoe_grid.addWidget(self.panel_qoe_game, 0, 1)
+        qoe_grid.addWidget(self.panel_qoe_calls, 1, 0)
+        qoe_grid.addWidget(self.panel_qoe_trans, 1, 1)
+
+        qoe_box.addLayout(qoe_grid)
+        vbox.addWidget(self.card_speed_qoe)
+
+        # Progress and Action Controls
+        ctrl_box = QHBoxLayout()
+        ctrl_box.setSpacing(12)
+
+        prog_layout = QVBoxLayout()
+        prog_layout.setSpacing(3)
+        self.lbl_speed_status = QLabel("Pronto para iniciar o teste de velocidade.")
+        self.lbl_speed_status.setStyleSheet(f"font-size: 12px; font-weight: 500; color: {self.c_text_sub};")
+        prog_layout.addWidget(self.lbl_speed_status)
+
+        self.speed_prog_bar = QProgressBar()
+        self.speed_prog_bar.setFixedHeight(8)
+        self.speed_prog_bar.setTextVisible(False)
+        self.speed_prog_bar.setRange(0, 100)
+        self.speed_prog_bar.setValue(0)
+        self.speed_prog_bar.setStyleSheet(f"""
+            QProgressBar {{
+                background-color: {self.c_card_bg};
+                border: 1px solid {self.c_border};
+                border-radius: 4px;
+            }}
+            QProgressBar::chunk {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0284c7, stop:1 #38bdf8);
+                border-radius: 3px;
+            }}
+        """)
+        prog_layout.addWidget(self.speed_prog_bar)
+        ctrl_box.addLayout(prog_layout, 1)
+
+        self.btn_speed_toggle = QPushButton(tr("btn_cancel_speed"))
+        self.btn_speed_toggle.setFixedHeight(36)
+        self.btn_speed_toggle.setFixedWidth(180)
+        self.btn_speed_toggle.setCursor(Qt.PointingHandCursor)
+        self._update_speed_btn_style(is_running=True)
+        self.btn_speed_toggle.clicked.connect(self.toggle_speed_test)
+        ctrl_box.addWidget(self.btn_speed_toggle)
+
+        vbox.addLayout(ctrl_box)
+        return widget
+
+    def _update_speed_btn_style(self, is_running: bool):
+        if is_running:
+            self.btn_speed_toggle.setText(tr("btn_cancel_speed"))
+            self.btn_speed_toggle.setStyleSheet("""
+                QPushButton {
+                    background: #dc2626;
+                    color: #ffffff;
+                    border: none;
+                    border-radius: 6px;
+                    font-size: 12px;
+                    font-weight: bold;
+                    padding: 6px 14px;
+                }
+                QPushButton:hover {
+                    background: #ef4444;
+                }
+            """)
+        else:
+            self.btn_speed_toggle.setText(tr("btn_start_speed"))
+            btn_bg = (
+                "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0284c7, stop:1 #38bdf8)"
+                if self.is_dark else
+                "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #164e78, stop:1 #2b6595)"
+            )
+            self.btn_speed_toggle.setStyleSheet(f"""
+                QPushButton {{
+                    background: {btn_bg};
+                    color: #ffffff;
+                    border: none;
+                    border-radius: 6px;
+                    font-size: 12px;
+                    font-weight: bold;
+                    padding: 6px 14px;
+                }}
+                QPushButton:hover {{
+                    opacity: 0.9;
+                }}
+            """)
+
+    def _create_dns_benchmark_tab(self) -> QWidget:
+        widget = QWidget()
+        vbox = QVBoxLayout(widget)
+        vbox.setContentsMargins(12, 10, 12, 10)
+        vbox.setSpacing(10)
+
+        # 1. KPI Badges Summary Row (4 spacious cards)
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(10)
 
-        self.card_wan = self._create_kpi_card(tr("card_wan"), "Identificando...", "#0284c7" if not self.is_dark else "#38bdf8")
+        self.card_wan = self._create_kpi_card(
+            tr("card_wan"), "Identificando...", "#0284c7" if not self.is_dark else "#38bdf8"
+        )
         self.card_gw = self._create_kpi_card(tr("card_gw"), self.gateway_ip or "Testando...", "#10b981")
-        self.card_dns = self._create_kpi_card(tr("card_dns"), "Testando...", "#9333ea" if not self.is_dark else "#c084fc")
-        self.card_fastest = self._create_kpi_card(tr("card_fastest"), "Aguardando...", "#d97706" if not self.is_dark else "#facc15")
+        self.card_dns = self._create_kpi_card(
+            tr("card_dns"), "Testando...", "#9333ea" if not self.is_dark else "#c084fc"
+        )
+        self.card_fastest = self._create_kpi_card(
+            tr("card_fastest"), "Aguardando...", "#d97706" if not self.is_dark else "#facc15"
+        )
 
         kpi_row.addWidget(self.card_wan)
         kpi_row.addWidget(self.card_gw)
@@ -956,11 +1717,11 @@ class InternetQualityDialog(QDialog):
         kpi_row.addWidget(self.card_fastest)
         vbox.addLayout(kpi_row)
 
-        # 3. Progress bar with status label
+        # 2. Progress bar with status label
         prog_box = QVBoxLayout()
-        prog_box.setSpacing(4)
+        prog_box.setSpacing(3)
 
-        self.lbl_status = QLabel("Iniciando diagnósticos de rede e consultas DNS...")
+        self.lbl_status = QLabel("Aguardando benchmark de servidores DNS...")
         self.lbl_status.setStyleSheet(f"font-size: 12px; font-weight: 500; color: {self.c_text_sub}; margin-left: 2px;")
         prog_box.addWidget(self.lbl_status)
 
@@ -983,7 +1744,7 @@ class InternetQualityDialog(QDialog):
         prog_box.addWidget(self.prog_bar)
         vbox.addLayout(prog_box)
 
-        # 4. Sorting and Controls Bar
+        # 3. Sorting and Controls Bar
         sort_bar = QHBoxLayout()
         sort_bar.setContentsMargins(2, 2, 2, 2)
         sort_bar.setSpacing(8)
@@ -1045,7 +1806,6 @@ class InternetQualityDialog(QDialog):
         sort_bar.addWidget(self.btn_sort_asc)
         sort_bar.addWidget(self.btn_sort_desc)
 
-        # Divisor e Botões de Gerenciamento da Lista DNS
         sort_bar.addSpacing(10)
         sep_dns_bar = QFrame()
         sep_dns_bar.setFrameShape(QFrame.VLine)
@@ -1103,9 +1863,29 @@ class InternetQualityDialog(QDialog):
 
         sort_bar.addStretch()
 
+        self.btn_restart = QPushButton(tr("btn_restart_test"))
+        self.btn_restart.setFixedHeight(28)
+        self.btn_restart.setCursor(Qt.PointingHandCursor)
+        self.btn_restart.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {self.c_accent if self.is_dark else self.c_accent_dark};
+                color: #ffffff;
+                border: none;
+                border-radius: 4px;
+                padding: 3px 14px;
+                font-size: 11px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                opacity: 0.9;
+            }}
+        """)
+        self.btn_restart.clicked.connect(self.start_test)
+        sort_bar.addWidget(self.btn_restart)
+
         vbox.addLayout(sort_bar)
 
-        # 5. Table Widget (High contrast, clearly bordered cells)
+        # 4. Table Widget
         self.table = QTableWidget()
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
@@ -1186,36 +1966,9 @@ class InternetQualityDialog(QDialog):
         rec_box.addWidget(self.lbl_recommendation, 1)
         vbox.addWidget(self.rec_card)
 
-        # 6. Bottom Action Buttons
-        btn_box = QHBoxLayout()
-        btn_box.setSpacing(10)
+        return widget
 
-        self.btn_restart = QPushButton(tr("btn_restart_test"))
-        self.btn_restart.setObjectName("btnStart")
-        self.btn_restart.setFixedHeight(34)
-        self.btn_restart.setFixedWidth(125)
-        self.btn_restart.setCursor(Qt.PointingHandCursor)
-        self.btn_restart.clicked.connect(self.start_test)
-        btn_box.addWidget(self.btn_restart)
-
-        self.btn_copy = QPushButton(tr("btn_copy_report"))
-        self.btn_copy.setFixedHeight(34)
-        self.btn_copy.setCursor(Qt.PointingHandCursor)
-        self.btn_copy.clicked.connect(self.copy_report)
-        btn_box.addWidget(self.btn_copy)
-
-        btn_box.addStretch()
-
-        btn_close = QPushButton(tr("btn_close"))
-        btn_close.setFixedHeight(34)
-        btn_close.setFixedWidth(100)
-        btn_close.setCursor(Qt.PointingHandCursor)
-        btn_close.clicked.connect(self.accept)
-        btn_box.addWidget(btn_close)
-
-        vbox.addLayout(btn_box)
-
-    def _create_kpi_card(self, title: str, default_val: str, accent_color: str) -> QFrame:
+    def _create_kpi_card(self, title: str, default_val: str, accent_color: str, sub_val: str = "") -> QFrame:
         card = QFrame()
         card.setStyleSheet(f"""
             QFrame {{
@@ -1228,7 +1981,7 @@ class InternetQualityDialog(QDialog):
         """)
         box = QVBoxLayout(card)
         box.setContentsMargins(10, 8, 10, 8)
-        box.setSpacing(3)
+        box.setSpacing(2)
 
         lbl_t = QLabel(title)
         lbl_t.setStyleSheet(f"font-size: 11px; color: {self.c_text_sub}; font-weight: 600;")
@@ -1238,15 +1991,173 @@ class InternetQualityDialog(QDialog):
 
         box.addWidget(lbl_t)
         box.addWidget(lbl_v)
+
+        if sub_val:
+            lbl_s = QLabel(sub_val)
+            lbl_s.setStyleSheet(f"font-size: 10px; color: {self.c_text_sub};")
+            lbl_s.setObjectName("sub")
+            box.addWidget(lbl_s)
+
         return card
 
-    def _set_kpi_val(self, card: QFrame, text: str, custom_color: str = ""):
+    def _set_kpi_val(self, card: QFrame, text: str, custom_color: str = "", sub_text: str = ""):
         lbl = card.findChild(QLabel, "val")
         if lbl:
             lbl.setText(text)
             if custom_color:
                 lbl.setStyleSheet(f"font-size: 13px; font-weight: bold; color: {custom_color};")
+        if sub_text:
+            lbl_sub = card.findChild(QLabel, "sub")
+            if lbl_sub:
+                lbl_sub.setText(sub_text)
 
+    # --------------------------------------------------------------------------
+    # SPEED TEST ENGINE SLOTS & METHODS
+    # --------------------------------------------------------------------------
+    def start_speed_test(self):
+        if self.speed_worker and self.speed_worker.isRunning():
+            self.speed_worker.cancel()
+            self.speed_worker.wait(1000)
+
+        self._update_speed_btn_style(is_running=True)
+        self.speedometer.reset()
+        self.speed_prog_bar.setValue(0)
+        self.lbl_speed_status.setText("Iniciando Speed Test...")
+
+        self.speed_worker = SpeedTestWorker(self)
+        self.speed_worker.phase_changed.connect(self.on_speed_phase_changed)
+        self.speed_worker.meta_received.connect(self.on_speed_meta)
+        self.speed_worker.ping_sample.connect(self.on_speed_ping_sample)
+        self.speed_worker.sample.connect(self.on_speed_sample)
+        self.speed_worker.download_finished.connect(self.on_speed_download_finished)
+        self.speed_worker.upload_finished.connect(self.on_speed_upload_finished)
+        self.speed_worker.finished.connect(self.on_speed_finished)
+        self.speed_worker.error_occurred.connect(self.on_speed_error)
+        self.speed_worker.start()
+
+    def cancel_speed_test(self):
+        if self.speed_worker and self.speed_worker.isRunning():
+            self.speed_worker.cancel()
+        self._update_speed_btn_style(is_running=False)
+        self.lbl_speed_status.setText("Speed Test cancelado pelo usuário.")
+        self.speedometer.set_phase("CANCELADO", unit="", sub_text="Teste interrompido")
+
+    def toggle_speed_test(self):
+        if self.speed_worker and self.speed_worker.isRunning():
+            self.cancel_speed_test()
+        else:
+            self.start_speed_test()
+
+    def on_speed_phase_changed(self, phase: str):
+        if phase == "meta":
+            self.speedometer.set_phase("METADADOS", unit="", sub_text="Identificando provedor...")
+            self.lbl_speed_status.setText("Identificando provedor e localização do servidor...")
+            self.speed_prog_bar.setValue(5)
+        elif phase == "ping":
+            self.speedometer.set_phase("LATÊNCIA", unit="ms", sub_text="Medindo ping...")
+            self.lbl_speed_status.setText("Medindo tempo de resposta e jitter da rota...")
+            self.speed_prog_bar.setValue(15)
+        elif phase == "download":
+            self.speedometer.set_phase("DOWNLOAD", unit="Mbps", sub_text="Testando download...")
+            self.lbl_speed_status.setText("Medindo taxa de transferência de download...")
+            self.speed_prog_bar.setValue(25)
+        elif phase == "upload":
+            self.speedometer.set_phase("UPLOAD", unit="Mbps", sub_text="Testando upload...")
+            self.lbl_speed_status.setText("Medindo taxa de transferência de upload...")
+            self.speed_prog_bar.setValue(65)
+        elif phase == "finished":
+            self.speedometer.set_phase("CONCLUÍDO", unit="Mbps", sub_text="Speed test finalizado")
+            self.speed_prog_bar.setValue(100)
+
+    def on_speed_meta(self, meta: dict):
+        self.speed_meta = meta
+        self.lbl_speed_wan.setText(f"🌐 IP: {meta.get('ip', 'N/D')}")
+        self.lbl_speed_isp.setText(f"🏢 Provedor: {meta.get('isp', 'N/D')}")
+        self.lbl_speed_server.setText(f"📍 Servidor: {meta.get('server', 'Cloudflare Edge')}")
+        # Sync with WAN card in Tab 1
+        self._set_kpi_val(self.card_wan, meta.get("ip", "N/D"), self.c_accent)
+
+    def on_speed_ping_sample(self, ping: float, jitter: float):
+        self.speedometer.set_value(ping, max_val=150.0, sub_text=f"Jitter: {jitter:.1f} ms")
+        self._set_kpi_val(self.card_speed_ping, f"{ping:.1f} ms", sub_text=f"Jitter: {jitter:.1f} ms")
+
+    def on_speed_sample(self, phase: str, cur_mbps: float, peak_mbps: float, progress_pct: int):
+        self.speedometer.set_value(cur_mbps, sub_text=f"Pico: {peak_mbps:.1f} Mbps")
+        if phase == "download":
+            pct = 25 + int(progress_pct * 0.38)
+            self.speed_prog_bar.setValue(min(64, pct))
+            self._set_kpi_val(
+                self.card_speed_down, f"{cur_mbps:.1f} Mbps", sub_text=f"Pico: {peak_mbps:.1f} Mbps"
+            )
+            real_mbs = cur_mbps / 8.0
+            self._set_kpi_val(self.card_speed_transfer, f"~{real_mbs:.1f} MB/s", sub_text="Medindo...")
+        else:
+            pct = 65 + int(progress_pct * 0.34)
+            self.speed_prog_bar.setValue(min(98, pct))
+            self._set_kpi_val(
+                self.card_speed_up, f"{cur_mbps:.1f} Mbps", sub_text=f"Pico: {peak_mbps:.1f} Mbps"
+            )
+
+    def on_speed_download_finished(self, avg_mbps: float, peak_mbps: float):
+        color = "#38bdf8" if self.is_dark else "#0284c7"
+        self._set_kpi_val(
+            self.card_speed_down, f"{avg_mbps:.1f} Mbps", custom_color=color, sub_text=f"Pico: {peak_mbps:.1f} Mbps"
+        )
+        real_mbs = avg_mbps / 8.0
+        sec_1gb = int(1024 / max(0.1, real_mbs))
+        self._set_kpi_val(self.card_speed_transfer, f"~{real_mbs:.1f} MB/s", sub_text=f"1 GB em ~{sec_1gb}s")
+
+    def on_speed_upload_finished(self, avg_mbps: float, peak_mbps: float):
+        color = "#10b981" if self.is_dark else "#16a34a"
+        self._set_kpi_val(
+            self.card_speed_up, f"{avg_mbps:.1f} Mbps", custom_color=color, sub_text=f"Pico: {peak_mbps:.1f} Mbps"
+        )
+
+    def on_speed_finished(self, summary: dict):
+        self.speed_summary = summary
+        self._update_speed_btn_style(is_running=False)
+        self.speed_prog_bar.setValue(100)
+        self.lbl_speed_status.setText(
+            f"Speed Test concluído: {summary['download']:.1f} Mbps download, {summary['upload']:.1f} Mbps upload, {summary['ping']:.1f} ms ping."
+        )
+
+        self.speedometer.set_phase("CONCLUÍDO", unit="Mbps", sub_text=f"Down {summary['download']:.1f} | Up {summary['upload']:.1f}")
+        self.speedometer.set_value(summary["download"])
+
+        # Update QoE Panels
+        qoe = summary.get("qoe", {})
+        stream_data = qoe.get("streaming", {})
+        game_data = qoe.get("gaming", {})
+        calls_data = qoe.get("calls", {})
+        trans_data = qoe.get("transfer", {})
+
+        def _update_qoe_panel(panel: QFrame, score: str, status: str, desc: str):
+            lbl_s = panel.findChild(QLabel, "qoe_score")
+            lbl_d = panel.findChild(QLabel, "qoe_desc")
+            if lbl_s:
+                lbl_s.setText(f"{score} {status}")
+            if lbl_d:
+                lbl_d.setText(desc)
+
+        _update_qoe_panel(self.panel_qoe_stream, stream_data.get("score", "⭐⭐⭐⭐"), stream_data.get("status", ""), stream_data.get("desc", ""))
+        _update_qoe_panel(self.panel_qoe_game, game_data.get("score", "⭐⭐⭐⭐"), game_data.get("status", ""), game_data.get("desc", ""))
+        _update_qoe_panel(self.panel_qoe_calls, calls_data.get("score", "⭐⭐⭐⭐"), calls_data.get("status", ""), calls_data.get("desc", ""))
+        _update_qoe_panel(self.panel_qoe_trans, trans_data.get("rate", "---"), "", trans_data.get("desc", ""))
+
+    def on_speed_error(self, err_msg: str):
+        self._update_speed_btn_style(is_running=False)
+        self.lbl_speed_status.setText(f"Erro durante medição de velocidade: {err_msg}")
+        self.speedometer.set_phase("ERRO", unit="", sub_text=err_msg[:30])
+
+    def on_tab_changed(self, index: int):
+        if index == 1:
+            # If switching to DNS tab and it hasn't run yet, auto-trigger DNS test
+            if not self.results_list and (self.worker is None or not self.worker.isRunning()):
+                self.start_test()
+
+    # --------------------------------------------------------------------------
+    # DNS BENCHMARK METHODS
+    # --------------------------------------------------------------------------
     def _update_sort_btn_styles(self):
         active_bg = "#0284c7" if not self.is_dark else "#0369a1"
         inactive_bg = self.c_card_bg
@@ -1350,10 +2261,11 @@ class InternetQualityDialog(QDialog):
             else:
                 self.dns_targets.append(new_item)
             save_dns_targets(self.dns_targets)
+            msg = f"Servidor '{new_item['provider']}' ({new_item['ip']}) salvo com sucesso!\n\nDeseja iniciar um novo benchmark de DNS agora?"
             ret = QMessageBox.question(
                 self,
                 "DNS Adicionado",
-                f"Servidor '{new_item['provider']}' ({new_item['ip']}) salvo com sucesso!\n\nDeseja iniciar um novo teste de benchmark agora?",
+                msg,
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.Yes
             )
@@ -1363,7 +2275,9 @@ class InternetQualityDialog(QDialog):
     def on_edit_dns(self):
         row = self.table.currentRow()
         if row < 0:
-            QMessageBox.information(self, tr("btn_edit_dns", "Editar"), tr("dns_select_edit", "Selecione um servidor DNS na tabela para editar."))
+            QMessageBox.information(
+                self, tr("btn_edit_dns", "Editar"), tr("dns_select_edit", "Selecione um servidor DNS na tabela para editar.")
+            )
             return
         item_ip = self.table.item(row, 1)
         if not item_ip:
@@ -1385,10 +2299,11 @@ class InternetQualityDialog(QDialog):
             else:
                 self.dns_targets.append(new_item)
             save_dns_targets(self.dns_targets)
+            msg = f"Servidor '{new_item['provider']}' ({new_item['ip']}) atualizado!\n\nDeseja reiniciar o benchmark agora?"
             ret = QMessageBox.question(
                 self,
                 "DNS",
-                f"Servidor '{new_item['provider']}' ({new_item['ip']}) OK!\n\nDeseja reiniciar o teste de benchmark agora?",
+                msg,
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.Yes
             )
@@ -1398,7 +2313,9 @@ class InternetQualityDialog(QDialog):
     def on_delete_dns(self):
         row = self.table.currentRow()
         if row < 0:
-            QMessageBox.information(self, tr("btn_delete_dns", "Remover"), tr("dns_select_del", "Selecione um servidor DNS na tabela para remover."))
+            QMessageBox.information(
+                self, tr("btn_delete_dns", "Remover"), tr("dns_select_del", "Selecione um servidor DNS na tabela para remover.")
+            )
             return
         item_name = self.table.item(row, 0)
         item_ip = self.table.item(row, 1)
@@ -1443,7 +2360,7 @@ class InternetQualityDialog(QDialog):
         self.btn_restart.setEnabled(False)
         self.btn_restart.setText("Testando...")
         self.lbl_status.setText("Disparando testes simultâneos de latência ICMP e queries DNS UDP 53...")
-        self.lbl_recommendation.setText("Aguardando finalização das medições para calcular o melhor provedor...")
+        self.lbl_recommendation.setText("Aguardando finalização das medições para formular a recomendação...")
 
         self.worker = InternetTestWorker(gateway_ip=self.gateway_ip, dns_targets=self.dns_targets)
         self.worker.progress.connect(self.on_progress)
@@ -1540,13 +2457,12 @@ class InternetQualityDialog(QDialog):
         item_loss.setFont(QFont("", -1, QFont.Bold))
         if loss > 0:
             item_loss.setForeground(QColor("#ef4444" if self.is_dark else "#dc2626"))
-            # Soft red tint on packet loss cell
             item_loss.setBackground(QColor(239, 68, 68, 30 if self.is_dark else 25))
         else:
             item_loss.setForeground(QColor("#10b981" if self.is_dark else "#16a34a"))
         self.table.setItem(row, 4, item_loss)
 
-        # 5. Rating badge (High contrast colored pill style)
+        # 5. Rating badge
         b_type = res.get("badge_type", "info")
         if b_type == "success":
             badge_fg = "#34d399" if self.is_dark else "#15803d"
@@ -1625,7 +2541,6 @@ class InternetQualityDialog(QDialog):
                 "#eab308" if self.is_dark else "#ca8a04"
             )
 
-            # Highlight champion row in table
             for r in range(self.table.rowCount()):
                 if self.table.item(r, 1) and self.table.item(r, 1).text() == fastest["ip"]:
                     item_dest = self.table.item(r, 6)
@@ -1660,46 +2575,87 @@ class InternetQualityDialog(QDialog):
                 "⚠️ Não foi possível resolver consultas DNS externas. Verifique sua conexão com o roteador ou firewall de rede."
             )
 
-        # Apply default sorting: DNS latency ascending (lowest latency on top)
         self.apply_sorting(col=3, order=Qt.AscendingOrder)
 
+    # --------------------------------------------------------------------------
+    # UNIFIED EXECUTIVE REPORT COPY
+    # --------------------------------------------------------------------------
     def copy_report(self):
-        if self.table.rowCount() == 0:
-            QMessageBox.information(self, tr("btn_net_test", "Aviso"), tr("dns_wait_test", "Aguarde a conclusão do teste antes de copiar o relatório."))
-            return
-
         lines = [
             "==================================================================",
-            "   IP SCAN IGT — RELATÓRIO DE QUALIDADE DA INTERNET & DNS",
+            "   IP SCAN IGT — RELATÓRIO DE QUALIDADE DA INTERNET & SPEED TEST",
             "==================================================================",
-            f"• Data/Hora:         {time.strftime('%d/%m/%Y %H:%M:%S')}",
-            f"• IP Público (WAN):  {self.card_wan.findChild(QLabel, 'val').text()}",
-            f"• Gateway Local:     {self.card_gw.findChild(QLabel, 'val').text()}",
-            f"• DNS da Placa:      {self.card_dns.findChild(QLabel, 'val').text()}",
-            f"• DNS Mais Rápido:   {self.card_fastest.findChild(QLabel, 'val').text()}",
+            f"• Data/Hora:             {time.strftime('%d/%m/%Y %H:%M:%S')}",
+        ]
+
+        # 1. Metadata
+        ip_val = self.speed_meta.get("ip") or self.card_wan.findChild(QLabel, "val").text()
+        isp_val = self.speed_meta.get("isp", "N/D")
+        server_val = self.speed_meta.get("server", "Cloudflare Edge")
+        lines.append(f"• IP Público (WAN):      {ip_val}")
+        lines.append(f"• Provedor / ISP:        {isp_val}")
+        lines.append(f"• Servidor / Local:      {server_val}")
+
+        # 2. Speed Test Section (if tested)
+        if self.speed_summary:
+            s = self.speed_summary
+            lines.extend([
+                "------------------------------------------------------------------",
+                "   [ MEDIÇÕES DE VELOCIDADE (SPEED TEST) ]",
+                "------------------------------------------------------------------",
+                f"• Latência (Ping):       {s.get('ping', 0):.1f} ms (Jitter: {s.get('jitter', 0):.1f} ms)",
+                f"• Velocidade Download:   {s.get('download', 0):.1f} Mbps (Pico: {s.get('download_peak', 0):.1f} Mbps)",
+                f"• Velocidade Upload:     {s.get('upload', 0):.1f} Mbps (Pico: {s.get('upload_peak', 0):.1f} Mbps)",
+                f"• Taxa Real de Arquivo:  ~{s.get('download_mb_s', 0):.1f} MB/s",
+            ])
+            qoe = s.get("qoe", {})
+            lines.extend([
+                "------------------------------------------------------------------",
+                "   [ EXPERIÊNCIA REAL DE CONEXÃO (QoE) ]",
+                "------------------------------------------------------------------",
+                f"• Streaming (4K UHD):    {qoe.get('streaming', {}).get('score', '')} {qoe.get('streaming', {}).get('status', '')}",
+                f"                         {qoe.get('streaming', {}).get('desc', '')}",
+                f"• Jogos Online (Gaming): {qoe.get('gaming', {}).get('score', '')} {qoe.get('gaming', {}).get('status', '')}",
+                f"                         {qoe.get('gaming', {}).get('desc', '')}",
+                f"• Videochamadas (HD):    {qoe.get('calls', {}).get('score', '')} {qoe.get('calls', {}).get('status', '')}",
+                f"                         {qoe.get('calls', {}).get('desc', '')}",
+                f"• Taxa de Transferência: {qoe.get('transfer', {}).get('desc', '')}",
+            ])
+
+        # 3. DNS Benchmark Section
+        lines.extend([
+            "------------------------------------------------------------------",
+            "   [ BENCHMARK DE SERVIDORES DNS ]",
+            "------------------------------------------------------------------",
+            f"• Gateway Local:         {self.card_gw.findChild(QLabel, 'val').text()}",
+            f"• DNS da Placa de Rede:  {self.card_dns.findChild(QLabel, 'val').text()}",
+            f"• DNS Mais Rápido:       {self.card_fastest.findChild(QLabel, 'val').text()}",
             "------------------------------------------------------------------",
             f"{'Alvo':<34} | {'IP':<15} | {'Ping Méd':<10} | {'DNS RTT':<10} | {'Perda':<6} | {'Classificação'}",
             "------------------------------------------------------------------",
-        ]
-        for r in range(self.table.rowCount()):
-            item_prov = self.table.item(r, 0)
-            item_ip = self.table.item(r, 1)
-            item_ping = self.table.item(r, 2)
-            item_dns = self.table.item(r, 3)
-            item_loss = self.table.item(r, 4)
-            item_rating = self.table.item(r, 5)
+        ])
 
-            prov_text = item_prov.text() if item_prov else ""
-            ip_text = item_ip.text() if item_ip else ""
-            ping_text = item_ping.text() if item_ping else tr("not_available", "N/D")
-            dns_text = item_dns.text() if item_dns else tr("not_available", "N/D")
-            loss_text = item_loss.text() if item_loss else "0%"
-            rating_text = item_rating.text() if item_rating else tr("not_available", "N/D")
+        if self.table.rowCount() > 0:
+            for r in range(self.table.rowCount()):
+                item_prov = self.table.item(r, 0)
+                item_ip = self.table.item(r, 1)
+                item_ping = self.table.item(r, 2)
+                item_dns = self.table.item(r, 3)
+                item_loss = self.table.item(r, 4)
+                item_rating = self.table.item(r, 5)
 
-            lines.append(f"{prov_text:<34} | {ip_text:<15} | {ping_text:<10} | {dns_text:<10} | {loss_text:>6} | {rating_text}")
+                prov_text = item_prov.text() if item_prov else ""
+                ip_text = item_ip.text() if item_ip else ""
+                ping_text = item_ping.text() if item_ping else tr("not_available", "N/D")
+                dns_text = item_dns.text() if item_dns else tr("not_available", "N/D")
+                loss_text = item_loss.text() if item_loss else "0%"
+                rating_text = item_rating.text() if item_rating else tr("not_available", "N/D")
 
-        lines.append("==================================================================")
-        lines.append(f"Recomendação: {self.lbl_recommendation.text()}")
+                lines.append(f"{prov_text:<34} | {ip_text:<15} | {ping_text:<10} | {dns_text:<10} | {loss_text:>6} | {rating_text}")
+
+            lines.append("------------------------------------------------------------------")
+            lines.append(f"Recomendação DNS: {self.lbl_recommendation.text()}")
+
         lines.append("==================================================================")
 
         report = "\n".join(lines)
@@ -1707,10 +2663,13 @@ class InternetQualityDialog(QDialog):
         QMessageBox.information(
             self,
             tr("dns_report_copied_title", "Relatório Copiado"),
-            tr("dns_report_copied_msg", "O relatório completo do teste de qualidade da internet foi copiado para a Área de Transferência!")
+            tr("dns_report_copied_msg", "O relatório completo de velocidade e DNS foi copiado para a Área de Transferência!")
         )
 
     def closeEvent(self, event):
+        if self.speed_worker and self.speed_worker.isRunning():
+            self.speed_worker.cancel()
+            self.speed_worker.wait(1000)
         if self.worker and self.worker.isRunning():
             self.worker.cancel()
             self.worker.wait(1000)

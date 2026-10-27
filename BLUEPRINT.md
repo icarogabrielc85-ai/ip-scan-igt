@@ -1,10 +1,10 @@
 # BLUEPRINT — IP SCAN IGT
-**Versão:** 2.9.2 (Edição Multiplataforma: Linux & Windows)  
+**Versão:** 2.10.0 (Edição Multiplataforma: Linux & Windows)  
 **Projeto:** IP Scan IGT  
 **Repositório GitHub:** [https://github.com/icarogabrielc85-ai/ip-scan-igt](https://github.com/icarogabrielc85-ai/ip-scan-igt)  
 **Diretório Local (PC):** `/home/icaro/linux-ipscan`  
 **Executável do Sistema (Linux):** `/home/icaro/.local/bin/ip-scan-igt`  
-**Pacote Debian (.deb):** `/home/icaro/Área de trabalho/ipscan-igt_2.9.2_amd64.deb`  
+**Pacote Debian (.deb):** `/home/icaro/Área de trabalho/ipscan-igt_2.10.0_amd64.deb`  
 **Atalho da Área de Trabalho:** `/home/icaro/Área de trabalho/ip-scan-igt.desktop`  
 **Atalho do Menu do Sistema:** `~/.local/share/applications/ip-scan-igt.desktop`  
 **Data da Última Atualização:** 27/10/2026  
@@ -20,11 +20,13 @@ Inspirado na usabilidade ágil e visual clássico do consagrado *Advanced IP Sca
   - Português do Brasil (`pt_BR`), Inglês (`en`), Espanhol (`es`), Italiano (`it`), Ucraniano (`uk`), Russo (`ru`), Chinês Simplificado (`zh_CN`), Polonês (`pl`) e Francês (`fr`).
   - Tradução integral de resultados de varredura, classificações de dispositivos, sub-recursos filhos, painel de propriedades, osciloscópio de ping e relatórios executivos.
   - Alternância instantânea de idioma em tempo real via menu ou barra superior sem necessidade de reiniciar o programa ou refazer a varredura.
-- **Auditoria de Internet & Benchmark de Servidores DNS Mundiais:**
-  - Diagnóstico em tempo real de latência WAN, perda de pacotes, status do Gateway e DNS local.
-  - Benchmark automatizado de provedores globais com classificação de qualidade em cores de alto contraste.
-  - **Gerenciador Customizado de DNS:** Adição, edição, exclusão e restauração com persistência multiplataforma em `~/.config/linux-ipscan/dns_targets.json` (Linux) ou `%APPDATA%\IPScanIGT\dns_targets.json` (Windows).
-  - Ordenação dinâmica (Crescente ▲ / Decrescente ▼) por milissegundos numéricos reais.
+- **Teste de Velocidade da Internet (Speed Test), Velocímetro Gráfico & Benchmark DNS:**
+  - Diagnóstico completo organizado em duas abas modernas: `[🚀 Teste de Velocidade]` e `[⚡ Benchmark de Servidores DNS]`.
+  - Medição em tempo real de latência (Ping), Jitter, velocidade de Download (Mbps), Upload (Mbps) e taxa prática de transferência (MB/s) via Cloudflare Edge.
+  - Velocímetro gráfico estilizado (`SpeedometerWidget`) com arco gradiente, ponteiro luminoso e auto-escala dinâmica até 1000 Mbps.
+  - Matriz de Experiência Real (QoE) para Streaming 4K/8K HDR, Jogos Online (gaming competitivo), Videochamadas HD e download prático de arquivos.
+  - Benchmark automatizado de provedores globais com classificação de qualidade em cores de alto contraste e gerenciador customizado de DNS.
+  - Relatório unificado copiável para a Área de Transferência.
 - **Abertura Inteligente Maximizada & Auto-Ajustável:**
   - Aplicação e diálogo de teste iniciam maximizados por padrão adaptados à resolução nativa do monitor.
   - Ao desmaximizar (restaurar), a janela centraliza suavemente em 90% da resolução da tela mantendo o controle ergonômico.
