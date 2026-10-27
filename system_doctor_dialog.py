@@ -495,18 +495,6 @@ class SystemDoctorDialog(QDialog):
         cmd_bg = "#020617" if self.is_dark else "#f1f5f9"
         self.txt_cmd.setStyleSheet(f"font-family: monospace; font-size: 11px; color: {self.c_accent}; background: {cmd_bg}; border: 1px solid {self.c_border}; border-radius: 4px; padding: 4px;")
         rec_layout.addWidget(self.txt_cmd)
-        rec_layout.setContentsMargins(8, 8, 8, 8)
-        rec_layout.setSpacing(6)
-
-        self.lbl_rec_title = QLabel("Comando para Instalação Automática dos Recursos Ausentes:")
-        self.lbl_rec_title.setStyleSheet("font-weight: 600; font-size: 12px; color: #e2e8f0;")
-        rec_layout.addWidget(self.lbl_rec_title)
-
-        self.txt_cmd = QTextEdit()
-        self.txt_cmd.setReadOnly(True)
-        self.txt_cmd.setFixedHeight(44)
-        self.txt_cmd.setStyleSheet("font-family: monospace; font-size: 11px; color: #38bdf8; background: #020617; border: 1px solid #1e293b; border-radius: 4px; padding: 4px;")
-        rec_layout.addWidget(self.txt_cmd)
 
         cmd_actions = QHBoxLayout()
         cmd_actions.setSpacing(8)

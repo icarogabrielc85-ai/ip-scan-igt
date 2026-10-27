@@ -731,6 +731,7 @@ class MainWindow(QMainWindow):
 
         self.init_menu_bar()
         self.init_ui()
+        self.select_network_interface(self.local_info)
         self.load_favorites()
         self.init_system_tray()
         self.sync_watchdog_state()
@@ -1000,7 +1001,7 @@ class MainWindow(QMainWindow):
 
         self.txt_start_ip = QLineEdit(self.local_info.get("start_ip", "192.168.1.1"))
         self.txt_start_ip.setObjectName("txtStartIp")
-        self.txt_start_ip.setFixedWidth(135)
+        self.txt_start_ip.setFixedWidth(148)
         self.txt_start_ip.setFixedHeight(30)
         self.txt_start_ip.setAlignment(Qt.AlignCenter)
         self.txt_start_ip.setToolTip("Endereço IP inicial da faixa de varredura")
@@ -1012,7 +1013,7 @@ class MainWindow(QMainWindow):
 
         self.txt_end_ip = QLineEdit(self.local_info.get("end_ip", "192.168.1.254"))
         self.txt_end_ip.setObjectName("txtEndIp")
-        self.txt_end_ip.setFixedWidth(135)
+        self.txt_end_ip.setFixedWidth(148)
         self.txt_end_ip.setFixedHeight(30)
         self.txt_end_ip.setAlignment(Qt.AlignCenter)
         self.txt_end_ip.setToolTip("Endereço IP final da faixa de varredura")
@@ -1023,15 +1024,17 @@ class MainWindow(QMainWindow):
         top_layout.addWidget(self.lbl_mask)
 
         self.combo_mask = QComboBox()
-        self.combo_mask.setMinimumWidth(195)
+        self.combo_mask.setMinimumWidth(205)
         self.combo_mask.setFixedHeight(30)
         self.combo_mask.setToolTip("Máscara de sub-rede / Prefixo CIDR da rede")
         self.populate_mask_combo()
         self.set_mask_cidr(self.local_info.get("cidr", 24))
         self.combo_mask.currentIndexChanged.connect(self.on_mask_changed)
+        self.combo_mask.activated.connect(self.on_mask_changed)
         top_layout.addWidget(self.combo_mask)
 
-        self.txt_start_ip.textChanged.connect(self.auto_detect_mask_from_inputs)
+        self.txt_start_ip.textChanged.connect(self.on_start_ip_text_changed)
+        self.txt_start_ip.editingFinished.connect(self.on_start_ip_editing_finished)
         self.txt_end_ip.textChanged.connect(self.auto_detect_mask_from_inputs)
 
         # Search filter
@@ -1480,20 +1483,20 @@ class MainWindow(QMainWindow):
         tree.header().sectionClicked.connect(lambda col, t=tree: self.on_tree_header_clicked(t, col))
         tree.itemChanged.connect(lambda it, col, t=tree: self.on_tree_item_changed(t, it, col))
 
-        tree.header().setSectionResizeMode(0, QHeaderView.Fixed)
-        tree.header().resizeSection(0, 54)
+        tree.header().setSectionResizeMode(0, QHeaderView.Interactive)
+        tree.header().resizeSection(0, 68)
         tree.header().setSectionResizeMode(1, QHeaderView.Interactive)
         tree.header().resizeSection(1, 215)
         tree.header().setSectionResizeMode(2, QHeaderView.Interactive)
         tree.header().resizeSection(2, 165)
         tree.header().setSectionResizeMode(3, QHeaderView.Interactive)
-        tree.header().resizeSection(3, 135)
+        tree.header().resizeSection(3, 138)
         tree.header().setSectionResizeMode(4, QHeaderView.Interactive)
         tree.header().resizeSection(4, 185)
         tree.header().setSectionResizeMode(5, QHeaderView.Interactive)
         tree.header().resizeSection(5, 145)
         tree.header().setSectionResizeMode(6, QHeaderView.Interactive)
-        tree.header().resizeSection(6, 82)
+        tree.header().resizeSection(6, 92)
         tree.header().setSectionResizeMode(7, QHeaderView.Stretch)
         return tree
 
@@ -1554,6 +1557,14 @@ class MainWindow(QMainWindow):
                 self.menu_security.setTitle(tr("menu_security", "Segurança"))
 
             self.act_nmap.setText(tr("nmap_scan"))
+            if hasattr(self, "act_guard"):
+                self.act_guard.setText(tr("menu_network_guard", "🛡️ Network Guard (Intrusos & ARP Spoofing)..."))
+            if hasattr(self, "act_watchdog_menu"):
+                self.act_watchdog_menu.setText(tr("menu_watchdog", "🛡️ Watchdog (Monitoramento Contínuo em 2º Plano)..."))
+            if hasattr(self, "act_snapshots"):
+                self.act_snapshots.setText(tr("menu_snapshots", "📸 Snapshots & Comparador de Mudanças (Diff)..."))
+            if hasattr(self, "act_traceroute"):
+                self.act_traceroute.setText(tr("menu_traceroute", "🧭 Traceroute Visual (Rota TTL)..."))
             self.act_rdp.setText(tr("connect_rdp"))
             self.act_ssh.setText(tr("connect_ssh"))
             self.act_wol.setText(tr("wake_on_lan"))
@@ -1606,6 +1617,12 @@ class MainWindow(QMainWindow):
 
         if hasattr(self, "btn_watchdog"):
             self.btn_watchdog.setText(tr("btn_watchdog", "🛡️ Watchdog"))
+        if hasattr(self, "btn_guard"):
+            self.btn_guard.setText(tr("btn_guard", "🚨 Guard"))
+        if hasattr(self, "btn_snapshots"):
+            self.btn_snapshots.setText(tr("btn_snapshots", "📸 Snapshots"))
+        if hasattr(self, "topology_widget"):
+            self.topology_widget.retranslate_ui()
 
         # Favorites Bar
         if hasattr(self, "btn_scan_fav"):
@@ -1637,12 +1654,14 @@ class MainWindow(QMainWindow):
         if hasattr(self, "tree") and hasattr(self, "records"):
             for rec in self.records.values():
                 rec.device_type, rec.os_family = classify_device(rec)
-                self.add_or_update_tree_node(self.tree, rec)
+                self.add_or_update_tree_node(self.tree, rec, update_topology=False)
+            if hasattr(self, "topology_widget"):
+                self.topology_widget.set_network_data(self.records, self.local_info)
 
         if hasattr(self, "fav_tree") and hasattr(self, "fav_records"):
             for rec in self.fav_records.values():
                 rec.device_type, rec.os_family = classify_device(rec)
-                self.add_or_update_tree_node(self.fav_tree, rec)
+                self.add_or_update_tree_node(self.fav_tree, rec, update_topology=False)
 
         # Retranslate Details Table & Oscilloscope title
         if hasattr(self, "details_table") and hasattr(self, "lbl_panel_title"):
@@ -1836,6 +1855,70 @@ class MainWindow(QMainWindow):
                 pass
         self.combo_mask.blockSignals(False)
 
+    def on_start_ip_text_changed(self, text: str = ""):
+        start_text = self.txt_start_ip.text().strip()
+        # Se o usuário colar ou digitar notação CIDR (ex: 192.168.10.0/24), aplica máscara e faixa
+        if "/" in start_text:
+            parts = start_text.split("/", 1)
+            if len(parts) == 2 and parts[0] and parts[1].isdigit():
+                prefix = int(parts[1])
+                if 8 <= prefix <= 30:
+                    try:
+                        net = ipaddress.IPv4Network(start_text, strict=False)
+                        first_host = str(net.network_address + 1) if net.num_addresses > 2 else str(net.network_address)
+                        last_host = str(net.broadcast_address - 1) if net.num_addresses > 2 else str(net.broadcast_address)
+                        self.txt_start_ip.blockSignals(True)
+                        self.txt_end_ip.blockSignals(True)
+                        self.txt_start_ip.setText(first_host)
+                        self.txt_end_ip.setText(last_host)
+                        self.txt_start_ip.blockSignals(False)
+                        self.txt_end_ip.blockSignals(False)
+                        self.set_mask_cidr(prefix)
+                        return
+                    except Exception:
+                        pass
+
+        # Se o IP inicial mudou para outra sub-rede diferente do IP final, sincroniza o IP final automaticamente
+        try:
+            ip1 = ipaddress.IPv4Address(start_text)
+            cidr = int(self.combo_mask.currentData() or 24)
+            net = ipaddress.IPv4Network(f"{start_text}/{cidr}", strict=False)
+            last_host = str(net.broadcast_address - 1) if net.num_addresses > 2 else str(net.broadcast_address)
+            end_text = self.txt_end_ip.text().strip()
+            update_end = False
+            try:
+                ip2 = ipaddress.IPv4Address(end_text)
+                if ip2 not in net or ip2 < ip1:
+                    update_end = True
+            except Exception:
+                update_end = True
+
+            if update_end:
+                self.txt_end_ip.blockSignals(True)
+                self.txt_end_ip.setText(last_host)
+                self.txt_end_ip.blockSignals(False)
+        except Exception:
+            pass
+
+        self.auto_detect_mask_from_inputs()
+
+    def on_start_ip_editing_finished(self):
+        start_text = self.txt_start_ip.text().strip()
+        try:
+            cidr = int(self.combo_mask.currentData() or 24)
+            net = ipaddress.IPv4Network(f"{start_text}/{cidr}", strict=False)
+            if net.num_addresses > 2 and start_text == str(net.network_address):
+                first_host = str(net.network_address + 1)
+                last_host = str(net.broadcast_address - 1)
+                self.txt_start_ip.blockSignals(True)
+                self.txt_end_ip.blockSignals(True)
+                self.txt_start_ip.setText(first_host)
+                self.txt_end_ip.setText(last_host)
+                self.txt_start_ip.blockSignals(False)
+                self.txt_end_ip.blockSignals(False)
+        except Exception:
+            pass
+
     def auto_detect_mask_from_inputs(self):
         start_text = self.txt_start_ip.text().strip()
         end_text = self.txt_end_ip.text().strip()
@@ -1874,7 +1957,10 @@ class MainWindow(QMainWindow):
 
         iface_name = iface_info.get("name", "eth0")
         ip_addr = iface_info.get("ip", "")
-        self.lbl_stats.setText(f"Placa selecionada: {iface_info.get('icon', '🖧')} {iface_name} ({ip_addr}/{cidr} • {netmask}) • Faixa: {start_ip} - {end_ip}")
+        if hasattr(self, "lbl_stats"):
+            self.lbl_stats.setText(f"Placa selecionada: {iface_info.get('icon', '🖧')} {iface_name} ({ip_addr}/{cidr} • {netmask}) • Faixa: {start_ip} - {end_ip}")
+        if hasattr(self, "topology_widget"):
+            self.topology_widget.set_network_data(self.records, self.local_info)
 
     def refresh_network_interfaces(self):
         new_info = get_local_network_info()
@@ -2097,7 +2183,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, "topology_widget"):
             self.topology_widget.set_network_data(self.records, self.local_info)
 
-    def add_or_update_tree_node(self, target_tree: QTreeWidget, rec: HostRecord):
+    def add_or_update_tree_node(self, target_tree: QTreeWidget, rec: HostRecord, update_topology: bool = True):
         correlate_host_vulnerabilities(rec)
         if not rec.alias:
             rec.alias = get_device_alias(rec.ip, rec.mac)
@@ -2212,7 +2298,7 @@ class MainWindow(QMainWindow):
         finally:
             self._updating_tree_node = False
 
-        if target_tree == self.tree and hasattr(self, "topology_widget") and (not self.scan_worker or not self.scan_worker.isRunning()):
+        if update_topology and target_tree == self.tree and hasattr(self, "topology_widget") and (not self.scan_worker or not self.scan_worker.isRunning()):
             self.topology_widget.set_network_data(self.records, self.local_info)
 
     def on_tree_item_changed(self, tree: QTreeWidget, item: QTreeWidgetItem, column: int):
@@ -3082,7 +3168,9 @@ class MainWindow(QMainWindow):
 
     def on_guard_updated(self):
         for rec in self.records.values():
-            self.add_or_update_tree_node(self.tree, rec)
+            self.add_or_update_tree_node(self.tree, rec, update_topology=False)
+        if hasattr(self, "topology_widget"):
+            self.topology_widget.set_network_data(self.records, self.local_info)
         self.update_status_stats()
 
     def open_snapshot_diff_dialog(self):

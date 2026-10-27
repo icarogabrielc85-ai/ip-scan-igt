@@ -27,11 +27,12 @@ from scanner_engine import get_all_network_interfaces
 class NetworkInterfaceDialog(QDialog):
     interface_selected = pyqtSignal(dict)
 
-    def __init__(self, parent=None, current_interface: str = ""):
+    def __init__(self, parent=None, current_interface: str = "", is_dark: Optional[bool] = None, **kwargs):
         super().__init__(parent)
         self.current_interface = current_interface
         self.interfaces: List[Dict] = []
         self.selected_info: Optional[Dict] = None
+        self._is_dark_override = is_dark
 
         self.setWindowTitle("Seleção de Placa de Rede & Sub-rede")
         self.resize(1020, 430)
@@ -43,7 +44,10 @@ class NetworkInterfaceDialog(QDialog):
         layout.setContentsMargins(14, 14, 14, 14)
         layout.setSpacing(10)
 
-        is_dark = getattr(self.parent(), "is_dark_mode", False) if self.parent() else False
+        if self._is_dark_override is not None:
+            is_dark = self._is_dark_override
+        else:
+            is_dark = getattr(self.parent(), "is_dark_mode", False) if self.parent() else False
         hdr_bg = "#162032" if is_dark else "#d2d2d2"
         hdr_border = "#243447" if is_dark else "#a8a8a8"
         title_col = "#f8fafc" if is_dark else "#1e242b"

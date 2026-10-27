@@ -3,6 +3,7 @@ from PyQt5.QtGui import (
     QBrush,
     QColor,
     QFont,
+    QFontMetrics,
     QLinearGradient,
     QPainter,
     QPainterPath,
@@ -498,6 +499,35 @@ QScrollBar::handle:horizontal:hover {
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
     width: 0px;
 }
+
+QSlider::groove:horizontal {
+    border: 1px solid #334155;
+    height: 6px;
+    background: #1e293b;
+    margin: 2px 0;
+    border-radius: 3px;
+}
+
+QSlider::sub-page:horizontal {
+    background: #0284c7;
+    border: 1px solid #0369a1;
+    height: 6px;
+    border-radius: 3px;
+}
+
+QSlider::handle:horizontal {
+    background: #38bdf8;
+    border: 1px solid #0284c7;
+    width: 14px;
+    height: 14px;
+    margin: -5px 0;
+    border-radius: 7px;
+}
+
+QSlider::handle:horizontal:hover {
+    background: #7dd3fc;
+    border-color: #38bdf8;
+}
 """
 
 LIGHT_STYLESHEET = """
@@ -989,6 +1019,35 @@ QScrollBar::handle:horizontal:hover {
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
     width: 0px;
 }
+
+QSlider::groove:horizontal {
+    border: 1px solid #a8a8a8;
+    height: 6px;
+    background: #cfcfcf;
+    margin: 2px 0;
+    border-radius: 3px;
+}
+
+QSlider::sub-page:horizontal {
+    background: #2b6595;
+    border: 1px solid #1d4f7a;
+    height: 6px;
+    border-radius: 3px;
+}
+
+QSlider::handle:horizontal {
+    background: #1d4f7a;
+    border: 1px solid #163d5e;
+    width: 14px;
+    height: 14px;
+    margin: -5px 0;
+    border-radius: 7px;
+}
+
+QSlider::handle:horizontal:hover {
+    background: #2b6595;
+    border-color: #1d4f7a;
+}
 """
 
 
@@ -1133,6 +1192,8 @@ class LivePingOscilloscope(QWidget):
         painter.drawText(12, 18, ip_header)
 
         accent_color = QColor(56, 189, 248) if self.is_dark else QColor(2, 132, 199)
+        fm = QFontMetrics(font)
+        avail_w = max(50, w - 24)
         if self.current_rtt >= 0:
             status_text = f"Agora: {self.current_rtt:.2f} ms   |   Mín: {self.min_rtt:.2f} ms  •  Méd: {self.avg_rtt:.2f} ms  •  Máx: {self.max_rtt:.2f} ms"
             if self.ttl > 0:
@@ -1140,10 +1201,10 @@ class LivePingOscilloscope(QWidget):
             if self.method:
                 status_text += f" ({self.method})"
             painter.setPen(accent_color)
-            painter.drawText(12, 34, status_text)
+            painter.drawText(12, 34, fm.elidedText(status_text, Qt.ElideRight, avail_w))
         else:
             painter.setPen(QColor(239, 68, 68) if self.is_dark else QColor(220, 38, 38))
-            painter.drawText(12, 34, "● Sem resposta no momento (Offline / Timeout)")
+            painter.drawText(12, 34, fm.elidedText("● Sem resposta no momento (Offline / Timeout)", Qt.ElideRight, avail_w))
 
         # Latency Waveform
         if not self.samples or w < 40 or h < 55:

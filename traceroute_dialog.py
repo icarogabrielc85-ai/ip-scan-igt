@@ -411,7 +411,7 @@ class TracerouteDialog(QDialog):
 
     def _redraw_visual_chain(self):
         self.scene.clear()
-        card_w = 155
+        card_w = 172
         card_h = 74
         gap_x = 48
         gap_y = 38

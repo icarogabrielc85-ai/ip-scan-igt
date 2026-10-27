@@ -16,6 +16,7 @@ from PyQt5.QtGui import (
     QBrush,
     QColor,
     QFont,
+    QFontMetrics,
     QImage,
     QPainter,
     QPainterPath,
@@ -34,6 +35,7 @@ from PyQt5.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
+    QSlider,
     QVBoxLayout,
     QWidget,
 )
@@ -146,18 +148,18 @@ class TopologyEdgeItem(QGraphicsItem):
 
         # Curva suave ou linha direta
         path = QPainterPath(self.src_pt)
-        mid = (self.src_pt + self.dst_pt) * 0.5
         path.lineTo(self.dst_pt)
         painter.drawPath(path)
 
-        # Exibe badge discreto de latência no meio do link se o nó estiver vivo
+        # Exibe badge discreto de latência próximo ao nó destino (evita colisão no centro do grafo)
         if rec.alive and rec.rtt_ms >= 0:
+            badge_pt = self.src_pt * 0.28 + self.dst_pt * 0.72
             rtt_txt = f"{rec.rtt_ms:.1f}ms" if rec.rtt_ms < 10 else f"{rec.rtt_ms:.0f}ms"
             font = QFont("Segoe UI", 7, QFont.Bold)
             painter.setFont(font)
             bg_col = QColor(15, 23, 42, 210) if self.is_dark else QColor(226, 226, 226, 235)
             txt_col = QColor("#e2e8f0") if self.is_dark else QColor("#1e242b")
-            rect = QRectF(mid.x() - 22, mid.y() - 8, 44, 16)
+            rect = QRectF(badge_pt.x() - 22, badge_pt.y() - 8, 44, 16)
             painter.setPen(QPen(col, 1.0))
             painter.setBrush(QBrush(bg_col))
             painter.drawRoundedRect(rect, 4, 4)
@@ -217,7 +219,7 @@ class TopologyNodeItem(QGraphicsObject):
 
     def boundingRect(self) -> QRectF:
         r = self.radius
-        return QRectF(-r - 55, -r - 18, (r + 55) * 2, (r + 38) * 2)
+        return QRectF(-r - 65, -r - 18, (r + 65) * 2, (r + 42) * 2)
 
     def _get_node_icon(self) -> str:
         if self.role == "gateway":
@@ -311,18 +313,16 @@ class TopologyNodeItem(QGraphicsObject):
                 str(len(vulns)),
             )
 
-        # Rótulo inferior: Apelido ou Nome curto + IP
-        label_name = getattr(rec, "alias", "") or rec.hostname or rec.vendor or "Host"
-        if len(label_name) > 18:
-            label_name = label_name[:16] + ".."
+        # Rótulo inferior: Apelido ou Nome curto + IP (sem truncamento incorreto)
+        raw_name = getattr(rec, "alias", "") or rec.hostname or rec.vendor or "Host"
         if self.role == "gateway":
-            label_name = f"GW: {label_name}"
+            raw_name = f"GW: {raw_name}"
         elif self.role == "local":
-            label_name = f"Local: {label_name}"
+            raw_name = f"Local: {raw_name}"
 
-        lbl_bg = QColor(15, 23, 42, 220) if self.is_dark else QColor(228, 228, 228, 240)
+        lbl_bg = QColor(15, 23, 42, 225) if self.is_dark else QColor(232, 232, 232, 242)
         lbl_border = QColor("#334155") if self.is_dark else QColor("#a8a8a8")
-        lbl_rect = QRectF(-62, r + 5, 124, 30)
+        lbl_rect = QRectF(-72, r + 5, 144, 32)
 
         painter.setPen(QPen(lbl_border, 1.0))
         painter.setBrush(QBrush(lbl_bg))
@@ -330,13 +330,15 @@ class TopologyNodeItem(QGraphicsObject):
 
         name_font = QFont("Segoe UI", 8, QFont.Bold)
         painter.setFont(name_font)
+        fm_name = QFontMetrics(name_font)
+        label_name = fm_name.elidedText(raw_name, Qt.ElideRight, 136)
         painter.setPen(QColor("#f8fafc") if self.is_dark else QColor("#0f172a"))
-        painter.drawText(QRectF(-60, r + 6, 120, 14), Qt.AlignCenter, label_name)
+        painter.drawText(QRectF(-68, r + 6, 136, 15), Qt.AlignCenter, label_name)
 
         ip_font = QFont("Monospace", 7)
         painter.setFont(ip_font)
         painter.setPen(QColor("#38bdf8") if self.is_dark else QColor("#0969da"))
-        painter.drawText(QRectF(-60, r + 19, 120, 13), Qt.AlignCenter, rec.ip)
+        painter.drawText(QRectF(-68, r + 20, 136, 14), Qt.AlignCenter, rec.ip)
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.ItemPositionHasChanged:
@@ -398,6 +400,7 @@ class NetworkTopologyWidget(QWidget):
         self.records: Dict[str, HostRecord] = {}
         self.local_info: Dict[str, str] = {}
         self.node_items: Dict[str, TopologyNodeItem] = {}
+        self.cached_routes: List[Dict[str, str]] = get_routing_table_summary()
         self.init_ui()
 
     def init_ui(self):
@@ -410,7 +413,7 @@ class NetworkTopologyWidget(QWidget):
         ctrl_frame.setObjectName("topologyToolbar")
         ctrl_layout = QHBoxLayout(ctrl_frame)
         ctrl_layout.setContentsMargins(8, 4, 8, 4)
-        ctrl_layout.setSpacing(8)
+        ctrl_layout.setSpacing(6)
 
         self.lbl_topo_info = QLabel("🗺️ Topologia: Gateway Padrão ➔ Ativos Descobertos")
         self.lbl_topo_info.setStyleSheet("font-weight: bold; font-size: 12px;")
@@ -438,15 +441,46 @@ class NetworkTopologyWidget(QWidget):
         self.combo_filter.currentIndexChanged.connect(self.rebuild_topology)
         ctrl_layout.addWidget(self.combo_filter)
 
+        # Barra de ajuste de distância entre os equipamentos
+        self.lbl_spacing = QLabel(f"↔️ {tr('topo_spacing_lbl', 'Distância:')}")
+        self.lbl_spacing.setStyleSheet("font-weight: 600; margin-left: 4px;")
+        ctrl_layout.addWidget(self.lbl_spacing)
+
+        self.slider_spacing = QSlider(Qt.Horizontal)
+        self.slider_spacing.setObjectName("sliderTopoSpacing")
+        self.slider_spacing.setRange(50, 300)
+        self.slider_spacing.setSingleStep(5)
+        self.slider_spacing.setPageStep(15)
+        self.slider_spacing.setValue(100)
+        self.slider_spacing.setFixedWidth(125)
+        self.slider_spacing.setFixedHeight(26)
+        self.slider_spacing.setToolTip(
+            tr(
+                "topo_spacing_tip",
+                "Ajustar a distância / espaçamento entre os equipamentos na topologia (50% a 300%)",
+            )
+        )
+        self.slider_spacing.valueChanged.connect(self._on_spacing_changed)
+        ctrl_layout.addWidget(self.slider_spacing)
+
+        self.lbl_spacing_val = QLabel("100%")
+        self.lbl_spacing_val.setMinimumWidth(42)
+        self.lbl_spacing_val.setAlignment(Qt.AlignCenter)
+        self.lbl_spacing_val.setStyleSheet("font-weight: bold; font-size: 11px; color: #0284c7;")
+        self.lbl_spacing_val.setToolTip(
+            tr("topo_spacing_reset_tip", "Clique em Reorganizar ou arraste a barra para ajustar o espaçamento")
+        )
+        ctrl_layout.addWidget(self.lbl_spacing_val)
+
         self.btn_zoom_in = QPushButton("➕")
         self.btn_zoom_in.setFixedSize(30, 28)
-        self.btn_zoom_in.setToolTip("Aproximar Zoom")
+        self.btn_zoom_in.setToolTip(tr("topo_zoom_in", "Aproximar Zoom"))
         self.btn_zoom_in.clicked.connect(lambda: self.view.scale(1.2, 1.2))
         ctrl_layout.addWidget(self.btn_zoom_in)
 
         self.btn_zoom_out = QPushButton("➖")
         self.btn_zoom_out.setFixedSize(30, 28)
-        self.btn_zoom_out.setToolTip("Afastar Zoom")
+        self.btn_zoom_out.setToolTip(tr("topo_zoom_out", "Afastar Zoom"))
         self.btn_zoom_out.clicked.connect(lambda: self.view.scale(1 / 1.2, 1 / 1.2))
         ctrl_layout.addWidget(self.btn_zoom_out)
 
@@ -474,8 +508,11 @@ class NetworkTopologyWidget(QWidget):
 
         # Legenda inferior
         self.lbl_legend = QLabel(
-            "🟣 Gateway Principal   •   🔵 Esta Máquina   •   🟢 Online (<5ms)   •   "
-            "🔷 Latência Normal   •   🟠 Latência Alta   •   🔴 Risco CVE Detectado"
+            tr(
+                "topo_legend",
+                "🟣 Gateway Principal   •   🔵 Esta Máquina   •   🟢 Online (<5ms)   •   "
+                "🔷 Latência Normal   •   🟠 Latência Alta   •   🔴 Risco CVE Detectado",
+            )
         )
         self.lbl_legend.setAlignment(Qt.AlignCenter)
         self.lbl_legend.setStyleSheet("font-size: 11px; padding: 3px;")
@@ -483,17 +520,61 @@ class NetworkTopologyWidget(QWidget):
 
         self.apply_theme(self.is_dark)
 
+    def _on_spacing_changed(self, val: int):
+        if hasattr(self, "lbl_spacing_val"):
+            self.lbl_spacing_val.setText(f"{val}%")
+        self.rebuild_topology()
+
+    def retranslate_ui(self):
+        self.lbl_layout_mode.setText(tr("topo_layout_lbl", "Layout:"))
+        self.lbl_spacing.setText(f"↔️ {tr('topo_spacing_lbl', 'Distância:')}")
+        self.slider_spacing.setToolTip(
+            tr(
+                "topo_spacing_tip",
+                "Ajustar a distância / espaçamento entre os equipamentos na topologia (50% a 300%)",
+            )
+        )
+        self.combo_layout.blockSignals(True)
+        self.combo_layout.setItemText(0, tr("topo_layout_radial", "🌟 Radial Concêntrico (NOC)"))
+        self.combo_layout.setItemText(1, tr("topo_layout_tiered", "🏛️ Hierárquico em Camadas"))
+        self.combo_layout.blockSignals(False)
+
+        self.combo_filter.blockSignals(True)
+        self.combo_filter.setItemText(0, tr("topo_filter_all", "🔍 Todos os Nós"))
+        self.combo_filter.setItemText(1, tr("topo_filter_infra", "🖧 Infraestrutura & Servidores"))
+        self.combo_filter.setItemText(2, tr("topo_filter_cameras", "📹 Câmeras & NVRs (ONVIF)"))
+        self.combo_filter.setItemText(3, tr("topo_filter_risk", "⚠️ Dispositivos com Risco (CVEs)"))
+        self.combo_filter.blockSignals(False)
+
+        self.btn_zoom_in.setToolTip(tr("topo_zoom_in", "Aproximar Zoom"))
+        self.btn_zoom_out.setToolTip(tr("topo_zoom_out", "Afastar Zoom"))
+        self.btn_fit.setText(f"🔲 {tr('topo_btn_fit', 'Ajustar')}")
+        self.btn_rebuild.setText(f"🔄 {tr('topo_btn_reorg', 'Reorganizar')}")
+        self.btn_export_png.setText(f"📷 {tr('topo_btn_export', 'Exportar PNG')}")
+        self.lbl_legend.setText(
+            tr(
+                "topo_legend",
+                "🟣 Gateway Principal   •   🔵 Esta Máquina   •   🟢 Online (<5ms)   •   "
+                "🔷 Latência Normal   •   🟠 Latência Alta   •   🔴 Risco CVE Detectado",
+            )
+        )
+        self.rebuild_topology()
+
     def apply_theme(self, is_dark: bool):
         self.is_dark = is_dark
         bg_col = QColor("#0f172a") if is_dark else QColor("#dcdcdc")
         self.scene.setBackgroundBrush(QBrush(bg_col))
         border_col = "#334155" if is_dark else "#a8a8a8"
         self.view.setStyleSheet(f"QGraphicsView {{ border: 1px solid {border_col}; border-radius: 6px; }}")
+        if hasattr(self, "lbl_spacing_val"):
+            val_col = "#38bdf8" if is_dark else "#0284c7"
+            self.lbl_spacing_val.setStyleSheet(f"font-weight: bold; font-size: 11px; color: {val_col};")
         self.rebuild_topology()
 
     def set_network_data(self, records: Dict[str, HostRecord], local_info: Dict[str, str]):
         self.records = dict(records)
         self.local_info = dict(local_info or {})
+        self.cached_routes = get_routing_table_summary()
         self.rebuild_topology()
 
     def _classify_node_tier(self, rec: HostRecord, gw_ip: str, local_ip: str) -> str:
@@ -538,7 +619,10 @@ class NetworkTopologyWidget(QWidget):
         local_ip = self.local_info.get("ip", "")
         iface_name = self.local_info.get("name", "LAN")
         cidr = self.local_info.get("cidr", "24")
-        routes = get_routing_table_summary()
+        routes = self.cached_routes
+
+        # Fator multiplicador de distância/espaçamento controlado pela barra (0.5x a 3.0x)
+        scale = (self.slider_spacing.value() / 100.0) if hasattr(self, "slider_spacing") else 1.0
 
         # Garante que o Gateway exista como nó central mesmo se ainda não escaneado
         all_records = dict(self.records)
@@ -576,15 +660,43 @@ class NetworkTopologyWidget(QWidget):
             f"Nós: {total_shown}  •  Rotas: {len(routes)}  •  Em Risco (CVE): {risk_count}"
         )
 
-        # Desenha guias visuais de anéis no modo radial
+        n_infra = len(infra_recs)
+        n_end = len(endpoint_recs)
+
+        # Cálculo adaptativo de raios e anéis concêntricos no modo radial para evitar sobreposição
+        min_arc_infra = 200.0 * scale
+        min_arc_end = 195.0 * scale
+        r_infra_base = max(250.0 * scale, (n_infra * min_arc_infra) / (2.0 * math.pi)) if n_infra > 0 else 210.0 * scale
+
+        endpoint_rings: List[Tuple[float, List[HostRecord]]] = []
+        if layout_mode == "radial" and n_end > 0:
+            rem = list(endpoint_recs)
+            r_curr = (r_infra_base + 230.0 * scale) if n_infra > 0 else (280.0 * scale)
+            ring_gap = 215.0 * scale
+            while rem:
+                # Capacidade de nós na circunferência garantindo folga horizontal/vertical para os rótulos
+                cap = max(8, int((2.0 * math.pi * max(1.0, r_curr)) / max(90.0, min_arc_end)))
+                chunk = rem[:cap]
+                rem = rem[cap:]
+                endpoint_rings.append((r_curr, chunk))
+                r_curr += ring_gap
+
+        # Desenha guias visuais de anéis no modo radial sincronizadas com os raios reais
         if layout_mode == "radial":
             ring_pen = QPen(QColor("#1e293b") if self.is_dark else QColor("#bdbdbd"), 1.2, Qt.DotLine)
-            for radius in (190, 370):
+            guide_radii = []
+            if n_infra > 0:
+                guide_radii.append(r_infra_base)
+            for r_ring, _ in endpoint_rings:
+                guide_radii.append(r_ring)
+            if not guide_radii:
+                guide_radii = [250.0 * scale, 480.0 * scale]
+            for radius in guide_radii:
                 self.scene.addEllipse(-radius, -radius, radius * 2, radius * 2, ring_pen)
 
         # 1. Cria Nó Central do Gateway
         gw_node = TopologyNodeItem(gw_rec, role="gateway", is_dark=self.is_dark)
-        gw_node.setPos(0, 0 if layout_mode == "radial" else -240)
+        gw_node.setPos(0, 0 if layout_mode == "radial" else (-260.0 * scale))
         self._connect_node_signals(gw_node)
         self.scene.addItem(gw_node)
         self.node_items[gw_rec.ip] = gw_node
@@ -595,18 +707,22 @@ class NetworkTopologyWidget(QWidget):
         switch_node: Optional[TopologyNodeItem] = None
 
         # 2. Posiciona Nós de Infraestrutura + Máquina Local
-        n_infra = len(infra_recs)
+        infra_cols = max(1, min(6, n_infra))
         for idx, rec in enumerate(infra_recs):
             role = "local" if rec.ip == local_ip else "infra"
             node = TopologyNodeItem(rec, role=role, is_dark=self.is_dark)
             if layout_mode == "radial":
-                angle = (2 * math.pi * idx) / max(1, n_infra) - (math.pi / 2)
-                r_dist = 190
+                angle = (2.0 * math.pi * idx) / max(1, n_infra) - (math.pi / 2.0)
+                stagger = (idx % 2) * (36.0 * scale) if n_infra >= 6 else 0.0
+                r_dist = r_infra_base + stagger
                 node.setPos(r_dist * math.cos(angle), r_dist * math.sin(angle))
             else:
-                spread = max(1, n_infra - 1)
-                x_offset = (idx - spread / 2.0) * 165
-                node.setPos(x_offset, -40)
+                row = idx // infra_cols
+                col = idx % infra_cols
+                row_count = min(infra_cols, n_infra - row * infra_cols)
+                x_offset = (col - (row_count - 1) / 2.0) * (210.0 * scale)
+                y_offset = (-55.0 + row * 155.0) * scale
+                node.setPos(x_offset, y_offset)
 
             self._connect_node_signals(node)
             self.scene.addItem(node)
@@ -624,42 +740,65 @@ class NetworkTopologyWidget(QWidget):
                 switch_node = node
 
         # 3. Posiciona Nós de Endpoints (Estações, Servidores, Câmeras, Impressoras)
-        n_end = len(endpoint_recs)
-        for idx, rec in enumerate(endpoint_recs):
-            node = TopologyNodeItem(rec, role="endpoint", is_dark=self.is_dark)
-            if layout_mode == "radial":
-                angle = (2 * math.pi * idx) / max(1, n_end)
-                # Se houver muitos nós, alterna entre dois raios externos para evitar sobreposição
-                r_dist = 360 if (n_end <= 16 or idx % 2 == 0) else 460
-                node.setPos(r_dist * math.cos(angle), r_dist * math.sin(angle))
-            else:
-                cols = max(1, min(8, n_end))
+        if layout_mode == "radial":
+            for ring_idx, (r_ring, ring_nodes) in enumerate(endpoint_rings):
+                m = len(ring_nodes)
+                angle_offset = ring_idx * (math.pi / max(8, m))
+                for i_in_ring, rec in enumerate(ring_nodes):
+                    node = TopologyNodeItem(rec, role="endpoint", is_dark=self.is_dark)
+                    angle = (2.0 * math.pi * i_in_ring) / max(1, m) + angle_offset
+                    stagger = (i_in_ring % 2) * (34.0 * scale) if m >= 10 else 0.0
+                    r_dist = r_ring + stagger
+                    node.setPos(r_dist * math.cos(angle), r_dist * math.sin(angle))
+
+                    self._connect_node_signals(node)
+                    self.scene.addItem(node)
+                    self.node_items[rec.ip] = node
+
+                    parent_node = self._resolve_parent_node(rec, gw_node, proxmox_node, nvr_node, switch_node)
+                    edge = TopologyEdgeItem(parent_node, node, is_dark=self.is_dark)
+                    self.scene.addItem(edge)
+        else:
+            infra_rows = max(1, math.ceil(n_infra / max(1, infra_cols))) if n_infra > 0 else 0
+            y_base_end = (-55.0 + infra_rows * 175.0) * scale if infra_rows > 0 else (120.0 * scale)
+            cols = max(1, min(7, n_end))
+            for idx, rec in enumerate(endpoint_recs):
+                node = TopologyNodeItem(rec, role="endpoint", is_dark=self.is_dark)
                 row = idx // cols
                 col = idx % cols
                 row_count = min(cols, n_end - row * cols)
-                x_offset = (col - (row_count - 1) / 2.0) * 155
-                y_offset = 150 + row * 135
+                x_offset = (col - (row_count - 1) / 2.0) * (205.0 * scale)
+                y_offset = y_base_end + row * (165.0 * scale)
                 node.setPos(x_offset, y_offset)
 
-            self._connect_node_signals(node)
-            self.scene.addItem(node)
-            self.node_items[rec.ip] = node
+                self._connect_node_signals(node)
+                self.scene.addItem(node)
+                self.node_items[rec.ip] = node
 
-            # Escolhe pai lógico na topologia (Proxmox -> VMs, NVR -> Câmeras, Switch/Gateway -> Demais)
-            parent_node = gw_node
-            v_low = (rec.vendor or "").lower()
-            dtype_low = (rec.device_type or "").lower()
-            if proxmox_node and ("proxmox" in v_low or "qemu" in v_low or "vm " in dtype_low):
-                parent_node = proxmox_node
-            elif nvr_node and (rec.onvif_url or 554 in rec.open_ports or "câmera" in dtype_low or "camera" in dtype_low):
-                parent_node = nvr_node
-            elif switch_node:
-                parent_node = switch_node
+                parent_node = self._resolve_parent_node(rec, gw_node, proxmox_node, nvr_node, switch_node)
+                edge = TopologyEdgeItem(parent_node, node, is_dark=self.is_dark)
+                self.scene.addItem(edge)
 
-            edge = TopologyEdgeItem(parent_node, node, is_dark=self.is_dark)
-            self.scene.addItem(edge)
+        self.scene.setSceneRect(self.scene.itemsBoundingRect().adjusted(-90, -90, 90, 90))
 
-        self.scene.setSceneRect(self.scene.itemsBoundingRect().adjusted(-80, -80, 80, 80))
+    def _resolve_parent_node(
+        self,
+        rec: HostRecord,
+        gw_node: TopologyNodeItem,
+        proxmox_node: Optional[TopologyNodeItem],
+        nvr_node: Optional[TopologyNodeItem],
+        switch_node: Optional[TopologyNodeItem],
+    ) -> TopologyNodeItem:
+        parent_node = gw_node
+        v_low = (rec.vendor or "").lower()
+        dtype_low = (rec.device_type or "").lower()
+        if proxmox_node and ("proxmox" in v_low or "qemu" in v_low or "vm " in dtype_low):
+            parent_node = proxmox_node
+        elif nvr_node and (rec.onvif_url or 554 in rec.open_ports or "câmera" in dtype_low or "camera" in dtype_low):
+            parent_node = nvr_node
+        elif switch_node:
+            parent_node = switch_node
+        return parent_node
 
     def _connect_node_signals(self, node: TopologyNodeItem):
         node.clicked_ip.connect(self.host_selected.emit)

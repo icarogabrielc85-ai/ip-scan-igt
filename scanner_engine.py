@@ -9,6 +9,7 @@ import ssl
 import struct
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 from dataclasses import dataclass, field
@@ -25,10 +26,11 @@ def _get_windows_silent_kwargs() -> Dict[str, Any]:
     if IS_WINDOWS:
         if hasattr(subprocess, "CREATE_NO_WINDOW"):
             kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
-        startupinfo = subprocess.STARTUPINFO()
-        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        startupinfo.wShowWindow = subprocess.SW_HIDE
-        kwargs["startupinfo"] = startupinfo
+        if hasattr(subprocess, "STARTUPINFO"):
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = subprocess.SW_HIDE
+            kwargs["startupinfo"] = startupinfo
     return kwargs
 
 
@@ -188,29 +190,44 @@ class HostRecord:
 
 
 ALIAS_STORE_PATH = os.path.expanduser("~/.config/ipscan-igt/device_aliases.json")
+_ALIAS_CACHE: Optional[Dict[str, Dict[str, str]]] = None
+_ALIAS_LOCK = threading.Lock()
 
 
-def load_device_aliases() -> Dict[str, Dict[str, str]]:
-    """Carrega o dicionário de apelidos personalizados por MAC e por IP."""
-    try:
-        if os.path.exists(ALIAS_STORE_PATH):
-            with open(ALIAS_STORE_PATH, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, dict):
-                    return {
-                        "by_mac": dict(data.get("by_mac") or {}),
-                        "by_ip": dict(data.get("by_ip") or {}),
-                    }
-    except Exception:
-        pass
-    return {"by_mac": {}, "by_ip": {}}
+def load_device_aliases(force_reload: bool = False) -> Dict[str, Dict[str, str]]:
+    """Carrega o dicionário de apelidos personalizados por MAC e por IP com cache em memória."""
+    global _ALIAS_CACHE
+    with _ALIAS_LOCK:
+        if _ALIAS_CACHE is not None and not force_reload:
+            return {
+                "by_mac": dict(_ALIAS_CACHE.get("by_mac") or {}),
+                "by_ip": dict(_ALIAS_CACHE.get("by_ip") or {}),
+            }
+        try:
+            if os.path.exists(ALIAS_STORE_PATH):
+                with open(ALIAS_STORE_PATH, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, dict):
+                        _ALIAS_CACHE = {
+                            "by_mac": dict(data.get("by_mac") or {}),
+                            "by_ip": dict(data.get("by_ip") or {}),
+                        }
+                        return {
+                            "by_mac": dict(_ALIAS_CACHE["by_mac"]),
+                            "by_ip": dict(_ALIAS_CACHE["by_ip"]),
+                        }
+        except Exception:
+            pass
+        _ALIAS_CACHE = {"by_mac": {}, "by_ip": {}}
+        return {"by_mac": {}, "by_ip": {}}
 
 
 def save_device_alias(ip: str, mac: str, alias: str) -> None:
     """Salva ou remove o apelido personalizado de um dispositivo vinculando por MAC e IP."""
+    global _ALIAS_CACHE
     try:
         os.makedirs(os.path.dirname(ALIAS_STORE_PATH), exist_ok=True)
-        store = load_device_aliases()
+        store = load_device_aliases(force_reload=True)
         clean_alias = (alias or "").strip()
         norm_mac = (mac or "").strip().upper()
         clean_ip = (ip or "").strip()
@@ -227,8 +244,13 @@ def save_device_alias(ip: str, mac: str, alias: str) -> None:
             else:
                 store["by_ip"].pop(clean_ip, None)
 
-        with open(ALIAS_STORE_PATH, "w", encoding="utf-8") as f:
-            json.dump(store, f, indent=2, ensure_ascii=False)
+        with _ALIAS_LOCK:
+            _ALIAS_CACHE = {
+                "by_mac": dict(store["by_mac"]),
+                "by_ip": dict(store["by_ip"]),
+            }
+            with open(ALIAS_STORE_PATH, "w", encoding="utf-8") as f:
+                json.dump(store, f, indent=2, ensure_ascii=False)
     except Exception:
         pass
 
@@ -244,46 +266,150 @@ def get_device_alias(ip: str, mac: str = "") -> str:
     return ""
 
 
+def _find_sys_cmd(cmd_name: str) -> str:
+    """Localiza binários de rede mesmo quando /sbin ou /usr/sbin não estão no PATH do ambiente gráfico."""
+    found = shutil.which(cmd_name)
+    if found:
+        return found
+    if not IS_WINDOWS:
+        for prefix in ("/usr/sbin", "/sbin", "/usr/bin", "/bin"):
+            candidate = os.path.join(prefix, cmd_name)
+            if os.path.exists(candidate) and os.access(candidate, os.X_OK):
+                return candidate
+    return cmd_name
+
+
+def _is_valid_ipv4_netmask(mask_str: str) -> bool:
+    """Valida se uma string é uma máscara de sub-rede IPv4 sintaticamente e semanticamente válida."""
+    if not mask_str:
+        return False
+    try:
+        ipaddress.IPv4Network(f"0.0.0.0/{mask_str}")
+        return True
+    except Exception:
+        return False
+
+
+def _decode_console_output(raw: Any) -> str:
+    """Decodifica saída de comandos de console no Windows/Linux preservando acentuação (OEM cp850, UTF-8, cp1252)."""
+    if not raw:
+        return ""
+    if isinstance(raw, str):
+        return raw
+    # UTF-8 primeiro (padrão Linux e consoles modernos), seguido de cp850 (OEM Windows BR/EU), cp1252, cp437
+    for enc in ("utf-8", "cp850", "cp1252", "cp437", "latin-1"):
+        try:
+            return raw.decode(enc)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return raw.decode("utf-8", errors="replace")
+
+
+def _get_primary_outbound_ip() -> str:
+    """
+    Determina o endereço IPv4 local da placa principal de saída consultando a tabela
+    de roteamento do kernel via socket UDP (sem transmitir pacotes na rede).
+    """
+    for target in (("8.8.8.8", 80), ("1.1.1.1", 53), ("192.168.1.1", 80), ("10.255.255.255", 1)):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.settimeout(0.2)
+                s.connect(target)
+                ip = s.getsockname()[0]
+                if ip and not ip.startswith("127.") and not ip.startswith("169.254.") and ip != "0.0.0.0":
+                    return ip
+        except Exception:
+            continue
+    return ""
+
+
 def get_default_gateways() -> Dict[str, str]:
-    gw_map = {}
+    gw_map: Dict[str, str] = {}
     if IS_WINDOWS:
         try:
             kwargs = _get_windows_silent_kwargs()
-            out = subprocess.check_output(["route", "print", "0.0.0.0"], text=True, timeout=2.0, **kwargs)
+            raw = subprocess.check_output(["route", "print", "0.0.0.0"], timeout=2.0, **kwargs)
+            out = _decode_console_output(raw)
+            best_metric = 999999
             for line in out.splitlines():
                 parts = line.split()
                 if len(parts) >= 4 and parts[0] == "0.0.0.0" and parts[1] == "0.0.0.0":
                     gateway = parts[2]
                     iface = parts[3]
+                    metric = 100
+                    if len(parts) >= 5 and parts[4].isdigit():
+                        metric = int(parts[4])
                     gw_map[iface] = gateway
-                    gw_map["default"] = gateway
+                    if metric < best_metric:
+                        best_metric = metric
+                        gw_map["default"] = gateway
+                        gw_map["default_iface_ip"] = iface
         except Exception:
             pass
         return gw_map
 
     try:
-        out = subprocess.check_output(["ip", "route", "show"], text=True, timeout=1.5)
+        ip_bin = _find_sys_cmd("ip")
+        out = subprocess.check_output([ip_bin, "-4", "route", "show", "default"], text=True, timeout=1.5)
+        if not out.strip():
+            out = subprocess.check_output([ip_bin, "route", "show"], text=True, timeout=1.5)
         for line in out.splitlines():
             parts = line.split()
-            if len(parts) >= 5 and parts[0] == "default":
-                gw_map[parts[4]] = parts[2]
+            if not parts or parts[0] != "default":
+                continue
+            gw = ""
+            dev = ""
+            if "via" in parts:
+                idx = parts.index("via")
+                if idx + 1 < len(parts):
+                    gw = parts[idx + 1]
+            if "dev" in parts:
+                idx = parts.index("dev")
+                if idx + 1 < len(parts):
+                    dev = parts[idx + 1]
+            if dev:
+                gw_map[dev] = gw or gw_map.get(dev, "")
+                if "default" not in gw_map and gw:
+                    gw_map["default"] = gw
     except Exception:
         pass
+
+    # Fallback direto via /proc/net/route caso o binário `ip` não esteja disponível
+    if not gw_map and os.path.exists("/proc/net/route"):
+        try:
+            with open("/proc/net/route", "r", encoding="utf-8", errors="ignore") as rf:
+                for line in rf.read().splitlines()[1:]:
+                    parts = line.split()
+                    if len(parts) >= 3 and parts[1] == "00000000":
+                        iface = parts[0]
+                        gw_hex = parts[2]
+                        if len(gw_hex) == 8:
+                            gw_int = int(gw_hex, 16)
+                            gw_ip = socket.inet_ntoa(struct.pack("<L", gw_int))
+                            gw_map[iface] = gw_ip
+                            if "default" not in gw_map and gw_ip != "0.0.0.0":
+                                gw_map["default"] = gw_ip
+        except Exception:
+            pass
+
     return gw_map
 
 
 def _get_windows_network_interfaces() -> List[Dict[str, Any]]:
     """
     Enumerate active IPv4 network interfaces on Windows using ipconfig /all,
-    with fallback to standard socket resolution.
+    with encoding-independent regexes, multi-line IPv6/IPv4 gateway support,
+    and fallback to netsh / socket resolution.
     """
     ifaces = []
     gw_map = get_default_gateways()
+    primary_ip = _get_primary_outbound_ip()
     hostname = socket.gethostname()
 
     try:
         kwargs = _get_windows_silent_kwargs()
-        out = subprocess.check_output(["ipconfig", "/all"], text=True, timeout=3.0, **kwargs)
+        raw = subprocess.check_output(["ipconfig", "/all"], timeout=3.0, **kwargs)
+        out = _decode_console_output(raw)
 
         blocks = re.split(r"\r?\n(?=\S)", out)
         for block in blocks:
@@ -291,11 +417,11 @@ def _get_windows_network_interfaces() -> List[Dict[str, Any]]:
             if not lines:
                 continue
             header = lines[0].rstrip(":")
-            if "configuration" in header.lower() or "configuração" in header.lower():
+            if any(w in header.lower() for w in ("configuration", "configura", "windows ip", "ip do windows")):
                 continue
 
             name = header
-            name_m = re.search(r"(?:adapter|adaptador)\s+(.+)", header, re.I)
+            name_m = re.search(r"(?:adapter|adaptador|carte|scheda|адаптер)\s+(.+)", header, re.I)
             if name_m:
                 name = name_m.group(1).strip()
 
@@ -304,62 +430,94 @@ def _get_windows_network_interfaces() -> List[Dict[str, Any]]:
             ipv4 = ""
             netmask = ""
             gateway = ""
+            expecting_gw_continuation = False
 
             for line in lines[1:]:
+                if expecting_gw_continuation:
+                    if ":" not in line:
+                        gw_cont = re.search(r"\b(\d{1,3}(?:\.\d{1,3}){3})\b", line)
+                        if gw_cont:
+                            gateway = gw_cont.group(1).strip()
+                            expecting_gw_continuation = False
+                        continue
+                    else:
+                        expecting_gw_continuation = False
+
                 if not desc:
-                    dm = re.search(r"(?:description|descrição)[^:]*:\s*(.+)$", line, re.I)
+                    dm = re.search(r"(?:description|descri|beschreibung|description|описание)[^:]*:\s*(.+)$", line, re.I)
                     if dm:
                         desc = dm.group(1).strip()
 
                 if not mac:
-                    mm = re.search(r"(?:physical address|endereço físico)[^:]*:\s*([0-9a-fA-F]{2}(?:-[0-9a-fA-F]{2}){5})", line, re.I)
+                    mm = re.search(r":\s*([0-9a-fA-F]{2}(?:-[0-9a-fA-F]{2}){5})\b", line)
                     if mm:
                         mac = mm.group(1).replace("-", ":").upper()
 
                 if not ipv4:
-                    ipm = re.search(r"(?:ipv4 address|endereço ipv4)[^:]*:\s*(\d{1,3}(?:\.\d{1,3}){3})", line, re.I)
+                    # Captura IPv4 em qualquer idioma/codepage (ex: "IPv4 Address", "Endereço IPv4", "Endere‡o IPv4", "Dirección IPv4")
+                    ipm = re.search(
+                        r"(?:ipv4|ip\s*address|endere.{1,4}o\s*ip|direcci.{1,4}n\s*ip|indirizzo\s*ip|adresse\s*ip|ip-adresse|ip-\S+)[^:]*:\s*(\d{1,3}(?:\.\d{1,3}){3})",
+                        line,
+                        re.I,
+                    )
                     if ipm:
-                        ipv4 = ipm.group(1).strip()
+                        candidate_ip = ipm.group(1).strip()
+                        if not candidate_ip.startswith("255."):
+                            ipv4 = candidate_ip
 
                 if not netmask:
-                    smm = re.search(r"(?:subnet\s*mask|m[aá\u00a0\ufffd\?]?scara\s*de\s*sub[- ]*rede|m.{1,2}scara)[^:]*:\s*(\d{1,3}(?:\.\d{1,3}){3})", line, re.I)
-                    if smm:
+                    smm = re.search(
+                        r"(?:subnet|sub[- ]*rede|sub[- ]*red|mask|m.{0,4}sc[a-z]*|maschera|masque|maske|маска|掩码)[^:]*:\s*(\d{1,3}(?:\.\d{1,3}){3})",
+                        line,
+                        re.I,
+                    )
+                    if smm and _is_valid_ipv4_netmask(smm.group(1).strip()):
                         netmask = smm.group(1).strip()
 
                 if not gateway:
-                    gwm = re.search(r"(?:default gateway|gateway padrão)[^:]*:\s*(\d{1,3}(?:\.\d{1,3}){3})", line, re.I)
-                    if gwm:
-                        gateway = gwm.group(1).strip()
+                    if re.search(r"(?:default\s*gateway|gateway\s*padr|puerta\s*de\s*enlace|gateway\s*predefinito|passerelle|standardgateway|шлюз|网关)", line, re.I):
+                        gwm = re.search(r":\s*(\d{1,3}(?:\.\d{1,3}){3})", line)
+                        if gwm:
+                            gateway = gwm.group(1).strip()
+                        else:
+                            # No Windows 10/11 com IPv6 ativo, a primeira linha do Gateway Padrão traz fe80:: e a linha seguinte traz o IPv4
+                            expecting_gw_continuation = True
 
             if not ipv4 or ipv4.startswith("127.") or ipv4.startswith("169.254."):
                 continue
 
             try:
-                mask = netmask if netmask else "255.255.255.0"
+                mask = netmask if _is_valid_ipv4_netmask(netmask) else "255.255.255.0"
                 net = ipaddress.IPv4Network(f"{ipv4}/{mask}", strict=False)
-                hosts = list(net.hosts())
+                start_ip, end_ip, total_hosts = _subnet_host_bounds(net, ipv4)
             except Exception:
                 continue
 
             combined_desc = f"{name} {desc}".lower()
-            if any(k in combined_desc for k in ["wi-fi", "wifi", "wireless", "sem fio", "802.11"]):
+            is_virtual = any(
+                k in combined_desc
+                for k in ["vethernet", "virtualbox", "vmware", "hyper-v", "wsl", "loopback", "docker", "npcap", "bluetooth"]
+            ) or ipv4.startswith("192.168.56.")
+
+            if any(k in combined_desc for k in ["wi-fi", "wifi", "wireless", "sem fio", "802.11", "wlan"]):
                 itype = "Wi-Fi (Sem Fio)"
                 icon = "📶"
-            elif any(k in combined_desc for k in ["vpn", "tap", "tun", "wireguard", "nord", "openvpn"]):
+            elif any(k in combined_desc for k in ["vpn", "tap", "tun", "wireguard", "nord", "openvpn", "radmin", "zerotier", "tailscale", "hamachi"]):
                 itype = "VPN / Túnel"
                 icon = "🛡️"
-            elif any(k in combined_desc for k in ["vethernet", "virtualbox", "vmware", "hyper-v", "wsl", "loopback"]):
+            elif is_virtual:
                 itype = "Bridge / Virtual"
                 icon = "🖥️"
-            elif any(k in combined_desc for k in ["ethernet", "gbe", "gigabit", "pcie", "realtek", "intel", "lan"]):
+            elif any(k in combined_desc for k in ["ethernet", "gbe", "gigabit", "pcie", "realtek", "intel", "lan", "broadcom", "killer"]):
                 itype = "Ethernet (Cabeada)"
                 icon = "🌐"
             else:
                 itype = "Rede Local"
                 icon = "🔌"
 
-            is_default = bool(gateway) or (ipv4 in gw_map) or (name in gw_map)
-            gw_val = gateway or gw_map.get(ipv4, "") or gw_map.get(name, "") or gw_map.get("default", "")
+            is_primary = (ipv4 == primary_ip) or (ipv4 == gw_map.get("default_iface_ip"))
+            is_default = is_primary or (bool(gateway) and not is_virtual) or (ipv4 in gw_map and not is_virtual)
+            gw_val = gateway or gw_map.get(ipv4, "") or gw_map.get(name, "") or (gw_map.get("default", "") if is_default else "")
 
             vendor = ""
             if mac:
@@ -372,9 +530,9 @@ def _get_windows_network_interfaces() -> List[Dict[str, Any]]:
                 "cidr": str(net.prefixlen),
                 "netmask": str(net.netmask),
                 "network": str(net.network_address),
-                "start_ip": str(hosts[0]) if hosts else ipv4,
-                "end_ip": str(hosts[-1]) if hosts else ipv4,
-                "total_hosts": len(hosts),
+                "start_ip": start_ip,
+                "end_ip": end_ip,
+                "total_hosts": total_hosts,
                 "mac": mac,
                 "vendor": vendor,
                 "type": itype,
@@ -382,6 +540,8 @@ def _get_windows_network_interfaces() -> List[Dict[str, Any]]:
                 "speed": "",
                 "gateway": gw_val,
                 "is_default": is_default,
+                "_is_primary": is_primary,
+                "_is_virtual": is_virtual,
                 "hostname": hostname,
             })
     except Exception as e:
@@ -389,12 +549,19 @@ def _get_windows_network_interfaces() -> List[Dict[str, Any]]:
 
     if not ifaces:
         try:
+            ip_candidates: List[str] = []
+            if primary_ip:
+                ip_candidates.append(primary_ip)
             _, _, ip_list = socket.gethostbyname_ex(hostname)
             for ip_str in ip_list:
-                if ip_str.startswith("127.") or ":" in ip_str:
+                if ip_str not in ip_candidates:
+                    ip_candidates.append(ip_str)
+            for ip_str in ip_candidates:
+                if ip_str.startswith("127.") or ip_str.startswith("169.254.") or ":" in ip_str:
                     continue
                 net = ipaddress.IPv4Network(f"{ip_str}/24", strict=False)
-                hosts = list(net.hosts())
+                start_ip, end_ip, total_hosts = _subnet_host_bounds(net, ip_str)
+                is_virt = ip_str.startswith("192.168.56.")
                 ifaces.append({
                     "name": "Ethernet",
                     "interface": "Ethernet",
@@ -402,22 +569,91 @@ def _get_windows_network_interfaces() -> List[Dict[str, Any]]:
                     "cidr": "24",
                     "netmask": "255.255.255.0",
                     "network": str(net.network_address),
-                    "start_ip": str(hosts[0]),
-                    "end_ip": str(hosts[-1]),
-                    "total_hosts": len(hosts),
+                    "start_ip": start_ip,
+                    "end_ip": end_ip,
+                    "total_hosts": total_hosts,
                     "mac": "",
                     "vendor": "",
-                    "type": "Ethernet (Cabeada)",
-                    "icon": "🌐",
+                    "type": "Bridge / Virtual" if is_virt else "Ethernet (Cabeada)",
+                    "icon": "🖥️" if is_virt else "🌐",
                     "speed": "",
-                    "gateway": gw_map.get("default", ""),
-                    "is_default": True,
+                    "gateway": gw_map.get(ip_str, "") or gw_map.get("default", ""),
+                    "is_default": (ip_str == primary_ip) or not is_virt,
+                    "_is_primary": ip_str == primary_ip,
+                    "_is_virtual": is_virt,
                     "hostname": hostname,
                 })
         except Exception:
             pass
 
-    ifaces.sort(key=lambda x: (not x.get("is_default", False), x.get("name", "")))
+    ifaces.sort(
+        key=lambda x: (
+            not x.get("_is_primary", False),
+            not x.get("is_default", False),
+            x.get("_is_virtual", False),
+            x.get("name", ""),
+        )
+    )
+    return ifaces
+
+
+def _subnet_host_bounds(net: ipaddress.IPv4Network, fallback_ip: str) -> Tuple[str, str, int]:
+    """Calcula O(1) o primeiro IP, último IP e total de hosts da sub-rede sem alocar milhões de objetos."""
+    num = int(net.num_addresses)
+    if num <= 2:
+        return str(net.network_address) or fallback_ip, str(net.broadcast_address) or fallback_ip, max(1, num)
+    return str(net.network_address + 1), str(net.broadcast_address - 1), num - 2
+
+
+def _get_linux_ioctl_interfaces(gw_map: Dict[str, str], primary_ip: str, hostname: str) -> List[Dict[str, Any]]:
+    """Fallback em Python puro via ioctl SIOCGIFADDR / SIOCGIFNETMASK direto no kernel Linux."""
+    ifaces: List[Dict[str, Any]] = []
+    if IS_WINDOWS or not os.path.exists("/sys/class/net"):
+        return ifaces
+    try:
+        import fcntl
+        for name in sorted(os.listdir("/sys/class/net")):
+            if name == "lo":
+                continue
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                    ifreq = struct.pack("256s", name[:15].encode("utf-8"))
+                    ip_bytes = fcntl.ioctl(s.fileno(), 0x8915, ifreq)[20:24]  # SIOCGIFADDR
+                    mask_bytes = fcntl.ioctl(s.fileno(), 0x891B, ifreq)[20:24]  # SIOCGIFNETMASK
+                    ip_str = socket.inet_ntoa(ip_bytes)
+                    mask_str = socket.inet_ntoa(mask_bytes)
+                    if ip_str.startswith("127.") or ip_str.startswith("169.254."):
+                        continue
+                    net = ipaddress.IPv4Network(f"{ip_str}/{mask_str}", strict=False)
+                    start_ip, end_ip, total_hosts = _subnet_host_bounds(net, ip_str)
+                    is_virt = name.startswith(("docker", "br", "veth", "virbr", "cni", "vboxnet", "vmnet"))
+                    is_primary = ip_str == primary_ip
+                    is_default = is_primary or (name in gw_map and not is_virt)
+                    ifaces.append({
+                        "name": name,
+                        "interface": name,
+                        "ip": ip_str,
+                        "cidr": str(net.prefixlen),
+                        "netmask": str(net.netmask),
+                        "network": str(net.network_address),
+                        "start_ip": start_ip,
+                        "end_ip": end_ip,
+                        "total_hosts": total_hosts,
+                        "mac": "",
+                        "vendor": "",
+                        "type": "Bridge / Virtual" if is_virt else "Ethernet (Cabeada)",
+                        "icon": "🖥️" if is_virt else "🌐",
+                        "speed": "",
+                        "gateway": gw_map.get(name, "") or (gw_map.get("default", "") if is_default else ""),
+                        "is_default": is_default,
+                        "_is_primary": is_primary,
+                        "_is_virtual": is_virt,
+                        "hostname": hostname,
+                    })
+            except Exception:
+                continue
+    except Exception:
+        pass
     return ifaces
 
 
@@ -432,21 +668,29 @@ def get_all_network_interfaces() -> List[Dict[str, Any]]:
 
     ifaces = []
     gw_map = get_default_gateways()
+    primary_ip = _get_primary_outbound_ip()
     hostname = socket.gethostname()
 
     try:
+        ip_bin = _find_sys_cmd("ip")
         out = subprocess.check_output(
-            ["ip", "-o", "-4", "addr", "show", "up"],
+            [ip_bin, "-o", "-4", "addr", "show", "up"],
             text=True,
             timeout=2.0,
         )
+        if not out.strip():
+            out = subprocess.check_output(
+                [ip_bin, "-o", "-4", "addr", "show"],
+                text=True,
+                timeout=2.0,
+            )
         for line in out.splitlines():
             m_inet = re.search(r"\binet\s+(\d{1,3}(?:\.\d{1,3}){3})/(\d{1,2})\b", line)
             if not m_inet:
                 continue
             ip_str = m_inet.group(1)
             prefix = m_inet.group(2)
-            if ip_str.startswith("127."):
+            if ip_str.startswith("127.") or ip_str.startswith("169.254."):
                 continue
 
             parts = line.split()
@@ -454,92 +698,106 @@ def get_all_network_interfaces() -> List[Dict[str, Any]]:
             m_name = re.match(r"^\d+:\s+([^\s:]+)", line)
             if m_name:
                 name = m_name.group(1)
+            if "@" in name:
+                name = name.split("@", 1)[0]
 
             try:
                 net = ipaddress.IPv4Network(f"{ip_str}/{prefix}", strict=False)
-                hosts = list(net.hosts())
+                start_ip, end_ip, total_hosts = _subnet_host_bounds(net, ip_str)
             except Exception:
                 continue
 
-                mac = ""
-                mac_path = f"/sys/class/net/{name}/address"
-                if os.path.exists(mac_path):
+            mac = ""
+            mac_path = f"/sys/class/net/{name}/address"
+            if os.path.exists(mac_path):
+                try:
                     with open(mac_path) as mf:
                         mac = mf.read().strip().upper()
+                except Exception:
+                    pass
 
-                # Interface classification & icon
-                if os.path.exists(f"/sys/class/net/{name}/wireless") or name.startswith("wl"):
-                    itype = "Wi-Fi (Sem Fio)"
-                    icon = "📶"
-                elif name.startswith(("tun", "tap", "wg")):
-                    itype = "VPN / Túnel"
-                    icon = "🛡️"
-                elif name.startswith(("docker", "br", "veth", "virbr", "cni")):
-                    itype = "Bridge / Virtual"
-                    icon = "🖥️"
-                elif name.startswith(("en", "eth", "em")):
-                    itype = "Ethernet (Cabeada)"
-                    icon = "🌐"
-                else:
-                    itype = "Rede Local"
-                    icon = "🔌"
+            is_virtual = name.startswith(("docker", "br", "veth", "virbr", "cni", "vboxnet", "vmnet"))
 
-                speed = ""
-                speed_path = f"/sys/class/net/{name}/speed"
-                if os.path.exists(speed_path):
-                    try:
-                        with open(speed_path) as sf:
-                            s = int(sf.read().strip())
-                            if s > 0:
-                                speed = f"{s} Mbps"
-                    except Exception:
-                        pass
+            # Interface classification & icon
+            if os.path.exists(f"/sys/class/net/{name}/wireless") or name.startswith("wl"):
+                itype = "Wi-Fi (Sem Fio)"
+                icon = "📶"
+            elif name.startswith(("tun", "tap", "wg", "tailscale", "zt")):
+                itype = "VPN / Túnel"
+                icon = "🛡️"
+            elif is_virtual:
+                itype = "Bridge / Virtual"
+                icon = "🖥️"
+            elif name.startswith(("en", "eth", "em")):
+                itype = "Ethernet (Cabeada)"
+                icon = "🌐"
+            else:
+                itype = "Rede Local"
+                icon = "🔌"
 
-                is_default = name in gw_map
-                gw = gw_map.get(name, "")
+            speed = ""
+            speed_path = f"/sys/class/net/{name}/speed"
+            if os.path.exists(speed_path):
+                try:
+                    with open(speed_path) as sf:
+                        s = int(sf.read().strip())
+                        if s > 0:
+                            speed = f"{s} Mbps"
+                except Exception:
+                    pass
 
-                vendor = ""
-                if mac:
-                    vendor = OUI_DB.lookup(mac)
+            is_primary = ip_str == primary_ip
+            is_default = is_primary or (name in gw_map and not is_virtual)
+            gw = gw_map.get(name, "") or (gw_map.get("default", "") if is_default else "")
 
-                ifaces.append({
-                    "name": name,
-                    "interface": name,
-                    "ip": ip_str,
-                    "cidr": prefix,
-                    "netmask": str(net.netmask),
-                    "network": str(net.network_address),
-                    "start_ip": str(hosts[0]) if hosts else ip_str,
-                    "end_ip": str(hosts[-1]) if hosts else ip_str,
-                    "total_hosts": len(hosts),
-                    "mac": mac,
-                    "vendor": vendor,
-                    "type": itype,
-                    "icon": icon,
-                    "speed": speed,
-                    "gateway": gw,
-                    "is_default": is_default,
-                    "hostname": hostname,
-                })
+            vendor = ""
+            if mac:
+                vendor = OUI_DB.lookup(mac)
+
+            ifaces.append({
+                "name": name,
+                "interface": name,
+                "ip": ip_str,
+                "cidr": prefix,
+                "netmask": str(net.netmask),
+                "network": str(net.network_address),
+                "start_ip": start_ip,
+                "end_ip": end_ip,
+                "total_hosts": total_hosts,
+                "mac": mac,
+                "vendor": vendor,
+                "type": itype,
+                "icon": icon,
+                "speed": speed,
+                "gateway": gw,
+                "is_default": is_default,
+                "_is_primary": is_primary,
+                "_is_virtual": is_virtual,
+                "hostname": hostname,
+            })
     except Exception as e:
         print("Error reading network interfaces:", e)
 
     if not ifaces:
         try:
-            out_if = subprocess.check_output(["ifconfig"], text=True, timeout=2.0)
+            ifconfig_bin = _find_sys_cmd("ifconfig")
+            out_if = subprocess.check_output([ifconfig_bin], text=True, timeout=2.0)
             cur_name = ""
             for line in out_if.splitlines():
-                if line and not line.startswith(" "):
-                    cur_name = line.split(":")[0].strip()
-                if "inet " in line and ("netmask " in line or "mascara " in line):
-                    ip_m = re.search(r"inet\s+(\d{1,3}(?:\.\d{1,3}){3})", line)
-                    nm_m = re.search(r"(?:netmask|m[aá\u00a0\ufffd\?]?scara)\s+(\d{1,3}(?:\.\d{1,3}){3})", line, re.I)
-                    if ip_m and nm_m:
+                if line and not line.startswith(" ") and not line.startswith("\t"):
+                    cur_name = line.split(":")[0].split()[0].strip()
+                if "inet " in line:
+                    ip_m = re.search(r"inet\s+(?:addr:|end\.:\s*)?(\d{1,3}(?:\.\d{1,3}){3})", line, re.I)
+                    nm_m = re.search(r"(?:netmask|mask:|m[aá\u00a0\ufffd\?]?scara:?)\s*(\d{1,3}(?:\.\d{1,3}){3})", line, re.I)
+                    if ip_m:
                         ip_val = ip_m.group(1)
-                        mask_val = nm_m.group(1)
-                        if not ip_val.startswith("127."):
+                        raw_mask = nm_m.group(1) if nm_m else ""
+                        mask_val = raw_mask if _is_valid_ipv4_netmask(raw_mask) else "255.255.255.0"
+                        if not ip_val.startswith("127.") and not ip_val.startswith("169.254."):
                             net = ipaddress.IPv4Network(f"{ip_val}/{mask_val}", strict=False)
-                            hosts = list(net.hosts())
+                            start_ip, end_ip, total_hosts = _subnet_host_bounds(net, ip_val)
+                            is_virt = (cur_name or "").startswith(("docker", "br", "veth", "virbr", "vboxnet"))
+                            is_prim = ip_val == primary_ip
                             ifaces.append({
                                 "name": cur_name or "eth0",
                                 "interface": cur_name or "eth0",
@@ -547,23 +805,35 @@ def get_all_network_interfaces() -> List[Dict[str, Any]]:
                                 "cidr": str(net.prefixlen),
                                 "netmask": str(net.netmask),
                                 "network": str(net.network_address),
-                                "start_ip": str(hosts[0]) if hosts else ip_val,
-                                "end_ip": str(hosts[-1]) if hosts else ip_val,
-                                "total_hosts": len(hosts),
+                                "start_ip": start_ip,
+                                "end_ip": end_ip,
+                                "total_hosts": total_hosts,
                                 "mac": "",
                                 "vendor": "",
-                                "type": "Ethernet (Cabeada)",
-                                "icon": "🌐",
+                                "type": "Bridge / Virtual" if is_virt else "Ethernet (Cabeada)",
+                                "icon": "🖥️" if is_virt else "🌐",
                                 "speed": "",
-                                "gateway": gw_map.get(cur_name, ""),
-                                "is_default": cur_name in gw_map,
+                                "gateway": gw_map.get(cur_name, "") or (gw_map.get("default", "") if is_prim else ""),
+                                "is_default": is_prim or (cur_name in gw_map and not is_virt),
+                                "_is_primary": is_prim,
+                                "_is_virtual": is_virt,
                                 "hostname": hostname,
                             })
         except Exception:
             pass
 
-    # Sort default interface first, then by name
-    ifaces.sort(key=lambda x: (not x.get("is_default", False), x.get("name", "")))
+    if not ifaces:
+        ifaces = _get_linux_ioctl_interfaces(gw_map, primary_ip, hostname)
+
+    # Sort primary outbound interface first, then default gateway interface, then physical before virtual
+    ifaces.sort(
+        key=lambda x: (
+            not x.get("_is_primary", False),
+            not x.get("is_default", False),
+            x.get("_is_virtual", False),
+            x.get("name", ""),
+        )
+    )
     return ifaces
 
 
@@ -576,14 +846,22 @@ def get_local_network_info(interface_name: Optional[str] = None) -> Dict[str, An
     if all_ifaces:
         return all_ifaces[0]
 
+    primary_ip = _get_primary_outbound_ip() or "192.168.1.100"
+    try:
+        net = ipaddress.IPv4Network(f"{primary_ip}/24", strict=False)
+        start_ip, end_ip, total_hosts = _subnet_host_bounds(net, primary_ip)
+    except Exception:
+        start_ip, end_ip, total_hosts = "192.168.1.1", "192.168.1.254", 254
+
     return {
         "interface": "eth0",
         "name": "eth0",
-        "ip": "192.168.1.100",
+        "ip": primary_ip,
         "cidr": "24",
         "netmask": "255.255.255.0",
-        "start_ip": "192.168.1.1",
-        "end_ip": "192.168.1.254",
+        "start_ip": start_ip,
+        "end_ip": end_ip,
+        "total_hosts": total_hosts,
         "mac": "",
         "hostname": socket.gethostname(),
         "type": "Ethernet",
@@ -615,7 +893,18 @@ def send_wake_on_lan(mac_address: str, broadcast_ip: str = "255.255.255.255", po
         return False
 
 
+_ARP_CACHE: Dict[str, str] = {}
+_ARP_CACHE_TS: float = 0.0
+_ARP_LOCK = threading.Lock()
+
+
 def read_arp_table() -> Dict[str, str]:
+    global _ARP_CACHE, _ARP_CACHE_TS
+    now = time.monotonic()
+    with _ARP_LOCK:
+        if _ARP_CACHE and (now - _ARP_CACHE_TS) < 0.6:
+            return dict(_ARP_CACHE)
+
     arp_map: Dict[str, str] = {}
     if IS_WINDOWS:
         try:
@@ -630,6 +919,9 @@ def read_arp_table() -> Dict[str, str]:
                         arp_map[ip_str] = mac_str
         except Exception:
             pass
+        with _ARP_LOCK:
+            _ARP_CACHE = dict(arp_map)
+            _ARP_CACHE_TS = time.monotonic()
         return arp_map
 
     try:
@@ -651,6 +943,10 @@ def read_arp_table() -> Dict[str, str]:
                 arp_map[m.group(1)] = m.group(2).upper()
     except Exception:
         pass
+
+    with _ARP_LOCK:
+        _ARP_CACHE = dict(arp_map)
+        _ARP_CACHE_TS = time.monotonic()
     return arp_map
 
 read_linux_arp_table = read_arp_table

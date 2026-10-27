@@ -8,8 +8,9 @@ destacando dispositivos em risco na interface e oferecendo recomendações de mi
 import os
 import re
 import sqlite3
+import threading
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 
 CVE_DB_PATH = os.path.expanduser("~/.config/linux-ipscan/cve_knowledge.db")
@@ -351,6 +352,8 @@ class CveDatabase:
     def __init__(self, db_path: str = CVE_DB_PATH):
         self.db_path = db_path
         self._conn: Optional[sqlite3.Connection] = None
+        self._lock = threading.Lock()
+        self._rules_cache: Optional[List[Dict[str, Any]]] = None
         self._ensure_database()
 
     def _get_connection(self) -> sqlite3.Connection:
@@ -365,69 +368,80 @@ class CveDatabase:
         return conn
 
     def _ensure_database(self):
-        conn = self._get_connection()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS cve_catalog (
-                cve_id TEXT PRIMARY KEY,
-                product_key TEXT NOT NULL,
-                version_regex TEXT,
-                min_ver TEXT,
-                max_ver TEXT,
-                port_hint INTEGER,
-                severity TEXT NOT NULL,
-                cvss REAL NOT NULL,
-                title TEXT NOT NULL,
-                description TEXT NOT NULL,
-                remediation TEXT NOT NULL
+        with self._lock:
+            conn = self._get_connection()
+            cur = conn.cursor()
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS cve_catalog (
+                    cve_id TEXT PRIMARY KEY,
+                    product_key TEXT NOT NULL,
+                    version_regex TEXT,
+                    min_ver TEXT,
+                    max_ver TEXT,
+                    port_hint INTEGER,
+                    severity TEXT NOT NULL,
+                    cvss REAL NOT NULL,
+                    title TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    remediation TEXT NOT NULL
+                )
+                """
             )
-            """
-        )
-        cur.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_cve_product ON cve_catalog(product_key)
-            """
-        )
-        cur.executemany(
-            """
-            INSERT OR REPLACE INTO cve_catalog (
-                cve_id, product_key, version_regex, min_ver, max_ver,
-                port_hint, severity, cvss, title, description, remediation
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            CURATED_CVE_RULES,
-        )
-        conn.commit()
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_cve_product ON cve_catalog(product_key)
+                """
+            )
+            cur.executemany(
+                """
+                INSERT OR REPLACE INTO cve_catalog (
+                    cve_id, product_key, version_regex, min_ver, max_ver,
+                    port_hint, severity, cvss, title, description, remediation
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                CURATED_CVE_RULES,
+            )
+            conn.commit()
+            self._rules_cache = None
 
-    def get_all_rules(self) -> List[dict]:
-        conn = self._get_connection()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT cve_id, product_key, version_regex, min_ver, max_ver,
-                   port_hint, severity, cvss, title, description, remediation
-            FROM cve_catalog
-            ORDER BY cvss DESC
-            """
-        )
-        rows = cur.fetchall()
-        rules = []
-        for r in rows:
-            rules.append({
-                "cve_id": r[0],
-                "product_key": r[1],
-                "version_regex": r[2] or "",
-                "min_ver": r[3] or "",
-                "max_ver": r[4] or "",
-                "port_hint": int(r[5] or 0),
-                "severity": r[6],
-                "cvss": float(r[7] or 0.0),
-                "title": r[8],
-                "description": r[9],
-                "remediation": r[10],
-            })
-        return rules
+    def get_all_rules(self) -> List[Dict[str, Any]]:
+        if self._rules_cache is not None:
+            return self._rules_cache
+        with self._lock:
+            if self._rules_cache is not None:
+                return self._rules_cache
+            conn = self._get_connection()
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT cve_id, product_key, version_regex, min_ver, max_ver,
+                       port_hint, severity, cvss, title, description, remediation
+                FROM cve_catalog
+                ORDER BY cvss DESC
+                """
+            )
+            rows = cur.fetchall()
+            rules: List[Dict[str, Any]] = []
+            for r in rows:
+                v_regex = r[2] or ""
+                compiled_re = re.compile(v_regex, re.IGNORECASE) if v_regex else None
+                rules.append({
+                    "cve_id": r[0],
+                    "product_key": r[1],
+                    "version_regex": v_regex,
+                    "compiled_regex": compiled_re,
+                    "min_ver": r[3] or "",
+                    "max_ver": r[4] or "",
+                    "port_hint": int(r[5] or 0),
+                    "severity": r[6],
+                    "cvss": float(r[7] or 0.0),
+                    "title": r[8],
+                    "description": r[9],
+                    "remediation": r[10],
+                })
+            self._rules_cache = rules
+            return rules
 
     def correlate_host(
         self,
@@ -508,7 +522,8 @@ class CveDatabase:
 
             # 3. Regras de produto + regex de versão (OpenSSH, Apache, Nginx, IIS, Samba, MikroTik, etc.)
             if v_regex:
-                m = re.search(v_regex, combined_text, re.IGNORECASE)
+                compiled_re = rule.get("compiled_regex")
+                m = compiled_re.search(combined_text) if compiled_re else re.search(v_regex, combined_text, re.IGNORECASE)
                 if not m:
                     # Caso especial: porta 8291 aberta identifica MikroTik Winbox mesmo sem banner textual
                     if pkey == "mikrotik" and 8291 in ports_set:

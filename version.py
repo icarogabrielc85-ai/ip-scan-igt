@@ -6,7 +6,7 @@ import os
 import subprocess
 
 # Versão Semântica Oficial (MAJOR.MINOR.PATCH)
-APP_VERSION = "2.9.1"
+APP_VERSION = "2.9.2"
 APP_RELEASE_DATE = "26/10/2026"
 
 
@@ -73,6 +73,18 @@ def get_short_version() -> str:
 
 
 VERSION_HISTORY = [
+    {
+        "version": "v2.9.2",
+        "date": "26/10/2026",
+        "title": "Auto-detecção Confiável de Sub-rede e Interface, Ajuste de Espaçamento na Topologia e Otimizações Globais",
+        "changes": [
+            "Auto-detecção Multi-camada de Sub-rede: resolução de IP local ativo em <0.1ms via socket de roteamento UDP do kernel, busca dinâmica de binários iproute2/ipconfig e fallback em Python puro via ioctl (SIOCGIFADDR/SIOCGIFNETMASK) no Linux.",
+            "Compatibilidade Windows Multilíngue (OEM CP850 / UTF-8): parser resiliente a acentuação em português, validação estrita de máscaras (impedindo que IPs fossem interpretados como máscaras) e suporte a gateways IPv6/IPv4 em linhas secundárias.",
+            "Sincronização Reativa da UI: recálculo automático de início/fim ao trocar de placa, alterar máscara no combo ou digitar faixas com notação CIDR (ex: 192.168.10.0/24).",
+            "Controle de Densidade no Mapa de Topologia: nova barra deslizante (50% a 300%) para afastar ou aproximar os equipamentos na visualização gráfica em camadas e radial.",
+            "Otimizações de Desempenho e Concorrência: compilação estática de regexes no motor CVE, thread-lock para leituras concorrentes da base de vulnerabilidades, eliminação de widgets duplicados no System Doctor e cache rápido de tabela ARP.",
+        ],
+    },
     {
         "version": "v2.9.1",
         "date": "26/10/2026",
