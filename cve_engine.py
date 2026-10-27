@@ -12,8 +12,9 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
+from config_paths import get_config_file
 
-CVE_DB_PATH = os.path.expanduser("~/.config/linux-ipscan/cve_knowledge.db")
+CVE_DB_PATH = get_config_file("cve_knowledge.db")
 
 
 @dataclass

@@ -16,7 +16,9 @@ import json
 import os
 from typing import Any, Dict
 
-SETTINGS_FILE = os.path.expanduser("~/.config/linux-ipscan/settings.json")
+from config_paths import get_config_file
+
+SETTINGS_FILE = get_config_file("settings.json")
 
 SUPPORTED_LANGUAGES = {
     "pt_BR": {"name": "Português (Brasil)", "native": "Português (Brasil)", "flag": "🇧🇷"},

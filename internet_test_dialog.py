@@ -273,8 +273,10 @@ DEFAULT_PUBLIC_DNS_TARGETS = [
     },
 ]
 
+from config_paths import get_config_file
+
 PUBLIC_DNS_TARGETS = DEFAULT_PUBLIC_DNS_TARGETS
-DNS_TARGETS_FILE = os.path.expanduser("~/.config/linux-ipscan/dns_targets.json")
+DNS_TARGETS_FILE = get_config_file("dns_targets.json")
 
 
 def load_dns_targets() -> List[Dict[str, str]]:

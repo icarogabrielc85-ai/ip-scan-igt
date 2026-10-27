@@ -38,9 +38,10 @@ from PyQt5.QtWidgets import (
 
 from i18n import tr
 from scanner_engine import IS_WINDOWS, _get_windows_silent_kwargs, probe_ping
+from config_paths import get_config_file
 
-WATCHDOG_CONFIG_FILE = os.path.expanduser("~/.config/linux-ipscan/watchdog_config.json")
-WATCHDOG_EVENTS_FILE = os.path.expanduser("~/.config/linux-ipscan/watchdog_events.json")
+WATCHDOG_CONFIG_FILE = get_config_file("watchdog_config.json")
+WATCHDOG_EVENTS_FILE = get_config_file("watchdog_events.json")
 
 
 @dataclass

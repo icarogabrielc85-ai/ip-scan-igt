@@ -23,8 +23,9 @@ from PyQt5.QtWidgets import (
     QSpinBox,
     QVBoxLayout,
 )
+from config_paths import get_config_file
 
-VIDEO_CONFIG_FILE = os.path.expanduser("~/.config/linux-ipscan/video_config.json")
+VIDEO_CONFIG_FILE = get_config_file("video_config.json")
 
 RESOLUTION_PRESETS = [
     ("800x600 (SVGA — Resolução Padrão)", "800x600", 800, 600),

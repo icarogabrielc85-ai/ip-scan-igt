@@ -1,13 +1,13 @@
 # BLUEPRINT — IP SCAN IGT
-**Versão:** 2.9.0 (Edição Multiplataforma: Linux & Windows)  
+**Versão:** 2.9.2 (Edição Multiplataforma: Linux & Windows)  
 **Projeto:** IP Scan IGT  
 **Repositório GitHub:** [https://github.com/icarogabrielc85-ai/ip-scan-igt](https://github.com/icarogabrielc85-ai/ip-scan-igt)  
 **Diretório Local (PC):** `/home/icaro/linux-ipscan`  
 **Executável do Sistema (Linux):** `/home/icaro/.local/bin/ip-scan-igt`  
-**Pacote Debian (.deb):** `/home/icaro/Área de trabalho/ipscan-igt_2.9.0_amd64.deb`  
+**Pacote Debian (.deb):** `/home/icaro/Área de trabalho/ipscan-igt_2.9.2_amd64.deb`  
 **Atalho da Área de Trabalho:** `/home/icaro/Área de trabalho/ip-scan-igt.desktop`  
 **Atalho do Menu do Sistema:** `~/.local/share/applications/ip-scan-igt.desktop`  
-**Data da Última Atualização:** 26/10/2026  
+**Data da Última Atualização:** 27/10/2026  
 
 ---
 
@@ -23,7 +23,7 @@ Inspirado na usabilidade ágil e visual clássico do consagrado *Advanced IP Sca
 - **Auditoria de Internet & Benchmark de Servidores DNS Mundiais:**
   - Diagnóstico em tempo real de latência WAN, perda de pacotes, status do Gateway e DNS local.
   - Benchmark automatizado de provedores globais com classificação de qualidade em cores de alto contraste.
-  - **Gerenciador Customizado de DNS:** Adição, edição, exclusão e restauração com persistência em `~/.config/linux-ipscan/dns_targets.json`.
+  - **Gerenciador Customizado de DNS:** Adição, edição, exclusão e restauração com persistência multiplataforma em `~/.config/linux-ipscan/dns_targets.json` (Linux) ou `%APPDATA%\IPScanIGT\dns_targets.json` (Windows).
   - Ordenação dinâmica (Crescente ▲ / Decrescente ▼) por milissegundos numéricos reais.
 - **Abertura Inteligente Maximizada & Auto-Ajustável:**
   - Aplicação e diálogo de teste iniciam maximizados por padrão adaptados à resolução nativa do monitor.
@@ -53,7 +53,7 @@ Inspirado na usabilidade ágil e visual clássico do consagrado *Advanced IP Sca
 ```mermaid
 flowchart TD
     subgraph UI_Layer["Camada de Apresentação (PyQt5 Modern 2-Tier Ribbon & NOC Suite)"]
-        MW["MainWindow (IP Scan IGT v2.8.0)"]
+        MW["MainWindow (IP Scan IGT v2.9.2)"]
         TB1["Tier 1 Header: Brand, Scan ▶, Seletor IP ▾, Faixa IP, Máscara, Busca, Atualizar 🔄"]
         TB2["Tier 2 Ribbon: Expandir/Recolher, ONVIF, Nmap, Internet Test, Watchdog 🛡️, Relatório ▾, Tema, Idioma, KPIs (Online, Ping, Serviços, CVEs ⚠️)"]
         TABS["Abas Principais: [Resultados] • [Favoritos] • [🗺️ Topologia da Rede]"]
@@ -142,6 +142,7 @@ flowchart TD
 | [`upnp_engine.py`](file:///home/icaro/linux-ipscan/upnp_engine.py) | Descoberta multicast e unicast **UPnP / SSDP (UDP 1900)** com parser de XML RootDevice para extrair fabricante, modelo exato e número de série de Smart TVs, roteadores Wi-Fi Mesh, Chromecasts e IoT. |
 | [`traceroute_dialog.py`](file:///home/icaro/linux-ipscan/traceroute_dialog.py) | Ferramenta gráfica de **Traceroute Visual por Saltos (TTL)** (`TracerouteWorker` + `TracerouteDialog`) com grafo encadeado de roteadores intermediários e diagnóstico de latência por salto. |
 | [`interface_dialog.py`](file:///home/icaro/linux-ipscan/interface_dialog.py) | Janela modal de seleção de placas de rede (`NetworkInterfaceDialog`), listando adaptadores físicos, Wi-Fi, VPNs e bridges com IP, CIDR, faixa calculada, MAC, Gateway e velocidade de link. |
+| [`config_paths.py`](file:///home/icaro/linux-ipscan/config_paths.py) | Abstração de caminhos e diretórios de configuração multiplataforma (`get_config_dir` / `get_config_file`), garantindo persistência nativa em `%APPDATA%\IPScanIGT` no Windows e `~/.config/linux-ipscan/` no Linux, com migração automática transparente. |
 | [`oui_db.py`](file:///home/icaro/linux-ipscan/oui_db.py) | Mecanismo de resolução OUI (Organizationally Unique Identifier) com suporte a pacotes congelados PyInstaller (`sys._MEIPASS`) para tradução instantânea de MACs para nomes de fabricantes. |
 | [`mac-vendors.txt`](file:///home/icaro/linux-ipscan/mac-vendors.txt) | Base de dados offline contendo mais de 40.000 prefixos MAC catalogados pela IEEE. |
 | [`ui_theme.py`](file:///home/icaro/linux-ipscan/ui_theme.py) | Folhas de estilo QSS (Light Theme idêntico ao Advanced IP Scanner e Dark Theme moderno), além da implementação do componente gráfico de osciloscópio (`LivePingOscilloscope`). |
@@ -194,14 +195,14 @@ flowchart TD
 - **Printer-MIB (`1.3.6.1.2.1.43.*`):** Consulta automática de `prtMarkerLifeCount` (contador total de páginas impressas) e cálculo percentual do nível de suprimento/toner (`prtMarkerSuppliesLevel` / `prtMarkerSuppliesMaxCapacity`).
 
 ### 4.6. Correlação de Vulnerabilidades (CVEs via SQLite)
-- Base de conhecimento local em SQLite (`~/.config/linux-ipscan/cve_knowledge.db`) inicializada automaticamente pelo módulo [`cve_engine.py`](file:///home/icaro/linux-ipscan/cve_engine.py).
+- Base de conhecimento local em SQLite (`~/.config/linux-ipscan/cve_knowledge.db` no Linux ou `%APPDATA%\IPScanIGT\cve_knowledge.db` no Windows) inicializada automaticamente pelo módulo [`cve_engine.py`](file:///home/icaro/linux-ipscan/cve_engine.py).
 - Cruza expressões regulares e faixas SemVer (`version_min`..`version_max`) contra banners HTTP, SSH, SMB, SSL, SNMP (`public` exposto), portas legadas de alto risco (Telnet 23, FTP 21, RDP 3389) e a saída detalhada de versões do Nmap (`-sV`).
 - Classifica vulnerabilidades por severidade (**CRITICAL**, **HIGH**, **MEDIUM**) com pontuação CVSS, destacando em vermelho/laranja os hosts vulneráveis na árvore principal e exibindo um painel dedicado de CVEs na janela do Nmap.
 
 ### 4.7. Monitoramento Contínuo em Segundo Plano (Watchdog)
 - Motor assíncrono [`WatchdogWorker`](file:///home/icaro/linux-ipscan/watchdog_engine.py) (`QThread`) que monitora periodicamente os dispositivos salvos na aba **Favoritos** usando o motor de ping silencioso.
 - **Histerese de Falhas:** Só dispara alerta de *Host Down* após atingir o limiar configurável de falhas consecutivas (padrão: 2 falhas), evitando falsos positivos por perda isolada de pacote.
-- **Notificações Desktop & Log Persistente:** Emite alertas nativos via `QSystemTrayIcon.showMessage()` e `notify-send` (Linux) tanto na queda quanto na recuperação (*Host Recovered*), gravando o histórico de incidentes em `~/.config/linux-ipscan/watchdog_events.json`.
+- **Notificações Desktop & Log Persistente:** Emite alertas nativos via `QSystemTrayIcon.showMessage()` e `notify-send` (Linux) tanto na queda quanto na recuperação (*Host Recovered*), gravando o histórico de incidentes em `~/.config/linux-ipscan/watchdog_events.json` (Linux) ou `%APPDATA%\IPScanIGT\watchdog_events.json` (Windows).
 
 ### 4.8. Mapeamento Visual de Topologia (Grafo NOC Interativo)
 - Renderização vetorial via `QGraphicsView` / `QGraphicsScene` ([`NetworkTopologyWidget`](file:///home/icaro/linux-ipscan/topology_widget.py)) integrada diretamente como a 3ª aba principal (**`🗺️ Topologia da Rede`**).
@@ -210,13 +211,13 @@ flowchart TD
 - **Modos Radial (NOC) e Hierárquico (Camadas):** Nós arrastáveis, zoom suave via roda do mouse, links coloridos pela latência de ping (`<5ms` verde, `5-30ms` azul, `>30ms` âmbar), halos pulsantes de alerta para hosts com CVEs críticas e exportação direta do mapa para imagem **PNG** e **Base64**.
 
 ### 4.9. Network Guard — Detecção de Intrusos, Conflito de IP e ARP Spoofing
-- Monitoramento em Camada 2 ([`network_guard_engine.py`](file:///home/icaro/linux-ipscan/network_guard_engine.py)) com persistência em `~/.config/linux-ipscan/network_guard.json`.
+- Monitoramento em Camada 2 ([`network_guard_engine.py`](file:///home/icaro/linux-ipscan/network_guard_engine.py)) com persistência em `~/.config/linux-ipscan/network_guard.json` (Linux) ou `%APPDATA%\IPScanIGT\network_guard.json` (Windows).
 - **ARP Spoofing (`CRITICAL`):** Alerta imediatamente se o MAC do Gateway padrão mudar ou se outro endereço IP na rede passar a anunciar o mesmo endereço MAC físico do Gateway.
 - **Conflito de IP (`HIGH`):** Detecta quando um endereço IP ativo na sub-rede muda abruptamente de endereço MAC físico.
 - **Novos Dispositivos / Intrusos (`WARNING`):** Identifica placas de rede inéditas que ainda não constam na Whitelist de MACs confiáveis aprovados pelo administrador.
 
 ### 4.10. Snapshots de Auditoria & Comparador de Mudanças (Baseline Diff)
-- Armazenamento de fotografias completas da rede ([`snapshot_engine.py`](file:///home/icaro/linux-ipscan/snapshot_engine.py)) em `~/.config/linux-ipscan/snapshots.json`.
+- Armazenamento de fotografias completas da rede ([`snapshot_engine.py`](file:///home/icaro/linux-ipscan/snapshot_engine.py)) em `~/.config/linux-ipscan/snapshots.json` (Linux) ou `%APPDATA%\IPScanIGT\snapshots.json` (Windows).
 - Algoritmo de comparação estrutural (`compare_host_maps`) que cruza qualquer Snapshot Base com a varredura ao vivo, classificando:
   - 🟢 **Novos Hosts (`ADDED`):** Dispositivos que entraram na rede desde a última auditoria;
   - 🔴 **Hosts Ausentes (`REMOVED`):** Servidores ou equipamentos que saíram da rede;
@@ -280,4 +281,4 @@ flowchart TD
 - **`Ctrl + Q`**: Sair do Aplicativo
 
 ---
-*Blueprint oficial v2.9.0 aprovado e sincronizado com o repositório do projeto IP Scan IGT.*
+*Blueprint oficial v2.9.2 aprovado e sincronizado com o repositório do projeto IP Scan IGT.*

@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
 from i18n import tr
+from config_paths import get_config_file
 
 IS_WINDOWS = sys.platform.startswith("win") or os.name == "nt"
 
@@ -189,7 +190,7 @@ class HostRecord:
             return (999, 999, 999, 999)
 
 
-ALIAS_STORE_PATH = os.path.expanduser("~/.config/ipscan-igt/device_aliases.json")
+ALIAS_STORE_PATH = get_config_file("device_aliases.json")
 _ALIAS_CACHE: Optional[Dict[str, Dict[str, str]]] = None
 _ALIAS_LOCK = threading.Lock()
 

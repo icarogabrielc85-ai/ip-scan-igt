@@ -22,9 +22,10 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from config_paths import get_config_file
 from i18n import tr
 
-NETWORK_GUARD_FILE = os.path.expanduser("~/.config/linux-ipscan/network_guard.json")
+NETWORK_GUARD_FILE = get_config_file("network_guard.json")
 
 
 def normalize_mac(mac: str) -> str:

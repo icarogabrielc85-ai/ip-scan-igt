@@ -29,8 +29,9 @@ from PyQt5.QtWidgets import (
     QSpinBox,
     QVBoxLayout,
 )
+from config_paths import get_config_file
 
-SSH_CREDENTIALS_FILE = os.path.expanduser("~/.config/linux-ipscan/ssh_credentials.json")
+SSH_CREDENTIALS_FILE = get_config_file("ssh_credentials.json")
 IS_WINDOWS = os.name == "nt"
 
 

@@ -201,8 +201,9 @@ from snapshot_engine import SNAPSHOT_MANAGER, SnapshotDiffDialog
 from upnp_engine import discover_upnp_devices
 from traceroute_dialog import TracerouteDialog
 from manual_dialog import UserManualDialog, export_manual_to_pdf
+from config_paths import get_config_file
 
-FAVORITES_FILE = os.path.expanduser("~/.config/linux-ipscan/favorites.json")
+FAVORITES_FILE = get_config_file("favorites.json")
 
 
 class ScanWorker(QThread):

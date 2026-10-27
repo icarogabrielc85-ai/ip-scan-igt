@@ -5,8 +5,9 @@ import sys
 import threading
 import urllib.request
 from i18n import tr
+from config_paths import get_config_file
 
-ONLINE_CACHE_FILE = os.path.expanduser("~/.config/linux-ipscan/oui_online_cache.json")
+ONLINE_CACHE_FILE = get_config_file("oui_online_cache.json")
 
 
 class OuiDatabase:

@@ -27,6 +27,7 @@ from PyQt5.QtWidgets import (
 )
 
 from version import APP_RELEASE_DATE, APP_VERSION
+from config_paths import get_config_dir
 
 MANUAL_SECTIONS: List[Tuple[str, str]] = [
     ("sec1", "1. Visão Geral e Interface Principal"),
@@ -274,7 +275,7 @@ A grade de dispositivos possui espaçamento compacto otimizado para exibir dezen
 </table>
 
 <div class="note-box">
-    <b>💡 Dica sobre a Coluna "Apelido":</b> Sempre que você edita o campo <b>Apelido</b> de um computador, impressora ou câmera, o IP Scan IGT vincula esse apelido tanto ao <b>Endereço MAC</b> quanto ao <b>IP</b> em <code>~/.config/ipscan-igt/device_aliases.json</code>. Assim, mesmo que o roteador troque o IP do computador via DHCP no futuro, o programa reconhecerá o MAC e manterá o seu Apelido automaticamente!
+    <b>💡 Dica sobre a Coluna "Apelido":</b> Sempre que você edita o campo <b>Apelido</b> de um computador, impressora ou câmera, o IP Scan IGT vincula esse apelido tanto ao <b>Endereço MAC</b> quanto ao <b>IP</b> com persistência automática no diretório de dados (<code>~/.config/linux-ipscan/device_aliases.json</code> no Linux ou <code>%APPDATA%\\IPScanIGT\\device_aliases.json</code> no Windows). Assim, mesmo que o roteador troque o IP do computador via DHCP no futuro, o programa reconhecerá o MAC e manterá o seu Apelido automaticamente!
 </div>
 
 <a name="sec3"></a>
@@ -411,7 +412,7 @@ def export_manual_to_pdf(pdf_path: str) -> bool:
 
 def get_default_manual_pdf_path() -> str:
     """Retorna o caminho padrão onde o PDF do manual é gerado automaticamente."""
-    cfg_dir = os.path.expanduser("~/.config/ipscan-igt")
+    cfg_dir = get_config_dir()
     os.makedirs(cfg_dir, exist_ok=True)
     return os.path.join(cfg_dir, f"Manual_Usuario_IP_Scan_IGT_v{APP_VERSION}.pdf")
 

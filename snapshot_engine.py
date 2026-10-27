@@ -25,9 +25,10 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from config_paths import get_config_file
 from i18n import tr
 
-SNAPSHOTS_FILE = os.path.expanduser("~/.config/linux-ipscan/snapshots.json")
+SNAPSHOTS_FILE = get_config_file("snapshots.json")
 
 
 def serialize_host_for_snapshot(rec: Any) -> Dict[str, Any]:
