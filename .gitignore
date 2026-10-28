@@ -26,3 +26,11 @@ Thumbs.db
 
 # Test scratch / logs
 *.log
+
+# Sensitive credentials & keys
+*.key
+*.pem
+*.token
+*.secret
+*credential*.json
+*.env*
