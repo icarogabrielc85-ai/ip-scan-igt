@@ -125,15 +125,29 @@ echo -e "\n[*] ${BOLD}Etapa 3/4: Configurando atalho no menu de aplicativos e co
 mkdir -p "$HOME/.local/bin"
 mkdir -p "$HOME/.local/share/applications"
 
-# Script executável global no PATH
-LAUNCHER="$HOME/.local/bin/ipscan-igt"
-cat << EOF > "$LAUNCHER"
+# Se o binário compilado existir, prioriza o binário ELF com permissão L2 CAP_NET_RAW
+if [ -f "$SCRIPT_DIR/dist/IPScanIGT" ]; then
+    cp -f "$SCRIPT_DIR/dist/IPScanIGT" "$HOME/.local/bin/ip-scan-igt"
+    cp -f "$SCRIPT_DIR/dist/IPScanIGT" "$HOME/.local/bin/ipscan-igt"
+    chmod +x "$HOME/.local/bin/ip-scan-igt" "$HOME/.local/bin/ipscan-igt"
+    LAUNCHER="$HOME/.local/bin/ip-scan-igt"
+else
+    # Script executável global no PATH como fallback
+    LAUNCHER="$HOME/.local/bin/ipscan-igt"
+    cat << EOF > "$LAUNCHER"
 #!/usr/bin/env bash
 cd "$SCRIPT_DIR"
 exec python3 "$SCRIPT_DIR/main.py" "\$@"
 EOF
-chmod +x "$LAUNCHER"
-echo -e "    ${GREEN}✔${RESET} Comando de terminal criado: ${CYAN}ipscan-igt${RESET}"
+    chmod +x "$LAUNCHER"
+fi
+
+# Concede permissão definitiva de captura L2 (LLDP/CDP) sem precisar rodar como root
+if command -v setcap >/dev/null 2>&1 && [ -f "$HOME/.local/bin/ip-scan-igt" ]; then
+    echo -e "    [*] Configurando permissão permanente de captura de rede L2 (CAP_NET_RAW)..."
+    run_sudo setcap cap_net_raw,cap_net_admin+eip "$HOME/.local/bin/ip-scan-igt" || true
+fi
+echo -e "    ${GREEN}✔${RESET} Comando de terminal criado: ${CYAN}ipscan-igt${RESET} / ${CYAN}ip-scan-igt${RESET}"
 
 # Atalho .desktop para menu de aplicativos
 DESKTOP_ENTRY="$HOME/.local/share/applications/ipscan-igt.desktop"
