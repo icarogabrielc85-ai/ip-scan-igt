@@ -6,7 +6,7 @@ import os
 import subprocess
 
 # Versão Semântica Oficial (MAJOR.MINOR.PATCH)
-APP_VERSION = "2.11.1"
+APP_VERSION = "2.11.2"
 APP_RELEASE_DATE = "28/10/2026"
 
 
@@ -73,6 +73,16 @@ def get_short_version() -> str:
 
 
 VERSION_HISTORY = [
+    {
+        "version": "v2.11.2",
+        "date": "28/10/2026",
+        "title": "Sincronização Forçada de Binário Compilado e Resolução de Atualização no Gerenciador de Pacotes",
+        "changes": [
+            "Garantia de Compilação Inteligente (build_deb.sh): verificação dinâmica de timestamps nos arquivos-fonte Python para disparar automaticamente o PyInstaller antes da geração de pacotes, impedindo distribuição de binários desatualizados.",
+            "Atualização de Versão para o Gerenciador de Pacotes (APT / Discover / QApt): avanço de versão de pacote para v2.11.2 permitindo ao sistema operacional detectar a atualização do .deb sem bloqueio por 'mesma versão já instalada'.",
+            "Sincronização de Executáveis em Espaço de Usuário: atualização imediata de ~/.local/bin/ip-scan-igt e atalhos .desktop locais garantindo execução direta da versão mais recente.",
+        ],
+    },
     {
         "version": "v2.11.1",
         "date": "28/10/2026",

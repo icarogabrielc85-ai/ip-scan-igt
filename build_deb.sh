@@ -20,9 +20,21 @@ echo "          IP SCAN IGT — GERADOR DE PACOTE DEBIAN (.DEB)"
 echo "          Versão: $VERSION • Arquitetura: $ARCH"
 echo "=============================================================================="
 
-# 1. Garantir que o binário foi compilado
-if [ ! -f "$DIST_DIR/IPScanIGT" ]; then
-    echo "[*] Binário dist/IPScanIGT não encontrado. Iniciando compilação com PyInstaller..."
+# 1. Garantir que o binário foi compilado com o código mais recente
+REBUILD=0
+if [ ! -f "$DIST_DIR/IPScanIGT" ] || [ "$1" = "--rebuild" ]; then
+    REBUILD=1
+else
+    # Verifica se algum arquivo fonte Python é mais recente que o executável gerado
+    NEWER=$(find "$SCRIPT_DIR" -maxdepth 1 -name "*.py" -newer "$DIST_DIR/IPScanIGT" 2>/dev/null | head -n 1)
+    if [ -n "$NEWER" ]; then
+        echo "[*] Alteração detectada no código fonte ($NEWER). Recompilando executável..."
+        REBUILD=1
+    fi
+fi
+
+if [ "$REBUILD" -eq 1 ]; then
+    echo "[*] Iniciando compilação com PyInstaller..."
     python3 -m PyInstaller --clean ipscan_linux.spec
 fi
 

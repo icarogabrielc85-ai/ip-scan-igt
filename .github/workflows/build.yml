@@ -130,27 +130,28 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.11.1
-          name: "IP Scan IGT v2.11.1 — Pacotes .deb (Linux), .msi e .exe (Windows)"
+          tag_name: v2.11.2
+          name: "IP Scan IGT v2.11.2 — Pacotes .deb (Linux), .msi e .exe (Windows)"
           body: |
-            ## 📦 Downloads Oficiais do IP Scan IGT (v2.11.1)
+            ## 📦 Downloads Oficiais do IP Scan IGT (v2.11.2)
 
             Selecione o pacote compatível com seu sistema operacional:
 
             ### 🐧 Linux (Ubuntu, Debian, Pop!_OS, Linux Mint, Kali):
-            - **Pacote Debian (.deb):** `ipscan-igt_2.11.1_amd64.deb`  
-              *(Instale dando duplo-clique ou pelo terminal: `sudo apt install ./ipscan-igt_2.11.1_amd64.deb`)*
+            - **Pacote Debian (.deb):** `ipscan-igt_2.11.2_amd64.deb`  
+              *(Instale dando duplo-clique ou pelo terminal: `sudo apt install ./ipscan-igt_2.11.2_amd64.deb`)*
             - **Binário Portátil:** `IPScanIGT`
 
             ### 🪟 Windows 10 e Windows 11:
-            - **Instalador Assistente Recomendado (.exe):** `IPScanIGT-Setup-2.11.1.exe`  
+            - **Instalador Assistente Recomendado (.exe):** `IPScanIGT-Setup-2.11.2.exe`  
               *(Instala o programa completo com todas as DLLs nativas em `Arquivos de Programas` e cria atalho na Área de Trabalho)*
             - **Instalador MSI (.msi):** `IPScanIGT.msi`  
               *(Instalação padrão corporativa do Windows)*
             - **Executável Portátil (.exe):** `IPScanIGT.exe`  
               *(Executa direto com duplo-clique sem precisar instalar, com VC++ Runtime e UCRT embutidos)*
 
-            ### 🚀 Novidades da Versão 2.11.1:
+            ### 🚀 Novidades da Versão 2.11.2:
+            - **🔄 Atualização Direta no Gerenciador de Pacotes:** Versão v2.11.2 permitindo ao APT / KDE Discover / QApt detectar a atualização do `.deb` sem conflito de versão já instalada.
             - **🛡️ Permissões L2 Automáticas nos Instaladores:** O pacote Debian (`.deb`) e o script `instalar_linux.sh` agora configuram de forma automática e permanente `setcap cap_net_raw,cap_net_admin+eip` no binário instalado e incluem dependência `libcap2-bin`, sem exigir intervenção manual do usuário.
             - **🪟 Instalador Windows (.exe) com Privilégios e Firewall Embutidos:** O instalador Inno Setup agora solicita privilégios de administrador nativamente e aplica regras de firewall para tráfego local e broadcast/multicast.
             - **🔐 Assistente Interativo de Permissões na Interface (LLDPSwitchDialog):** Diálogo inteligente oferecendo fallback para SNMP Bridge-MIB (sem requerer root), elevação gráfica em 1-clique via Polkit (`pkexec`) e comando copiável para terminal.
