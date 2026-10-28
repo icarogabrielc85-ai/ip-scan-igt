@@ -523,22 +523,12 @@ class LLDPSwitchDialog(QDialog):
 
     def _show_l2_permission_helper(self, err: str):
         """Exibe janela orientativa e interativa quando permissões L2 forem necessárias no Linux."""
-        target_bin = ""
-        if getattr(sys, "frozen", False):
-            target_bin = sys.executable
-        else:
-            local_bin = os.path.expanduser("~/.local/bin/ip-scan-igt")
-            dist_bin = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dist", "IPScanIGT")
-            opt_bin = "/opt/ipscan-igt/IPScanIGT"
-            if os.path.exists(local_bin):
-                target_bin = local_bin
-            elif os.path.exists(dist_bin):
-                target_bin = dist_bin
-            elif os.path.exists(opt_bin):
-                target_bin = opt_bin
-            else:
-                target_bin = os.path.realpath(sys.executable)
+        from lldp_engine import find_l2_sniffer_binary
+        sniffer_bin = find_l2_sniffer_binary()
+        if not sniffer_bin:
+            sniffer_bin = os.path.expanduser("~/.local/bin/ipscan-l2-sniffer")
 
+        target_bin = sniffer_bin
         cmd_sudo = f"sudo setcap cap_net_raw,cap_net_admin+eip {target_bin}"
 
         msg = QMessageBox(self)
@@ -546,13 +536,13 @@ class LLDPSwitchDialog(QDialog):
         msg.setWindowTitle("⚡ Permissão de Rede L2 Necessária — IP Scan IGT")
         msg.setText(
             "<b>A escuta passiva de pacotes Ethernet (LLDP / CDP) requer permissão de rede no Linux.</b><br><br>"
-            "Por segurança, o kernel do Linux restringe o acesso a sockets brutos (Raw Sockets) para usuários sem privilégios, "
-            "a menos que o executável possua a capacidade <code>CAP_NET_RAW</code> concedida.<br><br>"
+            "Por segurança, o kernel do Linux restringe o acesso a Raw Sockets para usuários comuns, "
+            f"a menos que o auxiliar nativo (<code>{os.path.basename(target_bin)}</code>) possua a capacidade <code>CAP_NET_RAW</code> concedida.<br><br>"
             "<b>Como você prefere proceder?</b>"
         )
 
         btn_snmp = msg.addButton("🔍 Usar Consulta SNMP (Sem Root)", QMessageBox.AcceptRole)
-        btn_polkit = msg.addButton("⚡ Conceder Permissão (Polkit)", QMessageBox.ActionRole)
+        btn_polkit = msg.addButton("⚡ Conceder Permissão Definitiva (Polkit)", QMessageBox.ActionRole)
         btn_copy = msg.addButton("📋 Copiar Comando Terminal", QMessageBox.ActionRole)
         btn_cancel = msg.addButton("Fechar", QMessageBox.RejectRole)
 

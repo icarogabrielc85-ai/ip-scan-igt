@@ -7,6 +7,7 @@ __pycache__/
 build/
 dist/
 *.spec.bak
+ipscan-l2-sniffer
 
 # Virtual environments
 .env

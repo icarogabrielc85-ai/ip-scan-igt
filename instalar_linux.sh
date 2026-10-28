@@ -142,10 +142,22 @@ EOF
     chmod +x "$LAUNCHER"
 fi
 
+# Compilação e configuração do auxiliar nativo de captura L2 (ipscan-l2-sniffer)
+if [ -f "$SCRIPT_DIR/l2_sniffer.c" ]; then
+    echo -e "    [*] Compilando auxiliar nativo C de captura L2..."
+    gcc -O2 -Wall "$SCRIPT_DIR/l2_sniffer.c" -o "$HOME/.local/bin/ipscan-l2-sniffer" 2>/dev/null || true
+    chmod +x "$HOME/.local/bin/ipscan-l2-sniffer" 2>/dev/null || true
+fi
+
 # Concede permissão definitiva de captura L2 (LLDP/CDP) sem precisar rodar como root
-if command -v setcap >/dev/null 2>&1 && [ -f "$HOME/.local/bin/ip-scan-igt" ]; then
-    echo -e "    [*] Configurando permissão permanente de captura de rede L2 (CAP_NET_RAW)..."
-    run_sudo setcap cap_net_raw,cap_net_admin+eip "$HOME/.local/bin/ip-scan-igt" || true
+if command -v setcap >/dev/null 2>&1; then
+    if [ -f "$HOME/.local/bin/ipscan-l2-sniffer" ]; then
+        echo -e "    [*] Configurando permissão permanente CAP_NET_RAW no auxiliar nativo..."
+        run_sudo setcap cap_net_raw,cap_net_admin+eip "$HOME/.local/bin/ipscan-l2-sniffer" || true
+    fi
+    if [ -f "$HOME/.local/bin/ip-scan-igt" ]; then
+        run_sudo setcap cap_net_raw,cap_net_admin+eip "$HOME/.local/bin/ip-scan-igt" || true
+    fi
 fi
 echo -e "    ${GREEN}✔${RESET} Comando de terminal criado: ${CYAN}ipscan-igt${RESET} / ${CYAN}ip-scan-igt${RESET}"
 

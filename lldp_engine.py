@@ -412,6 +412,22 @@ def parse_cdp_packet(raw_packet: bytes) -> Optional[LLDPPortInfo]:
     return info
 
 
+def find_l2_sniffer_binary() -> Optional[str]:
+    """Localiza o binário auxiliar nativo C ipscan-l2-sniffer."""
+    candidates = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "ipscan-l2-sniffer"),
+        os.path.expanduser("~/.local/bin/ipscan-l2-sniffer"),
+        "/usr/local/bin/ipscan-l2-sniffer",
+        "/opt/ipscan-igt/ipscan-l2-sniffer",
+        "/usr/bin/ipscan-l2-sniffer",
+    ]
+    for c in candidates:
+        if os.path.isfile(c) and os.access(c, os.X_OK):
+            return c
+    import shutil
+    return shutil.which("ipscan-l2-sniffer")
+
+
 class LLDPSnifferWorker(QThread):
     """
     Worker que escuta ativamente por pacotes multicast LLDP (01:80:C2:00:00:0E)
@@ -438,6 +454,8 @@ class LLDPSnifferWorker(QThread):
             )
             return
 
+        sock = None
+        direct_perm_denied = False
         try:
             # 0x0003 = ETH_P_ALL
             sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(0x0003))
@@ -445,15 +463,26 @@ class LLDPSnifferWorker(QThread):
                 sock.bind((self.interface, 0))
             sock.settimeout(1.0)
         except PermissionError:
-            self.error_occurred.emit(
-                "Permissão L2 negada (Requer privilégios de Administrador/root ou CAP_NET_RAW).\n"
-                "Você pode utilizar a Consulta SNMP diretamente ao Switch (sem root) "
-                "ou testar com os modelos do Modo Demonstração."
-            )
-            return
+            direct_perm_denied = True
+            sock = None
         except Exception as e:
             self.error_occurred.emit(f"Falha ao abrir socket de rede na interface '{self.interface}': {e}")
             return
+
+        # 2. Se o Python direto não tiver permissão (comum no PyInstaller onefile),
+        # tenta usar o auxiliar C nativo ipscan-l2-sniffer
+        if sock is None and direct_perm_denied:
+            sniffer_bin = find_l2_sniffer_binary()
+            if sniffer_bin:
+                self._run_with_helper_binary(sniffer_bin)
+                return
+            else:
+                self.error_occurred.emit(
+                    "Permissão L2 negada (Requer privilégios de Administrador/root ou CAP_NET_RAW).\n"
+                    "Você pode utilizar a Consulta SNMP diretamente ao Switch (sem root) "
+                    "ou testar com os modelos do Modo Demonstração."
+                )
+                return
 
         start_time = time.time()
         frames_seen = 0
@@ -501,6 +530,70 @@ class LLDPSnifferWorker(QThread):
             sock.close()
         except Exception:
             pass
+
+    def _run_with_helper_binary(self, sniffer_bin: str):
+        """Executa a captura usando o auxiliar nativo compilado em C (imune a limitações do PyInstaller)."""
+        self.status_updated.emit(f"Iniciando escuta via auxiliar de rede L2...")
+        try:
+            proc = subprocess.Popen(
+                [sniffer_bin, self.interface or "", str(self.timeout_sec)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
+        except Exception as ex:
+            self.error_occurred.emit(f"Erro ao disparar auxiliar de captura: {ex}")
+            return
+
+        start_time = time.time()
+        while self.is_running and proc.poll() is None:
+            elapsed = time.time() - start_time
+            remaining = max(0, int(self.timeout_sec - elapsed))
+            self.status_updated.emit(f"Aguardando frame LLDP/CDP... ({remaining}s restantes)")
+            time.sleep(0.5)
+
+        if not self.is_running and proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=1.0)
+            except Exception:
+                proc.kill()
+            return
+
+        stdout_data, stderr_data = proc.communicate()
+        if "ERROR_PERMISSION" in stderr_data:
+            self.error_occurred.emit(
+                "Permissão L2 negada (Requer privilégios de Administrador/root ou CAP_NET_RAW).\n"
+                "Você pode utilizar a Consulta SNMP diretamente ao Switch (sem root) "
+                "ou conceder permissão ao auxiliar nativo."
+            )
+            return
+
+        frame_found = False
+        for line in stdout_data.splitlines():
+            line = line.strip()
+            if line.startswith("FRAME:"):
+                raw_hex = line[6:]
+                try:
+                    packet = bytes.fromhex(raw_hex)
+                    lldp_info = parse_lldp_frame(packet) or parse_cdp_packet(packet)
+                    if lldp_info:
+                        lldp_info.interface_name = self.interface
+                        self.packet_captured.emit(lldp_info)
+                        self.status_updated.emit("✔ Anúncio do switch identificado com sucesso!")
+                        frame_found = True
+                        break
+                except Exception as ex:
+                    self.error_occurred.emit(f"Erro ao processar frame de rede: {ex}")
+                    return
+
+        if not frame_found and self.is_running:
+            self.status_updated.emit(
+                f"Tempo limite ({self.timeout_sec}s) atingido sem pacotes LLDP/CDP.\n"
+                "Dica: Muitos switches transmitem anúncios LLDP a cada 30 segundos. "
+                "Verifique se o LLDP está habilitado na porta do switch."
+            )
 
     def stop(self):
         self.is_running = False

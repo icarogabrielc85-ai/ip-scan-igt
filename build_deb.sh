@@ -50,6 +50,15 @@ mkdir -p "$BUILD_DIR/usr/share/pixmaps"
 cp "$DIST_DIR/IPScanIGT" "$BUILD_DIR/opt/ipscan-igt/IPScanIGT"
 chmod +x "$BUILD_DIR/opt/ipscan-igt/IPScanIGT"
 
+# Compilar e incluir o auxiliar nativo L2 sniffer (C puro)
+if [ -f "$SCRIPT_DIR/l2_sniffer.c" ]; then
+    echo "[*] Compilando auxiliar nativo C de captura L2 (ipscan-l2-sniffer)..."
+    gcc -O2 -Wall "$SCRIPT_DIR/l2_sniffer.c" -o "$BUILD_DIR/opt/ipscan-igt/ipscan-l2-sniffer"
+    strip "$BUILD_DIR/opt/ipscan-igt/ipscan-l2-sniffer" 2>/dev/null || true
+    chmod +x "$BUILD_DIR/opt/ipscan-igt/ipscan-l2-sniffer"
+    ln -sf "/opt/ipscan-igt/ipscan-l2-sniffer" "$BUILD_DIR/usr/bin/ipscan-l2-sniffer"
+fi
+
 if [ -f "$SCRIPT_DIR/mac-vendors.txt" ]; then
     cp "$SCRIPT_DIR/mac-vendors.txt" "$BUILD_DIR/opt/ipscan-igt/"
 fi
@@ -103,9 +112,14 @@ set -e
 if command -v update-desktop-database >/dev/null 2>&1; then
     update-desktop-database -q /usr/share/applications || true
 fi
-# Concede permissão de captura bruta L2 (LLDP/CDP) sem exigir execução como root
-if command -v setcap >/dev/null 2>&1 && [ -f "/opt/ipscan-igt/IPScanIGT" ]; then
-    setcap cap_net_raw,cap_net_admin+eip /opt/ipscan-igt/IPScanIGT || true
+# Concede permissão de captura bruta L2 (LLDP/CDP) no auxiliar nativo sem exigir root
+if command -v setcap >/dev/null 2>&1; then
+    if [ -f "/opt/ipscan-igt/ipscan-l2-sniffer" ]; then
+        setcap cap_net_raw,cap_net_admin+eip /opt/ipscan-igt/ipscan-l2-sniffer || true
+    fi
+    if [ -f "/opt/ipscan-igt/IPScanIGT" ]; then
+        setcap cap_net_raw,cap_net_admin+eip /opt/ipscan-igt/IPScanIGT || true
+    fi
 fi
 exit 0
 EOF
