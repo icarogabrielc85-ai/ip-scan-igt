@@ -1,4 +1,4 @@
-# 🔍 IP Scan IGT (Linux & Windows) — v2.11.0
+# 🔍 IP Scan IGT (Linux & Windows) — v2.11.1
 
 **IP Scan IGT** é uma ferramenta gráfica profissional de escaneamento, auditoria, segurança e diagnóstico de redes locais (LAN) inspirada no *Advanced IP Scanner*, desenvolvida em **Python 3** e **PyQt5** com suporte nativo multiplataforma (**Linux** e **Windows 10/11**).
 

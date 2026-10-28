@@ -6,8 +6,8 @@ import os
 import subprocess
 
 # Versão Semântica Oficial (MAJOR.MINOR.PATCH)
-APP_VERSION = "2.11.0"
-APP_RELEASE_DATE = "27/10/2026"
+APP_VERSION = "2.11.1"
+APP_RELEASE_DATE = "28/10/2026"
 
 
 def get_git_info(repo_dir: str = None) -> tuple:
@@ -73,6 +73,18 @@ def get_short_version() -> str:
 
 
 VERSION_HISTORY = [
+    {
+        "version": "v2.11.1",
+        "date": "28/10/2026",
+        "title": "Automação de Permissões L2 nos Instaladores (.deb / .exe), Polkit Interativo e Blindagem de Segurança",
+        "changes": [
+            "Automação L2 no Pacote Debian (.deb): inclusão de pós-instalação (DEBIAN/postinst) aplicando 'setcap cap_net_raw,cap_net_admin+eip' diretamente no binário e adição da dependência 'libcap2-bin', eliminando a necessidade de comandos manuais no terminal.",
+            "Automação L2 no Script de Instalação Linux (instalar_linux.sh): concessão automática e permanente de 'setcap' no binário instalado (/opt/ipscan-igt, /usr/local/bin e ~/.local/bin) com verificação inteligente de integridade.",
+            "Instalador Windows (.exe / Inno Setup): elevação administrativa nativa (PrivilegesRequired=admin) e regras automáticas de firewall liberando o tráfego de descoberta broadcast e multicast.",
+            "Assistente Interativo de Permissão L2 (LLDPSwitchDialog): assistente visual com fallback inteligente para SNMP Bridge-MIB (sem requerer root), botão de elevação gráfica via Polkit (pkexec) em 1 clique e comando copiável para o clipboard.",
+            "Auditoria Completa e Blindagem de Segurança: varredura no repositório confirmando ausência de tokens/chaves e reforço do .gitignore contra arquivos de credenciais, certificados e variáveis de ambiente.",
+        ],
+    },
     {
         "version": "v2.11.0",
         "date": "27/10/2026",
