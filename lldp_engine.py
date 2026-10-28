@@ -431,6 +431,13 @@ class LLDPSnifferWorker(QThread):
         self.status_updated.emit(f"Iniciando escuta LLDP/CDP na interface '{self.interface}'...")
 
         # 1. Tenta escutar via Raw Socket L2 (AF_PACKET no Linux)
+        if not hasattr(socket, "AF_PACKET"):
+            self.error_occurred.emit(
+                "WINDOWS_NO_AF_PACKET: No Windows, a identificação do switch é realizada nativamente via consulta SNMP direta ao Switch "
+                "(botão '🔍 Consultar SNMP') sem necessidade de drivers adicionais."
+            )
+            return
+
         try:
             # 0x0003 = ETH_P_ALL
             sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(0x0003))

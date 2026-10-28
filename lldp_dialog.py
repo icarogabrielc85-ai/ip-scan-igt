@@ -513,7 +513,10 @@ class LLDPSwitchDialog(QDialog):
         self.lbl_status.setText(f"⚠️ {err.splitlines()[0]}")
         self.lbl_status.setStyleSheet("color: #f87171;")
 
-        if "CAP_NET_RAW" in err or "Permissão L2 negada" in err:
+        if err.startswith("WINDOWS_NO_AF_PACKET"):
+            self.lbl_status.setText("● Alternando automaticamente para identificação via SNMP...")
+            self.run_snmp_audit()
+        elif "CAP_NET_RAW" in err or "Permissão L2 negada" in err:
             self._show_l2_permission_helper(err)
         else:
             QMessageBox.warning(self, "Aviso de Captura L2", err)

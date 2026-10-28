@@ -46,8 +46,9 @@ if [ -f "$SCRIPT_DIR/icon.png" ]; then
     cp "$SCRIPT_DIR/icon.png" "$BUILD_DIR/usr/share/pixmaps/ipscan-igt.png"
 fi
 
-# 3. Criar link simbólico /usr/bin/ipscan-igt
+# 3. Criar links simbólicos /usr/bin/ipscan-igt e /usr/bin/ip-scan-igt
 ln -sf "/opt/ipscan-igt/IPScanIGT" "$BUILD_DIR/usr/bin/ipscan-igt"
+ln -sf "/opt/ipscan-igt/IPScanIGT" "$BUILD_DIR/usr/bin/ip-scan-igt"
 
 # 4. Criar arquivo .desktop em /usr/share/applications/
 cat << 'EOF' > "$BUILD_DIR/usr/share/applications/ipscan-igt.desktop"
@@ -73,7 +74,7 @@ Section: net
 Priority: optional
 Architecture: ${ARCH}
 Maintainer: Icaro Gabriel <icarogabrielc85-ai@users.noreply.github.com>
-Depends: libgl1, libxcb-xinerama0
+Depends: libgl1, libxcb-xinerama0, libcap2-bin
 Recommends: ffmpeg, vlc, nmap, remmina, openssh-client
 Homepage: https://github.com/icarogabrielc85-ai/ip-scan-igt
 Description: IP Scan IGT - Ferramenta Grafica de Auditoria e Diagnostico de Rede
