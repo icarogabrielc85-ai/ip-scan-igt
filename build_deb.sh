@@ -83,12 +83,16 @@ Description: IP Scan IGT - Ferramenta Grafica de Auditoria e Diagnostico de Rede
  e conexao remota via RDP e terminal SSH.
 EOF
 
-# 6. Criar scripts de pós-instalação e pós-remoção para atualizar cache de ícones/desktop
+# 6. Criar scripts de pós-instalação e pós-remoção para atualizar cache de ícones/desktop e permissões L2
 cat << 'EOF' > "$BUILD_DIR/DEBIAN/postinst"
 #!/bin/sh
 set -e
 if command -v update-desktop-database >/dev/null 2>&1; then
     update-desktop-database -q /usr/share/applications || true
+fi
+# Concede permissão de captura bruta L2 (LLDP/CDP) sem exigir execução como root
+if command -v setcap >/dev/null 2>&1 && [ -f "/opt/ipscan-igt/IPScanIGT" ]; then
+    setcap cap_net_raw,cap_net_admin+eip /opt/ipscan-igt/IPScanIGT || true
 fi
 exit 0
 EOF

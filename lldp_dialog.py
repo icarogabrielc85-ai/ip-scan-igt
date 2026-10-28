@@ -512,7 +512,103 @@ class LLDPSwitchDialog(QDialog):
     def _on_sniffer_error(self, err: str):
         self.lbl_status.setText(f"⚠️ {err.splitlines()[0]}")
         self.lbl_status.setStyleSheet("color: #f87171;")
-        QMessageBox.warning(self, "Aviso de Captura L2", err)
+
+        if "CAP_NET_RAW" in err or "Permissão L2 negada" in err:
+            self._show_l2_permission_helper(err)
+        else:
+            QMessageBox.warning(self, "Aviso de Captura L2", err)
+
+    def _show_l2_permission_helper(self, err: str):
+        """Exibe janela orientativa e interativa quando permissões L2 forem necessárias no Linux."""
+        target_bin = ""
+        if getattr(sys, "frozen", False):
+            target_bin = sys.executable
+        else:
+            local_bin = os.path.expanduser("~/.local/bin/ip-scan-igt")
+            dist_bin = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dist", "IPScanIGT")
+            opt_bin = "/opt/ipscan-igt/IPScanIGT"
+            if os.path.exists(local_bin):
+                target_bin = local_bin
+            elif os.path.exists(dist_bin):
+                target_bin = dist_bin
+            elif os.path.exists(opt_bin):
+                target_bin = opt_bin
+            else:
+                target_bin = os.path.realpath(sys.executable)
+
+        cmd_sudo = f"sudo setcap cap_net_raw,cap_net_admin+eip {target_bin}"
+
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Information)
+        msg.setWindowTitle("⚡ Permissão de Rede L2 Necessária — IP Scan IGT")
+        msg.setText(
+            "<b>A escuta passiva de pacotes Ethernet (LLDP / CDP) requer permissão de rede no Linux.</b><br><br>"
+            "Por segurança, o kernel do Linux restringe o acesso a sockets brutos (Raw Sockets) para usuários sem privilégios, "
+            "a menos que o executável possua a capacidade <code>CAP_NET_RAW</code> concedida.<br><br>"
+            "<b>Como você prefere proceder?</b>"
+        )
+
+        btn_snmp = msg.addButton("🔍 Usar Consulta SNMP (Sem Root)", QMessageBox.AcceptRole)
+        btn_polkit = msg.addButton("⚡ Conceder Permissão (Polkit)", QMessageBox.ActionRole)
+        btn_copy = msg.addButton("📋 Copiar Comando Terminal", QMessageBox.ActionRole)
+        btn_cancel = msg.addButton("Fechar", QMessageBox.RejectRole)
+
+        msg.exec_()
+        clicked = msg.clickedButton()
+
+        if clicked == btn_snmp:
+            self.run_snmp_audit()
+        elif clicked == btn_polkit:
+            self._grant_cap_via_polkit(target_bin)
+        elif clicked == btn_copy:
+            QApplication.clipboard().setText(cmd_sudo)
+            QMessageBox.information(
+                self,
+                "Comando Copiado",
+                f"O comando abaixo foi copiado para a Área de Transferência:\n\n{cmd_sudo}\n\n"
+                "Abra o terminal, cole e execute com sua senha de administrador.",
+            )
+
+    def _grant_cap_via_polkit(self, target_bin: str):
+        """Tenta executar 'setcap' usando pkexec com prompt de autenticação gráfica."""
+        if not os.path.exists("/usr/bin/pkexec"):
+            QMessageBox.warning(
+                self,
+                "Polkit Indisponível",
+                "O utilitário 'pkexec' não foi encontrado. Por favor, execute o comando manualmente no terminal.",
+            )
+            return
+
+        setcap_path = "/usr/sbin/setcap"
+        if not os.path.exists(setcap_path):
+            import shutil
+            setcap_path = shutil.which("setcap") or "setcap"
+
+        self.lbl_status.setText("● Solicitando permissão via Polkit...")
+        self.lbl_status.setStyleSheet("color: #38bdf8;")
+
+        try:
+            import subprocess
+            res = subprocess.run(
+                ["pkexec", setcap_path, "cap_net_raw,cap_net_admin+eip", target_bin],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=45,
+            )
+            if res.returncode == 0:
+                QMessageBox.information(
+                    self,
+                    "Permissão Concedida!",
+                    f"Permissão CAP_NET_RAW concedida com sucesso para:\n{target_bin}\n\nIniciando escuta LLDP/CDP agora...",
+                )
+                self.toggle_sniffer()
+            else:
+                err_msg = res.stderr.strip() or "Operação cancelada pelo usuário."
+                self.lbl_status.setText(f"⚠️ {err_msg}")
+                self.lbl_status.setStyleSheet("color: #f87171;")
+        except Exception as ex:
+            QMessageBox.warning(self, "Falha na Elevação", f"Erro ao executar pkexec: {ex}")
 
     def _on_sniffer_finished(self):
         self.btn_sniff.setText(tr("lldp_btn_sniff", "▶ Escutar LLDP / CDP"))
