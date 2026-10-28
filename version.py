@@ -6,7 +6,7 @@ import os
 import subprocess
 
 # Versão Semântica Oficial (MAJOR.MINOR.PATCH)
-APP_VERSION = "2.10.0"
+APP_VERSION = "2.11.0"
 APP_RELEASE_DATE = "27/10/2026"
 
 
@@ -73,6 +73,19 @@ def get_short_version() -> str:
 
 
 VERSION_HISTORY = [
+    {
+        "version": "v2.11.0",
+        "date": "27/10/2026",
+        "title": "Identificador Visual de Porta de Switch (LLDP / CDP / SNMP) e Overhaul de Auditoria L2/L3",
+        "changes": [
+            "Painel Frontal 1U Vetorial Interativo (SwitchFrontPanelWidget): renderização realista de switch em rack de 19 polegadas (8, 16, 24 e 48 portas RJ45 com pinos banhados a ouro e slots SFP+ de fibra), LEDs de link (UP/DOWN) e animação pulsante com patch cord conectado destacando a porta local exata.",
+            "Escuta Passiva L2 Multicast (LLDP & Cisco CDP): captura de pacotes LLDP (IEEE 802.1AB) e CDP na camada de enlace sem interferir na rede, identificando Chassis ID, SysName, modelo, VLAN Nativa (PVID), capacidades e número da porta.",
+            "Mapeamento Ativo via SNMP Bridge-MIB: correlação do endereço MAC da estação local na tabela de encaminhamento L2 (dot1dTpFdbTable / dot1dBasePortIfIndex) para localização física sem necessidade de privilégios de administrador/root.",
+            "Presets de Demonstração Integrados: simulação instantânea com 1 clique de switches corporativos reais de mercado (Cisco Catalyst 2960X de 24 portas, Ubiquiti UniFi Pro PoE de 48 portas, MikroTik Cloud Router Switch CRS326 de 24 portas e HP Aruba 2530 de 8 portas).",
+            "Janela Dedicada (LLDPSwitchDialog): seletor de interfaces de rede, IP do switch alvo, cards detalhados de dados do equipamento, porta local e diagnóstico com exportação de relatório técnico e download do painel em imagem PNG.",
+            "Integração Global na Interface Principal: atalho rápido Ctrl+L, botão dedicado '🔌 Porta Switch' no Ribbon superior, opção no menu 'Ferramentas' e ação no menu de contexto de qualquer dispositivo da rede.",
+        ],
+    },
     {
         "version": "v2.10.0",
         "date": "27/10/2026",

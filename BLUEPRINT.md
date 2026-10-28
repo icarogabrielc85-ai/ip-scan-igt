@@ -1,10 +1,10 @@
 # BLUEPRINT — IP SCAN IGT
-**Versão:** 2.10.0 (Edição Multiplataforma: Linux & Windows)  
+**Versão:** 2.11.0 (Edição Multiplataforma: Linux & Windows)  
 **Projeto:** IP Scan IGT  
 **Repositório GitHub:** [https://github.com/icarogabrielc85-ai/ip-scan-igt](https://github.com/icarogabrielc85-ai/ip-scan-igt)  
 **Diretório Local (PC):** `/home/icaro/linux-ipscan`  
 **Executável do Sistema (Linux):** `/home/icaro/.local/bin/ip-scan-igt`  
-**Pacote Debian (.deb):** `/home/icaro/Área de trabalho/ipscan-igt_2.10.0_amd64.deb`  
+**Pacote Debian (.deb):** `/home/icaro/Área de trabalho/ipscan-igt_2.11.0_amd64.deb`  
 **Atalho da Área de Trabalho:** `/home/icaro/Área de trabalho/ip-scan-igt.desktop`  
 **Atalho do Menu do Sistema:** `~/.local/share/applications/ip-scan-igt.desktop`  
 **Data da Última Atualização:** 27/10/2026  
@@ -27,6 +27,11 @@ Inspirado na usabilidade ágil e visual clássico do consagrado *Advanced IP Sca
   - Matriz de Experiência Real (QoE) para Streaming 4K/8K HDR, Jogos Online (gaming competitivo), Videochamadas HD e download prático de arquivos.
   - Benchmark automatizado de provedores globais com classificação de qualidade em cores de alto contraste e gerenciador customizado de DNS.
   - Relatório unificado copiável para a Área de Transferência.
+- **Identificador Visual de Porta de Switch (LLDP, Cisco CDP & SNMP Bridge-MIB):**
+  - Renderização gráfica realista em rack 19" 1U de switches gerenciáveis (8, 16, 24 ou 48 portas RJ45 com pinos banhados a ouro e uplinks SFP+ de fibra óptica).
+  - Identificação exata da porta física em que o computador local está conectado, destacada com animação pulsante, patch cord conectado, LEDs de link (UP/DOWN), VLAN Nativa (PVID), velocidade e diagnóstico.
+  - Escuta passiva L2 Ethernet multicast (LLDP IEEE 802.1AB e Cisco CDP) e mapeamento ativo sem necessidade de root via SNMP Bridge-MIB (`dot1dTpFdbTable`).
+  - Presets demonstrativos de switches Cisco, Ubiquiti UniFi, MikroTik e Aruba, cópia de relatório técnico e exportação do painel em imagem PNG.
 - **Abertura Inteligente Maximizada & Auto-Ajustável:**
   - Aplicação e diálogo de teste iniciam maximizados por padrão adaptados à resolução nativa do monitor.
   - Ao desmaximizar (restaurar), a janela centraliza suavemente em 90% da resolução da tela mantendo o controle ergonômico.
@@ -143,6 +148,9 @@ flowchart TD
 | [`snapshot_engine.py`](file:///home/icaro/linux-ipscan/snapshot_engine.py) | Motor de **Snapshots de Auditoria & Comparador de Mudanças (Baseline Diff)** (`SnapshotManager` + `SnapshotDiffDialog`), destacando novos hosts (`🟢`), servidores ausentes (`🔴`) e portas/CVEs/MAC modificados (`🟠`). |
 | [`upnp_engine.py`](file:///home/icaro/linux-ipscan/upnp_engine.py) | Descoberta multicast e unicast **UPnP / SSDP (UDP 1900)** com parser de XML RootDevice para extrair fabricante, modelo exato e número de série de Smart TVs, roteadores Wi-Fi Mesh, Chromecasts e IoT. |
 | [`traceroute_dialog.py`](file:///home/icaro/linux-ipscan/traceroute_dialog.py) | Ferramenta gráfica de **Traceroute Visual por Saltos (TTL)** (`TracerouteWorker` + `TracerouteDialog`) com grafo encadeado de roteadores intermediários e diagnóstico de latência por salto. |
+| [`lldp_engine.py`](file:///home/icaro/linux-ipscan/lldp_engine.py) | Motor de descoberta L2 **LLDP (IEEE 802.1AB)**, **Cisco CDP** e mapeamento SNMP Bridge-MIB (`dot1dTpFdbTable`), extraindo modelo do switch, IP de gerência, VLAN, capacidades, número total de portas e a porta física exata em que o computador está conectado. |
+| [`lldp_dialog.py`](file:///home/icaro/linux-ipscan/lldp_dialog.py) | Janela dedicada (`LLDPSwitchDialog`) com controles de escuta passiva L2, consulta SNMP, seletor de placas e cards informativos detalhados de infraestrutura. |
+| [`switch_visual_widget.py`](file:///home/icaro/linux-ipscan/switch_visual_widget.py) | Componente gráfico vetorial de alta precisão (`SwitchFrontPanelWidget`) que renderiza o painel frontal 1U de switch em rack de 19" (8, 16, 24 ou 48 portas RJ45 + SFP+ uplinks), destacando com animação pulsante, patch cord conectado e badge a porta física conectada. |
 | [`interface_dialog.py`](file:///home/icaro/linux-ipscan/interface_dialog.py) | Janela modal de seleção de placas de rede (`NetworkInterfaceDialog`), listando adaptadores físicos, Wi-Fi, VPNs e bridges com IP, CIDR, faixa calculada, MAC, Gateway e velocidade de link. |
 | [`config_paths.py`](file:///home/icaro/linux-ipscan/config_paths.py) | Abstração de caminhos e diretórios de configuração multiplataforma (`get_config_dir` / `get_config_file`), garantindo persistência nativa em `%APPDATA%\IPScanIGT` no Windows e `~/.config/linux-ipscan/` no Linux, com migração automática transparente. |
 | [`oui_db.py`](file:///home/icaro/linux-ipscan/oui_db.py) | Mecanismo de resolução OUI (Organizationally Unique Identifier) com suporte a pacotes congelados PyInstaller (`sys._MEIPASS`) para tradução instantânea de MACs para nomes de fabricantes. |
@@ -233,6 +241,12 @@ flowchart TD
 - **SSDP Multicast & Unicast ([`upnp_engine.py`](file:///home/icaro/linux-ipscan/upnp_engine.py)):** Envia pacotes `M-SEARCH` para `239.255.255.250:1900`, coleta o header `LOCATION` e faz o parse do XML UPnP (`friendlyName`, `manufacturer`, `modelName`, `serialNumber`, `presentationURL`).
 - **Traceroute Visual ([`traceroute_dialog.py`](file:///home/icaro/linux-ipscan/traceroute_dialog.py)):** Sondagem iterativa salto a salto (`TTL 1..30`) compatível com Linux e Windows sem exigir privilégios de root, desenhando um grafo encadeado de roteadores com código de cores por latência RTT.
 
+### 4.13. Identificador Visual de Porta de Switch (LLDP, Cisco CDP & SNMP Bridge-MIB)
+- **Painel Frontal Vetorial 1U ([`switch_visual_widget.py`](file:///home/icaro/linux-ipscan/switch_visual_widget.py)):** Renderização gráfica ultra-precisa da carcaça de 19 polegadas com aletas de montagem em rack, slots modulares de 8, 16, 24 e 48 portas RJ45 com pinos de contato em ouro, slots SFP/SFP+ de fibra óptica, LEDs de link ativo/down e animação contínua de pulso neon com patch cord conectado indicando a porta física onde a estação está conectada.
+- **Escuta Passiva L2 ([`lldp_engine.py`](file:///home/icaro/linux-ipscan/lldp_engine.py)):** Sniffer nativo de pacotes multicast Ethernet L2 (`01:80:C2:00:00:0E` para LLDP IEEE 802.1AB e `01:00:0C:CC:CC:CC` para Cisco CDP) com decodificador completo de TLVs: Chassis ID, Port ID, TTL, Port Description, System Name, System Description, System Capabilities (Bridge/Router), Management Address IPv4 e VLAN Nativa / PVID (IEEE 802.1 OUI `00:80:c2`).
+- **Mapeamento Ativo via SNMP Bridge-MIB:** Para ambientes sem permissões de socket raw, consulta direta via UDP 161 nas tabelas padrão `dot1dBasePortIfIndex` e `dot1dTpFdbTable`, cruzando o endereço MAC da placa de rede local contra as tabelas de forwarding do switch para localização física exata da porta sem precisar de privilégios de administrador.
+- **Janela Interativa & Exportação ([`lldp_dialog.py`](file:///home/icaro/linux-ipscan/lldp_dialog.py)):** Seletor de placas de rede locais, campo para IP do switch alvo, presets demonstrativos corporativos de 1 clique (Cisco Catalyst 2960X, Ubiquiti UniFi Pro PoE, MikroTik CRS326, HP Aruba 2530), cards detalhados com informações L2/L3, cópia de relatório técnico formatado e exportação de foto do painel frontal em alta resolução PNG.
+
 ---
 
 ## 5. UI/UX Design System e Regras de Interface
@@ -273,6 +287,7 @@ flowchart TD
 - **`F5`**: Iniciar / Parar Varredura de Rede
 - **`Esc`**: Parar Varredura Ativa
 - **`Ctrl + N`**: Abrir Console de Varredura Nmap
+- **`Ctrl + L`**: Abrir Identificador de Porta de Switch (LLDP / CDP)
 - **`Ctrl + I`**: Abrir Seletor de Placas de Rede
 - **`Ctrl + E`**: Expandir Todos os Serviços `[+]`
 - **`Ctrl + R`**: Recolher Todos os Dispositivos `[-]`
@@ -283,4 +298,4 @@ flowchart TD
 - **`Ctrl + Q`**: Sair do Aplicativo
 
 ---
-*Blueprint oficial v2.9.2 aprovado e sincronizado com o repositório do projeto IP Scan IGT.*
+*Blueprint oficial v2.11.0 aprovado e sincronizado com o repositório do projeto IP Scan IGT.*

@@ -37,10 +37,10 @@ MANUAL_SECTIONS: List[Tuple[str, str]] = [
     ("sec5", "5. Câmeras IP, NVRs e Vídeo (ONVIF / RTSP)"),
     ("sec6", "6. Acesso Remoto (RDP, SSH, Wake-on-LAN, Web)"),
     ("sec7", "7. Segurança: CVEs, Nmap e Network Guard (L2)"),
-    ("sec8", "8. Monitoramento: Watchdog, SNMP e UPnP"),
+    ("sec8", "8. Monitoramento: Watchdog, SNMP, UPnP e Switch (LLDP)"),
     ("sec9", "9. Topologia Visual (NOC) e Traceroute TTL"),
     ("sec10", "10. Snapshots (Diff) e Relatórios Executivos"),
-    ("sec11", "11. Teste de Internet, DNS e System Doctor"),
+    ("sec11", "11. Speed Test, Benchmark DNS e System Doctor"),
     ("sec12", "12. Atalhos de Teclado e Dicas Rápidas"),
 ]
 
@@ -194,10 +194,10 @@ def generate_user_manual_html(is_dark: bool = False, for_pdf: bool = False) -> s
         <li><a href="#sec5">Câmeras IP, NVRs e Configuração de Vídeo (ONVIF / RTSP)</a></li>
         <li><a href="#sec6">Acesso Remoto e Controle (RDP, Terminal SSH, Wake-on-LAN, Web)</a></li>
         <li><a href="#sec7">Segurança de Rede: Correlação de CVEs, Auditoria Nmap e Network Guard (L2)</a></li>
-        <li><a href="#sec8">Monitoramento e Infraestrutura: Watchdog Contínuo, SNMP (UDP 161) e UPnP</a></li>
+        <li><a href="#sec8">Monitoramento e Infraestrutura: Watchdog Contínuo, SNMP (UDP 161), UPnP e Identificador de Porta do Switch (LLDP / CDP)</a></li>
         <li><a href="#sec9">Mapeamento Visual de Topologia (NOC) e Traceroute Visual (TTL)</a></li>
         <li><a href="#sec10">Snapshots de Auditoria (Baseline Diff) e Relatórios Executivos (HTML/PDF/CSV)</a></li>
-        <li><a href="#sec11">Diagnóstico de Internet, Benchmark Global de DNS e System Doctor</a></li>
+        <li><a href="#sec11">Speed Test (Cloudflare Edge), Benchmark Global de DNS e System Doctor</a></li>
         <li><a href="#sec12">Tabela Completa de Atalhos de Teclado</a></li>
     </ol>
 </div>
@@ -333,11 +333,12 @@ Executa varreduras profundas no ativo selecionado com 5 perfis prontos: <i>Scan 
 </ul>
 
 <a name="sec8"></a>
-<h2>8. Monitoramento e Infraestrutura: Watchdog Contínuo, SNMP (UDP 161) e UPnP</h2>
+<h2>8. Monitoramento e Infraestrutura: Watchdog Contínuo, SNMP (UDP 161), UPnP e Identificador de Porta do Switch (LLDP / CDP)</h2>
 <ul>
     <li><b>Watchdog Contínuo em 2º Plano (<code>🛡️ Watchdog</code>):</b> Monitora silenciosamente todos os dispositivos salvos na aba <b>Favoritos</b> em intervalos configuráveis (ex: a cada 15 segundos). Se um servidor crítico cair ou voltar a responder, emite notificações nativas na área de trabalho e registra o evento no Histórico de Incidentes.</li>
     <li><b>Auditoria via SNMP v1/v2c (UDP 161):</b> Consulta ativos de infraestrutura sem depender de bibliotecas externas (codificador ASN.1 BER nativo), extraindo descrição do hardware (<code>sysDescr</code>), nome (<code>sysName</code>), tempo de atividade (<code>sysUpTime</code>), localização, interfaces de switches e alertas de suprimentos/toner de impressoras.</li>
     <li><b>Descoberta UPnP / SSDP (UDP 1900):</b> Localiza roteadores, Smart TVs, NAS e dispositivos IoT via multicast SSDP e lê o descritor XML para exibir modelo exato, fabricante, firmware e número de série.</li>
+    <li><b>Identificador Visual de Porta de Switch (<code>🔌 Porta Switch</code> / <code>Ctrl+L</code>):</b> Renderiza com precisão vetorial o painel frontal 1U de um switch em rack de 19" (8, 16, 24 ou 48 portas RJ45 com pinos banhados a ouro e uplinks SFP+). Identifica através de escuta passiva L2 (LLDP IEEE 802.1AB ou Cisco CDP) ou consulta SNMP Bridge-MIB (<code>dot1dTpFdbTable</code>) a porta física exata em que o computador está conectado, destacando-a com animação pulsante, patch cord conectado, VLAN Nativa (PVID), velocidade e diagnóstico, permitindo copiar relatório técnico ou exportar a imagem do switch em PNG.</li>
 </ul>
 
 <a name="sec9"></a>
@@ -355,9 +356,10 @@ Executa varreduras profundas no ativo selecionado com 5 perfis prontos: <i>Scan 
 </ul>
 
 <a name="sec11"></a>
-<h2>11. Diagnóstico de Internet, Benchmark Global de DNS e System Doctor</h2>
+<h2>11. Speed Test (Cloudflare Edge), Benchmark Global de DNS e System Doctor</h2>
 <ul>
-    <li><b>Teste de Internet &amp; DNS (<code>🌐 Internet</code>):</b> Avalia a saúde do Gateway local, perda de pacotes WAN, velocidade de resolução do DNS atual da placa de rede e executa um benchmark comparativo em tempo real contra os principais servidores DNS mundiais (Cloudflare, Google, Quad9, OpenDNS, AdGuard), permitindo adicionar servidores DNS próprios da sua empresa.</li>
+    <li><b>Speed Test em Tempo Real (<code>🌐 Internet ➔ Teste de Velocidade</code>):</b> Medição nativa de alta velocidade via Cloudflare Edge de latência (Ping), Jitter, velocidade de Download (Mbps), Upload (Mbps) e taxa prática de transferência (MB/s), com velocímetro analógico dinâmico (auto-escala de 100M a 1000M) e Matriz de Avaliação de Experiência Real (QoE) para Streaming 4K, Jogos Online e Videochamadas.</li>
+    <li><b>Benchmark de Servidores DNS (<code>🌐 Internet ➔ Benchmark DNS</code>):</b> Avalia a saúde do Gateway local, perda de pacotes WAN, velocidade de resolução do DNS atual da placa de rede e executa um benchmark comparativo em tempo real contra os principais servidores DNS mundiais (Cloudflare, Google, Quad9, OpenDNS, AdGuard), permitindo adicionar, editar e restaurar servidores DNS customizados.</li>
     <li><b>System Doctor (Diagnóstico de Dependências):</b> Verifica se utilitários externos opcionais (Nmap, FFplay, VLC, Remmina, FreeRDP, ARP/IP) estão instalados no sistema operacional e fornece o comando exato de instalação em 1 clique caso algum esteja ausente.</li>
 </ul>
 
@@ -372,6 +374,7 @@ Executa varreduras profundas no ativo selecionado com 5 perfis prontos: <i>Scan 
     <tr><td><code>F2</code></td><td>Editar o <b>Apelido</b> do dispositivo selecionado na tabela</td></tr>
     <tr><td><code>F5</code></td><td>Iniciar varredura da faixa de IP configurada</td></tr>
     <tr><td><code>Esc</code></td><td>Interromper / parar a varredura em andamento</td></tr>
+    <tr><td><code>Ctrl + L</code></td><td>Abrir Identificador Visual de Porta de Switch (LLDP / CDP / SNMP)</td></tr>
     <tr><td><code>Ctrl + I</code></td><td>Abrir seletor detalhado de Placas de Rede e Sub-redes</td></tr>
     <tr><td><code>Ctrl + E</code></td><td>Expandir todos os serviços e portas de todos os dispositivos <code>[+]</code></td></tr>
     <tr><td><code>Ctrl + R</code></td><td>Recolher todos os itens da árvore <code>[-]</code></td></tr>

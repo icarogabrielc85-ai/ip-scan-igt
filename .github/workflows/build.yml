@@ -130,32 +130,34 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.10.0
-          name: "IP Scan IGT v2.10.0 — Pacotes .deb (Linux), .msi e .exe (Windows)"
+          tag_name: v2.11.0
+          name: "IP Scan IGT v2.11.0 — Pacotes .deb (Linux), .msi e .exe (Windows)"
           body: |
-            ## 📦 Downloads Oficiais do IP Scan IGT (v2.10.0)
+            ## 📦 Downloads Oficiais do IP Scan IGT (v2.11.0)
 
             Selecione o pacote compatível com seu sistema operacional:
 
             ### 🐧 Linux (Ubuntu, Debian, Pop!_OS, Linux Mint, Kali):
-            - **Pacote Debian (.deb):** `ipscan-igt_2.10.0_amd64.deb`  
-              *(Instale dando duplo-clique ou pelo terminal: `sudo apt install ./ipscan-igt_2.10.0_amd64.deb`)*
+            - **Pacote Debian (.deb):** `ipscan-igt_2.11.0_amd64.deb`  
+              *(Instale dando duplo-clique ou pelo terminal: `sudo apt install ./ipscan-igt_2.11.0_amd64.deb`)*
             - **Binário Portátil:** `IPScanIGT`
 
             ### 🪟 Windows 10 e Windows 11:
-            - **Instalador Assistente Recomendado (.exe):** `IPScanIGT-Setup-2.10.0.exe`  
+            - **Instalador Assistente Recomendado (.exe):** `IPScanIGT-Setup-2.11.0.exe`  
               *(Instala o programa completo com todas as DLLs nativas em `Arquivos de Programas` e cria atalho na Área de Trabalho)*
             - **Instalador MSI (.msi):** `IPScanIGT.msi`  
               *(Instalação padrão corporativa do Windows)*
             - **Executável Portátil (.exe):** `IPScanIGT.exe`  
               *(Executa direto com duplo-clique sem precisar instalar, com VC++ Runtime e UCRT embutidos)*
 
-            ### 🚀 Novidades da Versão 2.10.0:
-            - **🚀 Motor Nativo de Speed Test (Cloudflare Edge):** Medição de Latência (Ping), Jitter, Download (Mbps), Upload (Mbps) e taxa prática de transferência de arquivos em MB/s.
-            - **🏎️ Velocímetro Gráfico Moderno (SpeedometerWidget):** Arco gradiente com ponteiro luminoso e auto-escala dinâmica até 1000 Mbps.
-            - **⭐ Matriz de Experiência Real (QoE):** Avaliação automatizada de Streaming 4K/8K HDR, Jogos Online (gaming competitivo), Videochamadas HD (Zoom/Teams) e tempo de transferência de 1 GB.
-            - **🗂️ Nova Interface em Abas:** Separação entre [🚀 Teste de Velocidade] e [⚡ Benchmark de Servidores DNS] com sincronização automática de IP público, ISP e PoP.
-            - **📋 Relatório Executivo Unificado:** Cópia para Área de Transferência reunindo Speed Test, QoE e benchmark de todos os 30+ servidores DNS.
+            ### 🚀 Novidades da Versão 2.11.0:
+            - **🔌 Identificador Visual de Porta de Switch (LLDP / CDP / SNMP):** Renderização vetorial de alta fidelidade do painel frontal 1U de um switch em rack 19" (8, 16, 24 ou 48 portas RJ45 com pinos banhados a ouro e slots SFP+).
+            - **✨ Detecção Precisa da Conexão Local:** Destaque pulsante e patch cord conectado na porta física exata em que o computador está conectado, com identificação de VLAN Nativa (PVID), velocidade e PoE.
+            - **📡 Escuta Passiva L2 (LLDP IEEE 802.1AB & Cisco CDP):** Captura silenciosa de anúncios multicast de camada 2 sem gerar ruído na rede.
+            - **🔎 Mapeamento Ativo via SNMP Bridge-MIB:** Correlação reversa de MAC em tabelas FDB (`dot1dTpFdbTable`) para detecção em switches sem necessidade de privilégios de root.
+            - **🏢 Presets de Demonstração Corporativos:** Simulação instantânea de switches Cisco Catalyst, Ubiquiti UniFi, MikroTik Cloud Router e HP Aruba.
+            - **🚀 Motor de Teste de Velocidade (Speed Test) & Velocímetro Gráfico:** Medição de latência, jitter, download/upload via Cloudflare Edge com matriz QoE.
+            - **🌐 Internacionalização Completa (9 Idiomas):** Tradução total e dinâmica para todas as ferramentas e novos módulos.
           files: |
             release_files/*
           draft: false

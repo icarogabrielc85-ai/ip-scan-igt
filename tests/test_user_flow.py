@@ -205,6 +205,10 @@ def run_e2e_tests():
         assert tr("kpi_online").split("{")[0].strip() in window.kpi_online.text(), f"KPI Online incompatível em {lang}"
         assert tr("kpi_services").split("{")[0].strip() in window.kpi_services.text(), f"KPI Serviços incompatível em {lang}"
 
+        # Check Switch Port button and menu translation
+        assert window.btn_switch_port.text() == tr("btn_switch_port"), f"Botão Porta Switch não traduzido em {lang}"
+        assert window.act_lldp_switch.text() == tr("menu_lldp_switch"), f"Menu Porta Switch não traduzido em {lang}"
+
         print(f" -> Idioma '{lang}' ({SUPPORTED_LANGUAGES[lang]['native']}) OK!")
 
     # Restore Portuguese for subsequent tests
@@ -512,8 +516,25 @@ def run_e2e_tests():
         if os.path.exists(pdf_path):
             os.remove(pdf_path)
 
-    # 16. Cleanup
-    print("\n[TEST 16] Fechando janelas e encerrando threads...")
+    # 16. Switch Port Identification Dialog (LLDP / CDP / SNMP) Test
+    print("\n[TEST 16] Testando Identificador de Porta do Switch (LLDP / CDP / SNMP)...")
+    from lldp_dialog import LLDPSwitchDialog
+    lldp_dlg = LLDPSwitchDialog(window, gateway_ip="192.168.1.1", is_dark=False)
+    assert lldp_dlg is not None
+    assert lldp_dlg.switch_widget.total_ports == 24
+    # Test loading Ubiquiti 48 demo preset
+    lldp_dlg.load_demo("unifi_48")
+    assert lldp_dlg.switch_widget.total_ports == 48
+    assert lldp_dlg.current_info.port_number == 7
+    # Test copying report
+    lldp_dlg.copy_report_to_clipboard(show_popup=False)
+    copied = QApplication.clipboard().text()
+    assert "RELATÓRIO DE AUDITORIA DE PORTA DE SWITCH" in copied
+    lldp_dlg.close()
+    print(" -> Abertura de diálogo LLDP, troca de perfil de switch e relatório técnico OK.")
+
+    # 17. Cleanup
+    print("\n[TEST 17] Fechando janelas e encerrando threads...")
     dlg.close()
     window.close()
     print(" -> Encerramento limpo e gracioso concluído sem travamentos.")

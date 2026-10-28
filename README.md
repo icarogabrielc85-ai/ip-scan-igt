@@ -1,4 +1,4 @@
-# 🔍 IP Scan IGT (Linux & Windows) — v2.10.0
+# 🔍 IP Scan IGT (Linux & Windows) — v2.11.0
 
 **IP Scan IGT** é uma ferramenta gráfica profissional de escaneamento, auditoria, segurança e diagnóstico de redes locais (LAN) inspirada no *Advanced IP Scanner*, desenvolvida em **Python 3** e **PyQt5** com suporte nativo multiplataforma (**Linux** e **Windows 10/11**).
 
@@ -14,6 +14,7 @@
 - **📸 Snapshots de Auditoria & Comparador de Mudanças (Baseline Diff):** Fotografias completas da rede para auditoria comparativa destacando novos hosts (`🟢 +Novo`), servidores ausentes (`🔴 -Ausente`) e modificações de portas/CVEs (`🟠 ~Modificado`).
 - **🚨 Correlação de Vulnerabilidades (CVEs via SQLite Local):** Cruza banners HTTP, SSH, SSL, SNMP e serviços do Nmap com base curada SQLite (`cve_knowledge.db`), calculando score de risco CVSS.
 - **📊 Auditoria de Infraestrutura via SNMP (UDP 161 em Python Puro):** Extração de `sysDescr`, `sysName`, `sysUpTime`, contagem de interfaces de switches gerenciáveis e níveis de toner/páginas de impressoras (Printer-MIB).
+- **🔌 Identificador Visual de Porta de Switch (LLDP / CDP / SNMP):** Tela exclusiva interativa que renderiza o painel frontal 1U de um switch em rack de 19" (8, 16, 24 ou 48 portas), ilustra contatos RJ45 com pinos de ouro, status de links (UP/DOWN) e portas SFP+, destacando com patch cord conectado e halo neon pulsante a porta física exata em que o computador está conectado (via LLDP IEEE 802.1AB, Cisco CDP ou SNMP Bridge-MIB).
 - **👁️ Descoberta Automática de Câmeras & NVRs (ONVIF WS-Discovery):** Resolução dinâmica de URI RTSP com players de vídeo integrados (**FFplay** e **VLC** com aceleração de hardware H.264/HEVC).
 - **📡 Descoberta UPnP / SSDP (UDP 1900) & Traceroute Visual (TTL):** Extração de fabricante, modelo e serial de Smart TVs e IoT + grafo visual de latência salto a salto.
 - **📈 Osciloscópio de Ping Sub-Milissegundo:** Gráfico dinâmico contínuo de latência e jitter para diagnóstico instantâneo.

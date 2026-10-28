@@ -845,6 +845,11 @@ class MainWindow(QMainWindow):
         self.act_doctor_act.triggered.connect(self.open_system_doctor_dialog)
         self.menu_tools.addAction(self.act_doctor_act)
 
+        self.act_lldp_switch = QAction(tr("menu_lldp_switch", "🔌 Identificar Porta do Switch (LLDP / CDP)..."), self)
+        self.act_lldp_switch.setShortcut("Ctrl+L")
+        self.act_lldp_switch.triggered.connect(self.action_open_lldp_dialog)
+        self.menu_tools.addAction(self.act_lldp_switch)
+
         # 4. Segurança & Auditoria (Nmap, Network Guard, Watchdog, Snapshots)
         self.menu_security = menu_bar.addMenu(tr("menu_security", "Segurança"))
         self.act_nmap = QAction(tr("nmap_scan"), self)
@@ -1145,6 +1150,14 @@ class MainWindow(QMainWindow):
         self.btn_snapshots.setToolTip("Salvar Snapshot Base da rede e comparar mudanças (Novos hosts, Ausentes, Portas e CVEs)")
         self.btn_snapshots.clicked.connect(self.open_snapshot_diff_dialog)
         ribbon_layout.addWidget(self.btn_snapshots)
+
+        # Switch Port Identification (LLDP / CDP / SNMP)
+        self.btn_switch_port = QPushButton("🔌 Porta Switch")
+        self.btn_switch_port.setObjectName("ribbonBtn")
+        self.btn_switch_port.setFixedHeight(28)
+        self.btn_switch_port.setToolTip("Identificar porta do switch gerenciável conectado via LLDP/CDP ou consulta SNMP (Ctrl+L)")
+        self.btn_switch_port.clicked.connect(self.action_open_lldp_dialog)
+        ribbon_layout.addWidget(self.btn_switch_port)
 
         # Executive Report Export Menu button
         self.btn_report = QPushButton("📑 Relatório ▾")
@@ -1566,6 +1579,8 @@ class MainWindow(QMainWindow):
                 self.act_snapshots.setText(tr("menu_snapshots", "📸 Snapshots & Comparador de Mudanças (Diff)..."))
             if hasattr(self, "act_traceroute"):
                 self.act_traceroute.setText(tr("menu_traceroute", "🧭 Traceroute Visual (Rota TTL)..."))
+            if hasattr(self, "act_lldp_switch"):
+                self.act_lldp_switch.setText(tr("menu_lldp_switch", "🔌 Identificar Porta do Switch (LLDP / CDP)..."))
             self.act_rdp.setText(tr("connect_rdp"))
             self.act_ssh.setText(tr("connect_ssh"))
             self.act_wol.setText(tr("wake_on_lan"))
@@ -1622,6 +1637,9 @@ class MainWindow(QMainWindow):
             self.btn_guard.setText(tr("btn_guard", "🚨 Guard"))
         if hasattr(self, "btn_snapshots"):
             self.btn_snapshots.setText(tr("btn_snapshots", "📸 Snapshots"))
+        if hasattr(self, "btn_switch_port"):
+            self.btn_switch_port.setText(tr("btn_switch_port", "🔌 Porta Switch"))
+            self.btn_switch_port.setToolTip(tr("tooltip_switch_port", "Identificar porta do switch gerenciável conectado via LLDP/CDP ou consulta SNMP (Ctrl+L)"))
         if hasattr(self, "topology_widget"):
             self.topology_widget.retranslate_ui()
 
@@ -2635,6 +2653,7 @@ class MainWindow(QMainWindow):
 
         a_nmap = menu.addAction(f"🔍 {tr('ctx_nmap')}")
         a_traceroute = menu.addAction(f"🧭 {tr('ctx_traceroute', 'Traceroute Visual (Rota TTL)...')}")
+        a_switch_port = menu.addAction(f"🔌 {tr('ctx_switch_port', 'Identificar Porta no Switch (LLDP / CDP)...')}")
         a_trust_mac = None
         if rec.mac and rec.mac != "N/D":
             a_trust_mac = menu.addAction(f"🛡️ {tr('ctx_trust_mac', 'Marcar MAC como Confiável (Network Guard)')}")
@@ -2672,6 +2691,8 @@ class MainWindow(QMainWindow):
             self.open_nmap_dialog(rec.ip, rec.hostname)
         elif action == a_traceroute:
             self.open_traceroute_dialog(rec.ip)
+        elif action == a_switch_port:
+            self.open_lldp_switch_dialog(target_ip=rec.ip)
         elif a_trust_mac and action == a_trust_mac:
             NETWORK_GUARD.trust_mac(rec.mac, trusted=True, ip=rec.ip, hostname=rec.hostname, vendor=rec.vendor)
             rec.guard_alerts = []
@@ -2719,6 +2740,7 @@ class MainWindow(QMainWindow):
             a_rtsp = menu.addAction(f"🎬 {tr('ctx_rtsp')}")
             a_cam_cfg = menu.addAction(tr("config_video"))
         a_nmap = menu.addAction(f"🔍 {tr('ctx_nmap')}")
+        a_switch_port = menu.addAction(f"🔌 {tr('ctx_switch_port', 'Identificar Porta no Switch (LLDP / CDP)...')}")
         menu.addSeparator()
         a_rdp = menu.addAction(f"🖥️ {tr('ctx_rdp')}")
         a_ssh = menu.addAction(f"💻 {tr('ctx_ssh')}")
@@ -2740,6 +2762,8 @@ class MainWindow(QMainWindow):
             self.open_camera_config_dialog()
         elif action == a_nmap:
             self.open_nmap_dialog(rec.ip, rec.hostname)
+        elif action == a_switch_port:
+            self.open_lldp_switch_dialog(target_ip=rec.ip)
         elif action == a_rdp:
             self.open_rdp_connection(rec.ip)
         elif action == a_ssh:
@@ -2975,6 +2999,7 @@ class MainWindow(QMainWindow):
         menu = QMenu(self)
         a_fav = menu.addAction(f"★ {tr('ctx_add_fav')}")
         a_nmap = menu.addAction(f"🔍 {tr('ctx_nmap')}")
+        a_switch_port = menu.addAction(f"🔌 {tr('ctx_switch_port', 'Identificar Porta no Switch (LLDP / CDP)...')}")
         menu.addSeparator()
         a_http = menu.addAction(tr("ctx_open_http"))
         a_https = menu.addAction(tr("ctx_open_https"))
@@ -2986,6 +3011,8 @@ class MainWindow(QMainWindow):
             self.add_record_to_favorites(rec)
         elif action == a_nmap:
             self.open_nmap_dialog(rec.ip, rec.hostname)
+        elif action == a_switch_port:
+            self.open_lldp_switch_dialog(target_ip=rec.ip)
         elif action == a_http:
             QDesktopServices.openUrl(QUrl(f"http://{rec.ip}/"))
         elif action == a_https:
@@ -3197,6 +3224,17 @@ class MainWindow(QMainWindow):
             gateway_ip=self.local_info.get("gateway", ""),
             is_dark=self.is_dark_mode,
         )
+        dlg.exec_()
+
+    def action_open_lldp_dialog(self):
+        target = self.get_selected_or_current_ip() or self.local_info.get("gateway", "")
+        self.open_lldp_switch_dialog(target_ip=target)
+
+    def open_lldp_switch_dialog(self, target_ip: str = ""):
+        from lldp_dialog import LLDPSwitchDialog
+        gw = target_ip or self.local_info.get("gateway", "") or "192.168.1.254"
+        dlg = LLDPSwitchDialog(self, gateway_ip=gw, is_dark=self.is_dark_mode)
+        dlg.showMaximized()
         dlg.exec_()
 
     def generate_executive_html_report(self, records: dict) -> str:

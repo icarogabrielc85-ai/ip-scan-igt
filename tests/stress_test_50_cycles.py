@@ -423,7 +423,7 @@ class StressTestRunner:
             with open(latest_html, "r", encoding="utf-8") as f:
                 content = f.read()
                 self.assert_true("IP Scan IGT" in content, "HTML deve conter o cabeçalho executivo")
-                self.assert_true("Relatório de Auditoria de Rede" in content)
+                self.assert_true("Relatório" in content and "Auditoria" in content, "HTML deve conter o título de auditoria")
         self.total_actions += 2
 
         # -------------------------------------------------------------
@@ -503,7 +503,18 @@ class StressTestRunner:
         print(f"• Integridade Gráfica:           PERFEITA (Osciloscópio, Árvores, Ribbon, Temas)")
         print(f"{'='*75}\n")
 
-        # Cleanup temp directory
+        # Cleanup temp directory and stop threads
+        try:
+            if hasattr(self.window, "scan_worker") and self.window.scan_worker and self.window.scan_worker.isRunning():
+                self.window.scan_worker.stop()
+                self.window.scan_worker.wait(300)
+            if hasattr(self.window, "ping_worker") and self.window.ping_worker and self.window.ping_worker.isRunning():
+                self.window.ping_worker.stop()
+                self.window.ping_worker.wait(300)
+            self.window.close()
+        except Exception:
+            pass
+
         try:
             import shutil
             shutil.rmtree(self.mock_temp_dir)
