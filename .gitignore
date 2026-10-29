@@ -8,6 +8,8 @@ build/
 dist/
 *.spec.bak
 ipscan-l2-sniffer
+backups/
+*.tar.gz
 
 # Virtual environments
 .env

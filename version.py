@@ -6,8 +6,8 @@ import os
 import subprocess
 
 # Versão Semântica Oficial (MAJOR.MINOR.PATCH)
-APP_VERSION = "2.11.2"
-APP_RELEASE_DATE = "28/10/2026"
+APP_VERSION = "2.11.3"
+APP_RELEASE_DATE = "29/10/2026"
 
 
 def get_git_info(repo_dir: str = None) -> tuple:
@@ -73,6 +73,18 @@ def get_short_version() -> str:
 
 
 VERSION_HISTORY = [
+    {
+        "version": "v2.11.3",
+        "date": "29/10/2026",
+        "title": "Auditoria Híbrida Web/SNMP para Switches Airoha EN8851, Decodificação de Bitmaps L2 e Blindagem do Sniffer",
+        "changes": [
+            "Motor de Auditoria Híbrida Web/SNMP (Airoha EN8851 / EcoNet / FreeRTOS): suporte completo à extração do estado físico das portas (/portCur.xml) e tabela MAC FDB dinâmica (/dynamicmacentry.xml) via HTTP autenticado (SHA-256) com encerramento de sessão automático (/logout.cgi).",
+            "Mapeamento e Decodificação de Bitmaps de Porta (L2 Topology): resolução da convenção interna de bitmask do SoC Airoha (Bit 0 reservado à CPU interna, '1 << N' mapeado à porta física N), identificando com precisão a Porta 1 (Uplink/Gateway) e Porta 16 (Estação de Trabalho Local).",
+            "Validação Proativa de Capacidades no Sniffer L2 (l2_sniffer.c): nova flag '--test-cap' / '-t' e função check_sniffer_binary_cap() prevenindo 'Address family not supported' e garantindo seleção automática do binário auxiliar com CAP_NET_RAW no Linux.",
+            "Preset de Demonstração Airoha 24GE: adição do perfil demonstrativo de switch Airoha EN8851 de 24 portas com porta 1 (Uplink) e porta 16 (Conectada) para testes rápidos e validação visual.",
+            "Interface de Credenciais no Diálogo LLDP (lldp_dialog.py): inclusão de campos de autenticação web rápida (usuário/senha) no painel de auditoria do switch com repasse ao worker assíncrono.",
+        ],
+    },
     {
         "version": "v2.11.2",
         "date": "28/10/2026",

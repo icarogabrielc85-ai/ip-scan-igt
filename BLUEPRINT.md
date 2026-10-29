@@ -1,13 +1,13 @@
 # BLUEPRINT — IP SCAN IGT
-**Versão:** 2.11.2 (Edição Multiplataforma: Linux & Windows)  
+**Versão:** 2.11.3 (Edição Multiplataforma: Linux & Windows)  
 **Projeto:** IP Scan IGT  
 **Repositório GitHub:** [https://github.com/icarogabrielc85-ai/ip-scan-igt](https://github.com/icarogabrielc85-ai/ip-scan-igt)  
 **Diretório Local (PC):** `/home/icaro/linux-ipscan`  
 **Executável do Sistema (Linux):** `/home/icaro/.local/bin/ip-scan-igt`  
-**Pacote Debian (.deb):** `/home/icaro/Área de trabalho/ipscan-igt_2.11.2_amd64.deb`  
+**Pacote Debian (.deb):** `/home/icaro/Área de trabalho/ipscan-igt_2.11.3_amd64.deb`  
 **Atalho da Área de Trabalho:** `/home/icaro/Área de trabalho/ip-scan-igt.desktop`  
 **Atalho do Menu do Sistema:** `~/.local/share/applications/ip-scan-igt.desktop`  
-**Data da Última Atualização:** 28/10/2026  
+**Data da Última Atualização:** 29/10/2026  
 
 ---
 
@@ -245,7 +245,26 @@ flowchart TD
 - **Painel Frontal Vetorial 1U ([`switch_visual_widget.py`](file:///home/icaro/linux-ipscan/switch_visual_widget.py)):** Renderização gráfica ultra-precisa da carcaça de 19 polegadas com aletas de montagem em rack, slots modulares de 8, 16, 24 e 48 portas RJ45 com pinos de contato em ouro, slots SFP/SFP+ de fibra óptica, LEDs de link ativo/down e animação contínua de pulso neon com patch cord conectado indicando a porta física onde a estação está conectada.
 - **Escuta Passiva L2 ([`lldp_engine.py`](file:///home/icaro/linux-ipscan/lldp_engine.py)):** Sniffer nativo de pacotes multicast Ethernet L2 (`01:80:C2:00:00:0E` para LLDP IEEE 802.1AB e `01:00:0C:CC:CC:CC` para Cisco CDP) com decodificador completo de TLVs: Chassis ID, Port ID, TTL, Port Description, System Name, System Description, System Capabilities (Bridge/Router), Management Address IPv4 e VLAN Nativa / PVID (IEEE 802.1 OUI `00:80:c2`).
 - **Mapeamento Ativo via SNMP Bridge-MIB:** Para ambientes sem permissões de socket raw, consulta direta via UDP 161 nas tabelas padrão `dot1dBasePortIfIndex` e `dot1dTpFdbTable`, cruzando o endereço MAC da placa de rede local contra as tabelas de forwarding do switch para localização física exata da porta sem precisar de privilégios de administrador.
-- **Janela Interativa & Exportação ([`lldp_dialog.py`](file:///home/icaro/linux-ipscan/lldp_dialog.py)):** Seletor de placas de rede locais, campo para IP do switch alvo, presets demonstrativos corporativos de 1 clique (Cisco Catalyst 2960X, Ubiquiti UniFi Pro PoE, MikroTik CRS326, HP Aruba 2530), cards detalhados com informações L2/L3, cópia de relatório técnico formatado e exportação de foto do painel frontal em alta resolução PNG.
+- **Janela Interativa & Exportação ([`lldp_dialog.py`](file:///home/icaro/linux-ipscan/lldp_dialog.py)):** Seletor de placas de rede locais, campo para IP do switch alvo, credenciais de autenticação Web (usuário/senha), presets demonstrativos corporativos de 1 clique (Cisco Catalyst 2960X, Ubiquiti UniFi Pro PoE, MikroTik CRS326, HP Aruba 2530 e Airoha EN8851), cards detalhados com informações L2/L3, cópia de relatório técnico formatado e exportação de foto do painel frontal em alta resolução PNG.
+
+### 4.14. Auditoria Híbrida Web/SNMP, Decodificação de Bitmaps L2 e Blindagem do Sniffer (v2.11.3)
+- **Motor Híbrido Web/SNMP para Switches Airoha / EcoNet / FreeRTOS (`probe_switch_web_airoha` em [`lldp_engine.py`](file:///home/icaro/linux-ipscan/lldp_engine.py)):**
+  - Muitos switches compactos modernos (SoCs Airoha EN8851, MediaTek, EcoNet, Realtek gerenciáveis sob FreeRTOS) respondem a SNMP MIB-II básico (SysDescr, SysName, Uptime, ifNumber=24), mas retornam `noSuchName` para tabelas Bridge-MIB (`dot1dTpFdbTable`) e `ifOperStatus`.
+  - O motor híbrido detecta esse padrão de assinatura e aciona automaticamente a auditoria via API Web HTTP:
+    1. **Autenticação Segura:** POST para `/logon.cgi` com senha hash SHA-256 e extração do cookie de sessão `Cookies=user=admin`.
+    2. **Extração de Estado Elétrico Real das Portas:** Leitura de `/portCur.xml`, identificando individualmente o link físico (UP/DOWN) de cada uma das 24 portas RJ45.
+    3. **Tabela de Encaminhamento MAC (FDB):** Inicialização via `/freshdynamicmac.cgi?firstreq=1&times=4` seguida de extração em lote de `/dynamicmacentry.xml`.
+    4. **Desconexão Limpa Obrigatória:** Execução imediata de GET `/logout.cgi` ao final da auditoria, prevenindo bloqueio monousuário (`allow = 0`) no firmware do switch.
+- **Decodificação de Bitmaps de Portas Físicas (L2 Port Bitmap Architecture):**
+  - Switches baseados no SDK Airoha/EcoNet codificam a associação porta-MAC como uma máscara de bits onde o **Bit 0 (`0x1`) é reservado para a CPU/gerenciamento interno**, e cada porta física `r` corresponde a `(1 << r)` (`0x2` = Porta 1, `0x10000` = Porta 16).
+  - O algoritmo traduz com fidelidade matemática essa topologia:
+    - **Porta 1 (Bit 1 / `0x2`):** Porta de Uplink ativa (`🟢 UP`) onde trafegam os múltiplos MACs de Gateway, Proxmox, servidores e Access Points.
+    - **Porta 16 (Bit 16 / `0x10000`):** Porta local conectada (`🟢 CONNECTED`) onde reside exclusivamente o MAC da placa do usuário (`enp7s0`).
+    - **Portas 2–15 e 17–24:** Portas sem link (`⚪ DOWN`).
+- **Blindagem do Sniffer L2 e Teste Proativo de Capacidades (`l2_sniffer.c`):**
+  - Implementação da flag `--test-cap` / `-t` no executável C auxiliar para validar se o kernel Linux autoriza a criação do raw socket `AF_PACKET` / `SOCK_RAW`.
+  - A função `check_sniffer_binary_cap()` do Python executa o teste prévio, impedindo o erro de permissão *"Address family not supported"* e selecionando dinamicamente o melhor binário com `CAP_NET_RAW` (`~/.local/bin/ipscan-l2-sniffer`).
+  - Suporte expandido a tags 802.1Q (VLAN ID) e 802.1ad (QinQ) no tratador do sniffer C.
 
 ---
 
@@ -298,4 +317,4 @@ flowchart TD
 - **`Ctrl + Q`**: Sair do Aplicativo
 
 ---
-*Blueprint oficial v2.11.2 aprovado e sincronizado com o repositório do projeto IP Scan IGT.*
+*Blueprint oficial v2.11.3 aprovado e sincronizado com o repositório do projeto IP Scan IGT.*

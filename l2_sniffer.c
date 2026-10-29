@@ -25,6 +25,16 @@ int main(int argc, char *argv[]) {
     int timeout_sec = 35;
 
     if (argc >= 2) {
+        if (strcmp(argv[1], "--test-cap") == 0 || strcmp(argv[1], "-t") == 0) {
+            int test_sock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+            if (test_sock < 0) {
+                fprintf(stderr, "ERROR_PERMISSION: %s\n", strerror(errno));
+                return 1;
+            }
+            close(test_sock);
+            printf("OK_CAP_NET_RAW\n");
+            return 0;
+        }
         interface = argv[1];
     }
     if (argc >= 3) {
@@ -106,6 +116,10 @@ int main(int argc, char *argv[]) {
                           buffer[3] == 0xcc && buffer[4] == 0xcc && buffer[5] == 0xcc);
 
         uint16_t ethertype = (buffer[12] << 8) | buffer[13];
+        // Handle 802.1Q / 802.1ad VLAN tags
+        if ((ethertype == 0x8100 || ethertype == 0x88A8) && len >= 18) {
+            ethertype = (buffer[16] << 8) | buffer[17];
+        }
         int is_lldp_ethertype = (ethertype == 0x88CC);
 
         if (is_lldp_ethertype || is_lldp_mac || is_cdp_mac) {

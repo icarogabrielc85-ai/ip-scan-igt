@@ -157,30 +157,48 @@ class LLDPSwitchDialog(QDialog):
         tb_layout.addWidget(lbl_iface)
 
         self.combo_iface = QComboBox()
-        self.combo_iface.setMinimumWidth(220)
+        self.combo_iface.setMinimumWidth(190)
         self.combo_iface.setToolTip("Selecione a placa de rede conectada ao switch")
         tb_layout.addWidget(self.combo_iface)
 
         # IP do Switch / Gateway para SNMP
-        lbl_sw_ip = QLabel(f"<b>{tr('lldp_lbl_switch_ip', 'IP do Switch:')}</b>")
+        lbl_sw_ip = QLabel(f"<b>{tr('lldp_lbl_switch_ip', 'IP Switch:')}</b>")
         tb_layout.addWidget(lbl_sw_ip)
 
         self.edit_switch_ip = QLineEdit(self.gateway_ip)
         self.edit_switch_ip.setPlaceholderText("ex: 192.168.1.254")
-        self.edit_switch_ip.setFixedWidth(120)
-        self.edit_switch_ip.setToolTip("Endereço IP do switch para consulta SNMP direta")
+        self.edit_switch_ip.setFixedWidth(115)
+        self.edit_switch_ip.setToolTip("Endereço IP do switch para consulta direta (SNMP / Web)")
         tb_layout.addWidget(self.edit_switch_ip)
 
+        # Credenciais Web de Acesso ao Switch (Airoha / EcoNet / FreeRTOS)
+        lbl_sw_auth = QLabel("<b>Auth:</b>")
+        lbl_sw_auth.setToolTip("Credenciais de gerenciamento Web do Switch (ex: Airoha / EcoNet)")
+        tb_layout.addWidget(lbl_sw_auth)
+
+        self.edit_sw_user = QLineEdit("admin")
+        self.edit_sw_user.setPlaceholderText("Usuário")
+        self.edit_sw_user.setFixedWidth(70)
+        self.edit_sw_user.setToolTip("Usuário Web de gerenciamento do switch (padrão: admin)")
+        tb_layout.addWidget(self.edit_sw_user)
+
+        self.edit_sw_pwd = QLineEdit("admin")
+        self.edit_sw_pwd.setPlaceholderText("Senha")
+        self.edit_sw_pwd.setEchoMode(QLineEdit.Password)
+        self.edit_sw_pwd.setFixedWidth(70)
+        self.edit_sw_pwd.setToolTip("Senha Web de gerenciamento do switch (padrão: admin)")
+        tb_layout.addWidget(self.edit_sw_pwd)
+
         # Botão: Iniciar Escuta Passiva LLDP / CDP
-        self.btn_sniff = QPushButton(tr("lldp_btn_sniff", "▶ Escutar LLDP / CDP"))
+        self.btn_sniff = QPushButton(tr("lldp_btn_sniff", "▶ Escutar LLDP"))
         self.btn_sniff.setObjectName("primaryBtn")
         self.btn_sniff.setToolTip("Escuta pacotes multicast L2 periódicos transmitidos pelo switch na rede local")
         self.btn_sniff.clicked.connect(self.toggle_sniffer)
         tb_layout.addWidget(self.btn_sniff)
 
         # Botão: Consulta Ativa via SNMP
-        self.btn_snmp = QPushButton(tr("lldp_btn_snmp", "🔍 Consultar SNMP"))
-        self.btn_snmp.setToolTip("Consulta o switch diretamente via SNMPv1/v2c sem necessidade de permissões root")
+        self.btn_snmp = QPushButton(tr("lldp_btn_snmp", "🔍 Consultar Switch"))
+        self.btn_snmp.setToolTip("Consulta o switch diretamente via SNMPv1/v2c e API Web (Airoha/EcoNet/FreeRTOS)")
         self.btn_snmp.clicked.connect(self.run_snmp_audit)
         tb_layout.addWidget(self.btn_snmp)
 
@@ -188,11 +206,14 @@ class LLDPSwitchDialog(QDialog):
         self.btn_demo = QToolButton()
         self.btn_demo.setText(tr("lldp_btn_demo", "✨ Testar Switch Simulado ▾"))
         self.btn_demo.setPopupMode(QToolButton.InstantPopup)
-        self.btn_demo.setToolTip("Visualizar o painel em ação com perfis reais de switches Cisco, Ubiquiti, MikroTik e Aruba")
+        self.btn_demo.setToolTip("Visualizar o painel em ação com perfis reais de switches Cisco, Ubiquiti, MikroTik, Aruba e Airoha")
 
         demo_menu = QMenu(self.btn_demo)
         act_cisco = demo_menu.addAction("🏢 Cisco Catalyst 2960X (24 Portas GbE — Porta 12)")
         act_cisco.triggered.connect(lambda: self.load_demo("cisco_24"))
+
+        act_airoha = demo_menu.addAction("⚡ Airoha EN8851 24GE Smart Switch (Porta 16 Conectada / Porta 1 Uplink)")
+        act_airoha.triggered.connect(lambda: self.load_demo("airoha_24"))
 
         act_unifi = demo_menu.addAction("📶 Ubiquiti UniFi Pro PoE (48 Portas GbE — Porta 7)")
         act_unifi.triggered.connect(lambda: self.load_demo("unifi_48"))
@@ -607,8 +628,11 @@ class LLDPSwitchDialog(QDialog):
         self.btn_sniff.setText(tr("lldp_btn_sniff", "▶ Escutar LLDP / CDP"))
 
     def run_snmp_audit(self):
-        """Inicia a consulta ativa via SNMP ao IP do switch."""
+        """Inicia a consulta ativa via SNMP / Web ao IP do switch."""
         sw_ip = self.edit_switch_ip.text().strip()
+        sw_user = self.edit_sw_user.text().strip() if hasattr(self, "edit_sw_user") else "admin"
+        sw_pwd = self.edit_sw_pwd.text().strip() if hasattr(self, "edit_sw_pwd") else "admin"
+
         if not sw_ip:
             QMessageBox.information(self, "IP do Switch", "Por favor, informe o endereço IP do switch gerenciável.")
             return
@@ -616,7 +640,7 @@ class LLDPSwitchDialog(QDialog):
         iface_name = self._get_current_iface_name()
         local_mac = self._get_current_local_mac()
 
-        self.lbl_status.setText(f"● Consultando switch em {sw_ip} via SNMP...")
+        self.lbl_status.setText(f"● Consultando switch em {sw_ip} via SNMP / Web API...")
         self.lbl_status.setStyleSheet("color: #38bdf8;")
 
         self.snmp_worker = SNMPSwitchWorker(
@@ -624,6 +648,8 @@ class LLDPSwitchDialog(QDialog):
             community="public",
             local_mac=local_mac,
             interface=iface_name,
+            username=sw_user,
+            password=sw_pwd,
         )
         self.snmp_worker.switch_audited.connect(self._on_snmp_success)
         self.snmp_worker.status_updated.connect(self._on_sniffer_status)

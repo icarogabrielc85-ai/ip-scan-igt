@@ -17,9 +17,12 @@ from PyQt5.QtWidgets import QApplication
 from lldp_dialog import LLDPSwitchDialog
 from lldp_engine import (
     LLDPPortInfo,
+    check_sniffer_binary_cap,
     estimate_total_ports,
     extract_port_number,
+    find_l2_sniffer_binary,
     get_demo_preset,
+    get_l2_sniffer_candidates,
     parse_cdp_packet,
     parse_lldp_frame,
 )
@@ -131,9 +134,9 @@ def run_tests():
     print(" -> Auto-detecção de total de portas (8, 16, 24, 48) OK.")
 
     # ---------------------------------------------------------
-    # TESTE 3: Decodificação de Frame LLDP Bruto (IEEE 802.1AB)
+    # TESTE 3: Decodificação de Frame LLDP Bruto (IEEE 802.1AB) & Cisco CDP
     # ---------------------------------------------------------
-    print("\n[TEST 3] Decodificação de Frame Bruto Ethernet LLDP...")
+    print("\n[TEST 3] Decodificação de Frame Bruto Ethernet LLDP & Cisco CDP...")
     synthetic_pkt = build_synthetic_lldp_frame(
         chassis_mac="00:1a:a1:4b:92:00",
         port_id="GigabitEthernet1/0/12",
@@ -154,10 +157,43 @@ def run_tests():
     assert info.port_status_map.get(12) == "connected", "Porta 12 não marcada como conectada"
     print(f" -> Frame LLDP decodificado: {info.format_summary()} OK.")
 
+    # Valida decodificação de frame Cisco CDP com cabeçalho LLC/SNAP
+    eth_cdp = bytes.fromhex("01000cccccc0001122334455") + struct.pack("!H", 120)
+    snap_cdp = b"\xaa\xaa\x03\x00\x00\x0c\x20\x00"
+    cdp_hdr = bytes([2, 180]) + b"\x00\x00"
+    cdp_dev = b"SW-CISCO-CORE"
+    cdp_t1 = struct.pack("!HH", 0x0001, 4 + len(cdp_dev)) + cdp_dev
+    import socket
+    cdp_ip = socket.inet_aton("192.168.1.1")
+    cdp_addr = struct.pack("!IBB", 1, 1, 1) + b"\xcc" + struct.pack("!H", 4) + cdp_ip
+    cdp_t2 = struct.pack("!HH", 0x0002, 4 + len(cdp_addr)) + cdp_addr
+    cdp_port = b"GigabitEthernet1/0/1"
+    cdp_t3 = struct.pack("!HH", 0x0003, 4 + len(cdp_port)) + cdp_port
+    cdp_pkt = eth_cdp + snap_cdp + cdp_hdr + cdp_t1 + cdp_t2 + cdp_t3
+
+    cdp_info = parse_cdp_packet(cdp_pkt)
+    assert cdp_info is not None, "Falha ao decodificar frame Cisco CDP"
+    assert cdp_info.switch_name == "SW-CISCO-CORE"
+    assert cdp_info.management_ip == "192.168.1.1"
+    assert cdp_info.port_number == 1
+    assert cdp_info.protocol == "Cisco CDP"
+    print(f" -> Frame Cisco CDP decodificado: {cdp_info.format_summary()} OK.")
+
     # ---------------------------------------------------------
-    # TESTE 4: Presets de Demonstração (Cisco, Ubiquiti, MikroTik, Aruba)
+    # TESTE 4: Detecção Inteligente e Validação de Capacidades do Sniffer L2
     # ---------------------------------------------------------
-    print("\n[TEST 4] Validação dos Presets de Demonstração...")
+    print("\n[TEST 4] Validação de Candidatos e Permissões do Auxiliar L2...")
+    candidates = get_l2_sniffer_candidates()
+    assert len(candidates) > 0, "Nenhum candidato a binário auxiliar ipscan-l2-sniffer encontrado"
+    best_bin = find_l2_sniffer_binary()
+    assert best_bin is not None, "find_l2_sniffer_binary não retornou binário"
+    has_cap = check_sniffer_binary_cap(best_bin)
+    print(f" -> Melhor binário L2 selecionado: '{best_bin}' (CAP_NET_RAW: {has_cap}) OK.")
+
+    # ---------------------------------------------------------
+    # TESTE 5: Presets de Demonstração (Cisco, Ubiquiti, MikroTik, Aruba, Airoha)
+    # ---------------------------------------------------------
+    print("\n[TEST 5] Validação dos Presets de Demonstração...")
     p_cisco = get_demo_preset("cisco_24")
     assert p_cisco.total_ports == 24 and p_cisco.port_number == 12
     p_unifi = get_demo_preset("unifi_48")
@@ -166,12 +202,17 @@ def run_tests():
     assert p_mikrotik.total_ports == 24 and p_mikrotik.port_number == 3
     p_aruba = get_demo_preset("aruba_8")
     assert p_aruba.total_ports == 8 and p_aruba.port_number == 4
-    print(" -> Todos os 4 presets de fabricantes validados OK.")
+    p_airoha = get_demo_preset("airoha_24")
+    assert p_airoha.total_ports == 24 and p_airoha.port_number == 16
+    assert p_airoha.port_status_map.get(1) == "up", "Porta 1 (Uplink) deve estar up"
+    assert p_airoha.port_status_map.get(16) == "connected", "Porta 16 deve estar connected"
+    assert p_airoha.port_status_map.get(2) == "down", "Porta 2 deve estar down"
+    print(" -> Todos os 5 presets de fabricantes (incluindo Airoha EN8851) validados OK.")
 
     # ---------------------------------------------------------
-    # TESTE 5: Componente Gráfico SwitchFrontPanelWidget & Dialog
+    # TESTE 6: Componente Gráfico SwitchFrontPanelWidget & Dialog
     # ---------------------------------------------------------
-    print("\n[TEST 5] Renderização Gráfica do SwitchFrontPanelWidget e Diálogo...")
+    print("\n[TEST 6] Renderização Gráfica do SwitchFrontPanelWidget e Diálogo...")
     app = QApplication.instance() or QApplication(sys.argv)
 
     widget = SwitchFrontPanelWidget(is_dark=True)
