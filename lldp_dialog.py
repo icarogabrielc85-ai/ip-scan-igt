@@ -71,8 +71,10 @@ class LLDPSwitchDialog(QDialog):
         self._init_ui()
         self._load_interfaces()
 
-        # Inicia com preset padrão demonstrativo para visualização imediata
-        self.load_demo("cisco_24")
+        # Inicia automaticamente a consulta real ao switch caso o IP esteja configurado
+        if self.gateway_ip:
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(200, self.run_snmp_audit)
 
     def _apply_styling(self):
         bg = "#0b0f17" if self.is_dark else "#f3f4f6"
@@ -202,30 +204,6 @@ class LLDPSwitchDialog(QDialog):
         self.btn_snmp.clicked.connect(self.run_snmp_audit)
         tb_layout.addWidget(self.btn_snmp)
 
-        # Botão com Menu: Modos de Demonstração (Presets de Switches)
-        self.btn_demo = QToolButton()
-        self.btn_demo.setText(tr("lldp_btn_demo", "✨ Testar Switch Simulado ▾"))
-        self.btn_demo.setPopupMode(QToolButton.InstantPopup)
-        self.btn_demo.setToolTip("Visualizar o painel em ação com perfis reais de switches Cisco, Ubiquiti, MikroTik, Aruba e Airoha")
-
-        demo_menu = QMenu(self.btn_demo)
-        act_cisco = demo_menu.addAction("🏢 Cisco Catalyst 2960X (24 Portas GbE — Porta 12)")
-        act_cisco.triggered.connect(lambda: self.load_demo("cisco_24"))
-
-        act_airoha = demo_menu.addAction("⚡ Airoha EN8851 24GE Smart Switch (Porta 16 Conectada / Porta 1 Uplink)")
-        act_airoha.triggered.connect(lambda: self.load_demo("airoha_24"))
-
-        act_unifi = demo_menu.addAction("📶 Ubiquiti UniFi Pro PoE (48 Portas GbE — Porta 7)")
-        act_unifi.triggered.connect(lambda: self.load_demo("unifi_48"))
-
-        act_mikrotik = demo_menu.addAction("🌐 MikroTik CRS326 (24 Portas GbE — Porta 3)")
-        act_mikrotik.triggered.connect(lambda: self.load_demo("mikrotik_24"))
-
-        act_aruba = demo_menu.addAction("💼 HP Aruba 2530 (8 Portas GbE — Porta 4)")
-        act_aruba.triggered.connect(lambda: self.load_demo("aruba_8"))
-
-        self.btn_demo.setMenu(demo_menu)
-        tb_layout.addWidget(self.btn_demo)
 
         tb_layout.addStretch(1)
 
@@ -249,14 +227,14 @@ class LLDPSwitchDialog(QDialog):
         sb_layout = QHBoxLayout(self.status_banner)
         sb_layout.setContentsMargins(10, 6, 10, 6)
 
-        self.lbl_status = QLabel("● Pronto. Clique em 'Escutar LLDP / CDP' ou 'Consultar SNMP' para identificar o switch.")
+        self.lbl_status = QLabel("● Pronto. Clique em '🔍 Consultar Switch' ou '▶ Escutar LLDP' para identificar o switch.")
         self.lbl_status.setFont(QFont("Segoe UI", 9, QFont.Bold))
         self.lbl_status.setStyleSheet("color: #60a5fa;")
         sb_layout.addWidget(self.lbl_status)
 
         sb_layout.addStretch(1)
 
-        self.lbl_protocol_badge = QLabel("Protocolo: LLDP (IEEE 802.1AB)")
+        self.lbl_protocol_badge = QLabel("Protocolo: Auto (LLDP / SNMP / Web)")
         self.lbl_protocol_badge.setStyleSheet(
             "background-color: #1e3a8a; color: #93c5fd; padding: 2px 8px; border-radius: 4px; font-weight: bold;"
         )
@@ -300,34 +278,34 @@ class LLDPSwitchDialog(QDialog):
 
         # CARD 1: DADOS DO SWITCH (CHASSIS / HARDWARE)
         self.card_switch = self._create_card("🏢 Switch & Fabricante", [
-            ("Nome do Switch:", "lbl_sw_name", "SW-CORE-DISTRIB-01"),
-            ("Modelo / SO:", "lbl_sw_model", "Cisco Catalyst 2960X-24TD-L"),
-            ("Fabricante:", "lbl_sw_vendor", "Cisco Systems"),
-            ("IP de Gerência:", "lbl_sw_mgmt_ip", "192.168.111.250"),
-            ("MAC Chassis ID:", "lbl_sw_chassis_mac", "00:2a:6a:12:34:00"),
-            ("Recursos:", "lbl_sw_caps", "Bridge (Switch L2), Router (L3)"),
+            ("Nome do Switch:", "lbl_sw_name", "--"),
+            ("Modelo / SO:", "lbl_sw_model", "Aguardando identificação..."),
+            ("Fabricante:", "lbl_sw_vendor", "--"),
+            ("IP de Gerência:", "lbl_sw_mgmt_ip", "--"),
+            ("MAC Chassis ID:", "lbl_sw_chassis_mac", "--:--:--:--:--:--"),
+            ("Recursos:", "lbl_sw_caps", "--"),
         ])
         cards_layout.addWidget(self.card_switch)
 
         # CARD 2: DADOS DA PORTA LOCAL CONECTADA
         self.card_port = self._create_card("🔌 Porta Local Identificada", [
-            ("Porta Física:", "lbl_port_id", "GigabitEthernet1/0/12"),
-            ("Número no Painel:", "lbl_port_num", "Porta 12"),
-            ("Descrição da Porta:", "lbl_port_desc", "Workstation Icaro / TI Infra"),
-            ("VLAN Nativa (PVID):", "lbl_port_vlan", "VLAN 10 (VLAN_DADOS_CORP)"),
-            ("Velocidade / Duplex:", "lbl_port_speed", "1000 Mbps Full-Duplex"),
-            ("PoE (Power over Eth):", "lbl_port_poe", "802.3at PoE+ (Disponível 30W)"),
+            ("Porta Física:", "lbl_port_id", "--"),
+            ("Número no Painel:", "lbl_port_num", "Aguardando detecção"),
+            ("Descrição da Porta:", "lbl_port_desc", "--"),
+            ("VLAN Nativa (PVID):", "lbl_port_vlan", "--"),
+            ("Velocidade / Duplex:", "lbl_port_speed", "--"),
+            ("PoE (Power over Eth):", "lbl_port_poe", "--"),
         ])
         cards_layout.addWidget(self.card_port)
 
         # CARD 3: DIAGNÓSTICO & AUDITORIA
         self.card_diag = self._create_card("📊 Diagnóstico da Conexão", [
-            ("Protocolo Utilizado:", "lbl_diag_proto", "LLDP (IEEE 802.1AB)"),
-            ("Interface Local:", "lbl_diag_iface", "enp7s0"),
-            ("MAC Local (PC):", "lbl_diag_local_mac", "00:23:09:02:cd:9f"),
-            ("TTL do Anúncio:", "lbl_diag_ttl", "120 segundos"),
+            ("Protocolo Utilizado:", "lbl_diag_proto", "--"),
+            ("Interface Local:", "lbl_diag_iface", "--"),
+            ("MAC Local (PC):", "lbl_diag_local_mac", "--"),
+            ("TTL do Anúncio:", "lbl_diag_ttl", "--"),
             ("Horário da Captura:", "lbl_diag_time", "--:--:--"),
-            ("Portas Ativas:", "lbl_diag_ports_summary", "8 de 24 portas ativas (33%)"),
+            ("Portas Ativas:", "lbl_diag_ports_summary", "--"),
         ])
         cards_layout.addWidget(self.card_diag)
 

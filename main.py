@@ -3227,7 +3227,20 @@ class MainWindow(QMainWindow):
         dlg.exec_()
 
     def action_open_lldp_dialog(self):
-        target = self.get_selected_or_current_ip() or self.local_info.get("gateway", "")
+        target = self.get_selected_or_current_ip()
+        if not target:
+            # Localiza switch gerenciável conhecido nos registros da rede
+            for ip, rec in self.records.items():
+                txt = f"{rec.hostname} {rec.vendor} {rec.device_type} {rec.snmp_info}".lower()
+                if "switch" in txt or "en8851" in txt or "smart" in txt or ip == "192.168.111.195":
+                    target = ip
+                    break
+        if not target:
+            gw = self.local_info.get("gateway", "")
+            if gw.startswith("192.168.111."):
+                target = "192.168.111.195"
+            else:
+                target = gw or "192.168.1.254"
         self.open_lldp_switch_dialog(target_ip=target)
 
     def open_lldp_switch_dialog(self, target_ip: str = ""):

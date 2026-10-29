@@ -78,6 +78,7 @@ VERSION_HISTORY = [
         "date": "29/10/2026",
         "title": "Auditoria Híbrida Web/SNMP para Switches Airoha EN8851, Decodificação de Bitmaps L2 e Blindagem do Sniffer",
         "changes": [
+            "Remoção dos modos de simulação demonstrativa da interface de auditoria do switch (LLDPSwitchDialog): exibição focada exclusivamente no switch e topologia física reais descobertos na rede local.",
             "Motor de Auditoria Híbrida Web/SNMP (Airoha EN8851 / EcoNet / FreeRTOS): suporte completo à extração do estado físico das portas (/portCur.xml) e tabela MAC FDB dinâmica (/dynamicmacentry.xml) via HTTP autenticado (SHA-256) com encerramento de sessão automático (/logout.cgi).",
             "Mapeamento e Decodificação de Bitmaps de Porta (L2 Topology): resolução da convenção interna de bitmask do SoC Airoha (Bit 0 reservado à CPU interna, '1 << N' mapeado à porta física N), identificando com precisão a Porta 1 (Uplink/Gateway) e Porta 16 (Estação de Trabalho Local).",
             "Validação Proativa de Capacidades no Sniffer L2 (l2_sniffer.c): nova flag '--test-cap' / '-t' e função check_sniffer_binary_cap() prevenindo 'Address family not supported' e garantindo seleção automática do binário auxiliar com CAP_NET_RAW no Linux.",

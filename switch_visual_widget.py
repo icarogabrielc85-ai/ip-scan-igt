@@ -37,8 +37,8 @@ class SwitchFrontPanelWidget(QWidget):
         self.total_ports = 24
         self.connected_port = 0
         self.connected_port_name = ""
-        self.switch_brand = "CISCO"
-        self.switch_model = "Catalyst 2960X-24TD-L"
+        self.switch_brand = ""
+        self.switch_model = ""
         self.port_status_map: Dict[int, str] = {}  # {port: "connected"|"up"|"down"}
         self.hovered_port = 0
         self.selected_port = 0
@@ -283,7 +283,7 @@ class SwitchFrontPanelWidget(QWidget):
         y += 14
         painter.setFont(QFont("Segoe UI", 7, QFont.Normal))
         painter.setPen(QPen(QColor("#94a3b8")))
-        model_text = self.switch_model or f"{self.total_ports}-Port Gigabit Switch"
+        model_text = self.switch_model or "Aguardando identificação..."
         if len(model_text) > 22:
             model_text = model_text[:20] + ".."
         painter.drawText(int(x), int(y), model_text)
