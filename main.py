@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import csv
 import io
 import ipaddress
@@ -226,53 +227,56 @@ class ScanWorker(QThread):
 
     def run(self):
         start_time = time.time()
-        arp_cache = read_linux_arp_table()
-
-        onvif_cache = {}
-        if self.enable_onvif:
-            self.progress_updated.emit(0, len(self.ip_list), tr("stat_onvif_discovery", "Buscando câmeras ONVIF (WS-Discovery)..."))
-            try:
-                onvif_cache = discover_onvif_devices(timeout=1.2)
-            except Exception as e:
-                print(f"ONVIF discovery error: {e}")
-
-        upnp_cache = {}
-        if self._is_running:
-            self.progress_updated.emit(0, len(self.ip_list), tr("stat_upnp_discovery", "Buscando ativos UPnP / SSDP (UDP 1900)..."))
-            try:
-                upnp_cache = discover_upnp_devices(timeout=0.9)
-            except Exception as e:
-                print(f"UPnP discovery error: {e}")
-
         found_count = 0
-        total = len(self.ip_list)
-        processed = 0
+        try:
+            arp_cache = read_linux_arp_table()
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            future_to_ip = {
-                executor.submit(scan_single_ip, ip, arp_cache, self.local_info, onvif_cache, False, upnp_cache): ip
-                for ip in self.ip_list
-            }
-
-            for future in concurrent.futures.as_completed(future_to_ip):
-                if not self._is_running:
-                    executor.shutdown(wait=False, cancel_futures=True)
-                    break
-
-                processed += 1
-                ip = future_to_ip[future]
+            onvif_cache = {}
+            if self.enable_onvif and self._is_running:
+                self.progress_updated.emit(0, len(self.ip_list), tr("stat_onvif_discovery", "Buscando câmeras ONVIF (WS-Discovery)..."))
                 try:
-                    record = future.result()
-                    if record and record.alive:
-                        found_count += 1
-                        self.host_found.emit(record)
-                except Exception as ex:
-                    print(f"Error scanning {ip}: {ex}")
+                    onvif_cache = discover_onvif_devices(timeout=1.2)
+                except Exception as e:
+                    print(f"ONVIF discovery error: {e}")
 
-                self.progress_updated.emit(processed, total, ip)
+            upnp_cache = {}
+            if self._is_running:
+                self.progress_updated.emit(0, len(self.ip_list), tr("stat_upnp_discovery", "Buscando ativos UPnP / SSDP (UDP 1900)..."))
+                try:
+                    upnp_cache = discover_upnp_devices(timeout=0.9)
+                except Exception as e:
+                    print(f"UPnP discovery error: {e}")
 
-        elapsed = time.time() - start_time
-        self.scan_finished.emit(found_count, elapsed)
+            total = len(self.ip_list)
+            processed = 0
+
+            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+                future_to_ip = {
+                    executor.submit(scan_single_ip, ip, arp_cache, self.local_info, onvif_cache, False, upnp_cache): ip
+                    for ip in self.ip_list
+                }
+
+                for future in as_completed(future_to_ip):
+                    if not self._is_running:
+                        executor.shutdown(wait=False, cancel_futures=True)
+                        break
+
+                    processed += 1
+                    ip = future_to_ip[future]
+                    try:
+                        record = future.result()
+                        if record and record.alive:
+                            found_count += 1
+                            self.host_found.emit(record)
+                    except Exception as ex:
+                        print(f"Error scanning {ip}: {ex}")
+
+                    self.progress_updated.emit(processed, total, ip)
+        except Exception as scan_err:
+            print(f"Erro inesperado no ScanWorker: {scan_err}")
+        finally:
+            elapsed = time.time() - start_time
+            self.scan_finished.emit(found_count, elapsed)
 
 
 class LivePingWorker(QThread):

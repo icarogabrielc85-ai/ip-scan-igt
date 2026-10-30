@@ -37,10 +37,12 @@ jobs:
       - name: Build Windows Inno Setup Installer (.exe)
         run: |
           choco install innosetup -y
-          & "C:\Program Files (x86)\Inno Setup 6\iscc.exe" ipscan_windows.iss
+          $ver = python -c "from version import APP_VERSION; print(APP_VERSION)"
+          & "C:\Program Files (x86)\Inno Setup 6\iscc.exe" /DMyAppVersion=$ver ipscan_windows.iss
 
       - name: Build Windows MSI Package (.msi)
         run: |
+          $ver = python -c "from version import APP_VERSION; print(APP_VERSION)"
           $candle = Get-ChildItem -Path "C:\Program Files (x86)\WiX Toolset*\bin\candle.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $candle) {
             choco install wixtoolset -y
@@ -48,7 +50,7 @@ jobs:
           }
           if ($candle) {
             $wixBin = $candle.DirectoryName
-            & "$wixBin\candle.exe" -arch x64 ipscan_windows.wxs -out dist\ipscan_windows.wixobj
+            & "$wixBin\candle.exe" -arch x64 -dAppVersion=$ver ipscan_windows.wxs -out dist\ipscan_windows.wixobj
             & "$wixBin\light.exe" -ext WixUIExtension dist\ipscan_windows.wixobj -out dist\IPScanIGT.msi
           }
 
@@ -116,6 +118,21 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Extrair versão do sistema
+        id: ver
+        run: |
+          APP_VER=$(python3 -c "from version import APP_VERSION; print(APP_VERSION)")
+          echo "version=$APP_VER" >> $GITHUB_OUTPUT
+          echo "tag=v$APP_VER" >> $GITHUB_OUTPUT
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -130,36 +147,31 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.11.2
-          name: "IP Scan IGT v2.11.2 — Pacotes .deb (Linux), .msi e .exe (Windows)"
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: "IP Scan IGT ${{ steps.ver.outputs.tag }} — Pacotes .deb (Linux), .msi e .exe (Windows)"
           body: |
-            ## 📦 Downloads Oficiais do IP Scan IGT (v2.11.2)
+            ## 📦 Downloads Oficiais do IP Scan IGT (${{ steps.ver.outputs.tag }})
 
             Selecione o pacote compatível com seu sistema operacional:
 
             ### 🐧 Linux (Ubuntu, Debian, Pop!_OS, Linux Mint, Kali):
-            - **Pacote Debian (.deb):** `ipscan-igt_2.11.2_amd64.deb`  
-              *(Instale dando duplo-clique ou pelo terminal: `sudo apt install ./ipscan-igt_2.11.2_amd64.deb`)*
+            - **Pacote Debian (.deb):** `ipscan-igt_${{ steps.ver.outputs.version }}_amd64.deb`  
+              *(Instale dando duplo-clique ou pelo terminal: `sudo apt install ./ipscan-igt_${{ steps.ver.outputs.version }}_amd64.deb`)*
             - **Binário Portátil:** `IPScanIGT`
 
             ### 🪟 Windows 10 e Windows 11:
-            - **Instalador Assistente Recomendado (.exe):** `IPScanIGT-Setup-2.11.2.exe`  
+            - **Instalador Assistente Recomendado (.exe):** `IPScanIGT-Setup-${{ steps.ver.outputs.version }}.exe`  
               *(Instala o programa completo com todas as DLLs nativas em `Arquivos de Programas` e cria atalho na Área de Trabalho)*
             - **Instalador MSI (.msi):** `IPScanIGT.msi`  
               *(Instalação padrão corporativa do Windows)*
             - **Executável Portátil (.exe):** `IPScanIGT.exe`  
               *(Executa direto com duplo-clique sem precisar instalar, com VC++ Runtime e UCRT embutidos)*
-
-            ### 🚀 Novidades da Versão 2.11.2:
-            - **🔄 Atualização Direta no Gerenciador de Pacotes:** Versão v2.11.2 permitindo ao APT / KDE Discover / QApt detectar a atualização do `.deb` sem conflito de versão já instalada.
-            - **🛡️ Permissões L2 Automáticas nos Instaladores:** O pacote Debian (`.deb`) e o script `instalar_linux.sh` agora configuram de forma automática e permanente `setcap cap_net_raw,cap_net_admin+eip` no binário instalado e incluem dependência `libcap2-bin`, sem exigir intervenção manual do usuário.
-            - **🪟 Instalador Windows (.exe) com Privilégios e Firewall Embutidos:** O instalador Inno Setup agora solicita privilégios de administrador nativamente e aplica regras de firewall para tráfego local e broadcast/multicast.
-            - **🔐 Assistente Interativo de Permissões na Interface (LLDPSwitchDialog):** Diálogo inteligente oferecendo fallback para SNMP Bridge-MIB (sem requerer root), elevação gráfica em 1-clique via Polkit (`pkexec`) e comando copiável para terminal.
-            - **🔒 Auditoria Completa de Segurança:** Varredura minuciosa de todo o repositório e histórico Git garantindo ausência de credenciais, além de reforço estrito no `.gitignore`.
-            - **🔌 Identificador Visual de Porta de Switch (LLDP / CDP / SNMP):** Renderização vetorial de switch 1U em rack 19" (8, 16, 24 ou 48 portas RJ45 com pinos banhados a ouro e slots SFP+), destaque de porta local e animação de patch cord.
           files: |
             release_files/*
           draft: false
           prerelease: false
+          overwrite_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
