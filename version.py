@@ -76,10 +76,11 @@ VERSION_HISTORY = [
     {
         "version": "v2.11.3",
         "date": "30/10/2026",
-        "title": "Diagnóstico Físico de Cabo de Rede via TDR, Auditoria Híbrida Web/SNMP e Topologia Real de Switch",
+        "title": "Diagnóstico e Medição de Cabo de Rede via Placa Local (NIC), Auditoria Híbrida Web/SNMP e Topologia Real",
         "changes": [
-            "Medição Física de Cabo de Rede e Diagnóstico TDR (Virtual Cable Tester): integração direta com o chip de reflectometria no domínio do tempo do switch (/cablediag.cgi e /cableCur.xml), medindo milimetricamente o comprimento do cabo em metros (ex: 8.0m) e testando a integridade elétrica individual dos 4 pares de cobre (Pares A, B, C e D: Normal, Aberto ou Curto-circuito).",
-            "Botão Interativo de Medição TDR (LLDPSwitchDialog): botão '⚡ Medir Cabo (TDR)' e suporte a clique em qualquer porta física do rack 1U para acionar a reflectometria sob demanda sem travar a interface.",
+            "Motor de Diagnóstico e Medição de Cabo de Rede via Placa Local (cable_diagnostic_engine.py): auditoria física e elétrica do cabo de rede executada diretamente através da placa de rede selecionada pelo usuário no computador (ex: enp7s0 / Realtek RTL8111/8168), sem depender de credenciais de switch.",
+            "Janela Dedicada CableDiagnosticDialog (Ctrl+K): nova interface visual exibindo diagrama elétrico dos 4 pares de fios RJ-45 (Pares A, B, C e D em modulação IEEE 802.3ab PAM-5), medição de comprimento em metros (ex: 8.0m), análise de ruído/EMI (erros CRC e alinhamento) e estabilidade de conector (carrier flapping).",
+            "Integração do Botão '⚡ Medir Cabo da Placa' no Diálogo do Switch (LLDPSwitchDialog): acionamento direto ao lado do seletor de interfaces de rede e no menu 'Ferramentas' da janela principal.",
             "Remoção dos modos de simulação demonstrativa da interface de auditoria do switch (LLDPSwitchDialog): exibição focada exclusivamente no switch e topologia física reais descobertos na rede local.",
             "Motor de Auditoria Híbrida Web/SNMP (Airoha EN8851 / EcoNet / FreeRTOS): suporte completo à extração do estado físico das portas (/portCur.xml) e tabela MAC FDB dinâmica (/dynamicmacentry.xml) via HTTP autenticado (SHA-256) com encerramento de sessão automático (/logout.cgi).",
             "Mapeamento e Decodificação de Bitmaps de Porta (L2 Topology): resolução da convenção interna de bitmask do SoC Airoha (Bit 0 reservado à CPU interna, '1 << N' mapeado à porta física N), identificando com precisão a Porta 1 (Uplink/Gateway) e Porta 16 (Estação de Trabalho Local).",

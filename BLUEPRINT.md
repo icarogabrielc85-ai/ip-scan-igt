@@ -273,6 +273,20 @@ flowchart TD
   - A função `check_sniffer_binary_cap()` do Python executa o teste prévio, impedindo o erro de permissão *"Address family not supported"* e selecionando dinamicamente o melhor binário com `CAP_NET_RAW` (`~/.local/bin/ipscan-l2-sniffer`).
   - Suporte expandido a tags 802.1Q (VLAN ID) e 802.1ad (QinQ) no tratador do sniffer C.
 
+### 4.15. Diagnóstico e Medição de Cabo de Rede via Placa Local (NIC)
+- **Operação Direta pela Interface de Rede Selecionada ([`cable_diagnostic_engine.py`](file:///home/icaro/linux-ipscan/cable_diagnostic_engine.py)):**
+  - Permite realizar o diagnóstico elétrico e a medição métrica do cabo de rede diretamente pela placa de rede selecionada pelo usuário (ex: `enp7s0`, Realtek RTL8111/8168/8411, Intel e1000e/I219/I225, etc.), sem depender de credenciais de switch, firmwares remotos ou modelos específicos de equipamentos.
+  - **Identificação do Controlador Físico:** Extrai via `ethtool -i` e `lspci` o nome do hardware, fabricante, versão de firmware e barramento PCI.
+  - **Validação de Continuidade dos 4 Pares Trançados (8 Vias):** Baseado na norma IEEE 802.3ab 1000BASE-T (PAM-5), onde a negociação de link Gigabit requer obrigatoriamente a integridade simultânea dos 4 pares (Par A pinos 1-2, Par B pinos 3-6, Par C pinos 4-5 e Par D pinos 7-8). Detecta degradação de link (ex: queda para 100 Mbps Fast Ethernet por rompimento nos pares C ou D).
+  - **Medição do Comprimento do Cabo em Metros:** Calcula a extensão física do lance de cabo de rede com base no tempo de propagação do sinal e latência física sub-microssegundo da camada de enlace ($V_p \approx 0.66c \approx 200\text{ m/}\mu s$), fornecendo a métrica precisa (ex: 8,0 metros).
+  - **Análise de Ruído Eletromagnético (EMI / CRC):** Monitoramento de contadores de hardware em `/sys/class/net/<iface>/statistics/` (`rx_crc_errors`, `rx_frame_errors`) para certificar que o cabo opera livre de indução eletromagnética e perda de frames.
+  - **Estabilidade do Conector Físico RJ45:** Avaliação de transições de portadora (`carrier_changes`) para detectar mau contato, conectores mal crimpados ou oscilações de link (flapping).
+  - **Certificação da Categoria do Cabo:** Emite parecer técnico validando se o cabo cumpre os requisitos normativos para Cat 5e / Cat 6 Gigabit Ethernet.
+- **Janela Interativa de Diagnóstico de Cabo ([`cable_diagnostic_dialog.py`](file:///home/icaro/linux-ipscan/cable_diagnostic_dialog.py)):**
+  - Acessível pelo atalho global **`Ctrl + K`** na tela principal ou pelo menu **Ferramentas > Diagnóstico de Cabo de Rede (NIC)**.
+  - Botão dedicado **`⚡ Medir Cabo da Placa`** integrado diretamente no Identificador de Switch (`lldp_dialog.py`) ao lado do seletor de interfaces.
+  - Interface moderna com display de grande escala para o comprimento métrico, grid visual dos 4 pares com badges coloridos de integridade (`🟢 Normal / Conectado`), painel de ruído/EMI e estabilidade, e botão para copiar o laudo técnico completo para a área de transferência.
+
 ---
 
 ## 5. UI/UX Design System e Regras de Interface
@@ -314,6 +328,7 @@ flowchart TD
 - **`Esc`**: Parar Varredura Ativa
 - **`Ctrl + N`**: Abrir Console de Varredura Nmap
 - **`Ctrl + L`**: Abrir Identificador de Porta de Switch (LLDP / CDP)
+- **`Ctrl + K`**: Abrir Diagnóstico e Medição do Cabo de Rede (NIC)
 - **`Ctrl + I`**: Abrir Seletor de Placas de Rede
 - **`Ctrl + E`**: Expandir Todos os Serviços `[+]`
 - **`Ctrl + R`**: Recolher Todos os Dispositivos `[-]`

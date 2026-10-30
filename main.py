@@ -850,6 +850,11 @@ class MainWindow(QMainWindow):
         self.act_lldp_switch.triggered.connect(self.action_open_lldp_dialog)
         self.menu_tools.addAction(self.act_lldp_switch)
 
+        self.act_cable_diag = QAction("⚡ Diagnóstico e Medição do Cabo de Rede (Placa Local)...", self)
+        self.act_cable_diag.setShortcut("Ctrl+K")
+        self.act_cable_diag.triggered.connect(self.open_cable_diagnostic_dialog)
+        self.menu_tools.addAction(self.act_cable_diag)
+
         # 4. Segurança & Auditoria (Nmap, Network Guard, Watchdog, Snapshots)
         self.menu_security = menu_bar.addMenu(tr("menu_security", "Segurança"))
         self.act_nmap = QAction(tr("nmap_scan"), self)
@@ -3248,6 +3253,12 @@ class MainWindow(QMainWindow):
         gw = target_ip or self.local_info.get("gateway", "") or "192.168.1.254"
         dlg = LLDPSwitchDialog(self, gateway_ip=gw, is_dark=self.is_dark_mode)
         dlg.showMaximized()
+        dlg.exec_()
+
+    def open_cable_diagnostic_dialog(self):
+        from cable_diagnostic_dialog import CableDiagnosticDialog
+        iface = self.local_info.get("interface", "enp7s0")
+        dlg = CableDiagnosticDialog(self, initial_iface=iface, is_dark=self.is_dark_mode)
         dlg.exec_()
 
     def generate_executive_html_report(self, records: dict) -> str:
