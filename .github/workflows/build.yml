@@ -37,12 +37,10 @@ jobs:
       - name: Build Windows Inno Setup Installer (.exe)
         run: |
           choco install innosetup -y
-          $ver = python -c "from version import APP_VERSION; print(APP_VERSION)"
-          & "C:\Program Files (x86)\Inno Setup 6\iscc.exe" /DMyAppVersion=$ver ipscan_windows.iss
+          & "C:\Program Files (x86)\Inno Setup 6\iscc.exe" ipscan_windows.iss
 
       - name: Build Windows MSI Package (.msi)
         run: |
-          $ver = python -c "from version import APP_VERSION; print(APP_VERSION)"
           $candle = Get-ChildItem -Path "C:\Program Files (x86)\WiX Toolset*\bin\candle.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $candle) {
             choco install wixtoolset -y
@@ -50,7 +48,7 @@ jobs:
           }
           if ($candle) {
             $wixBin = $candle.DirectoryName
-            & "$wixBin\candle.exe" -arch x64 -dAppVersion=$ver ipscan_windows.wxs -out dist\ipscan_windows.wixobj
+            & "$wixBin\candle.exe" -arch x64 ipscan_windows.wxs -out dist\ipscan_windows.wixobj
             & "$wixBin\light.exe" -ext WixUIExtension dist\ipscan_windows.wixobj -out dist\IPScanIGT.msi
           }
 

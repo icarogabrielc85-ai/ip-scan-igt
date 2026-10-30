@@ -1,8 +1,6 @@
 ; IP Scan IGT — Inno Setup Script
 #define MyAppName "IP Scan IGT"
-#ifndef MyAppVersion
 #define MyAppVersion "2.12.5"
-#endif
 #define MyAppPublisher "IGT"
 #define MyAppURL "https://github.com/icarogabrielc85-ai/ip-scan-igt"
 #define MyAppExeName "IPScanIGT.exe"
