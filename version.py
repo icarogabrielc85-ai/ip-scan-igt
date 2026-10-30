@@ -6,7 +6,7 @@ import os
 import subprocess
 
 # Versão Semântica Oficial (MAJOR.MINOR.PATCH)
-APP_VERSION = "2.12.1"
+APP_VERSION = "2.12.2"
 APP_RELEASE_DATE = "30/10/2026"
 
 
@@ -73,6 +73,18 @@ def get_short_version() -> str:
 
 
 VERSION_HISTORY = [
+    {
+        "version": "v2.12.2",
+        "date": "30/10/2026",
+        "title": "Integração do Catálogo Oficial de 605 Scripts NSE do Nmap com Presets Rápidos e UI/UX Intuitiva",
+        "changes": [
+            "Catálogo Completo dos 605 Scripts NSE (nmap_scripts_db.py): parser nativo de script.db e metadados oficiais do Nmap com descrições em português, categorias (vuln, discovery, safe, auth, brute, web, etc.) e busca dinâmica em tempo real.",
+            "Presets Rápidos de 1-Clique na Tela do Nmap (nmap_dialog.py): botões de disparo instantâneo para Vulnerabilidades/CVEs, Reconhecimento & Banners, Auditoria Web & APIs, Criptografia SSL/TLS, Windows & SMB (MS17-010 EternalBlue), Autenticação & Contas Fracas, Câmeras IP & CFTV e Padrão Seguro Oficial (-sC).",
+            "Seleção Intuitiva Multi-Script e Preview do Comando: tabela interativa com checkboxes por linha, contadores de seleção em tempo real, seleção/desmarcação em massa e visualização ao vivo do comando Nmap formatado.",
+            "Visualização Estruturada dos Achados de Scripts e CVEs: separador inteligente dos resultados dos scripts NSE com classificação de severidade (🚨 VULNERÁVEL, ⚠️ ALERTA, ℹ️ INFO) e correlação direta com a base local de CVEs.",
+            "Interface Maximizada com Suporte a Tela Cheia (F11): layout imersivo com navegação por 4 abas estruturadas, suporte completo aos temas Dark e Light e atalho Ctrl+Enter para execução rápida.",
+        ],
+    },
     {
         "version": "v2.12.1",
         "date": "30/10/2026",

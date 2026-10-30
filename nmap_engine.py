@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -8,6 +9,7 @@ from typing import Dict, List, Optional, Tuple
 
 from PyQt5.QtCore import QThread, pyqtSignal
 from cve_engine import CVE_DB, compute_risk_summary
+from nmap_scripts_db import parse_nse_script_output
 
 IS_WINDOWS = sys.platform.startswith("win") or os.name == "nt"
 
@@ -153,7 +155,13 @@ def parse_nmap_output(text: str, target: str = "") -> dict:
     result["risk_level"] = rlvl
     result["max_cvss"] = mcvss
     result["risk_badge"] = rbadge
-    if vulns:
+
+    # Parse and attach structured NSE Script output
+    result["nse_scripts"] = parse_nse_script_output(text)
+    nse_vulns = [s for s in result["nse_scripts"] if s.get("status") == "VULN"]
+    if nse_vulns:
+        result["device_diagnosis"] += f" | 🚨 {len(nse_vulns)} script(s) NSE detectaram vulnerabilidade ativa!"
+    elif vulns:
         result["device_diagnosis"] += f" | ⚠️ Auditoria de Segurança: {len(vulns)} vulnerabilidade(s) conhecida(s) detectada(s) ({rbadge})."
 
     return result
@@ -164,11 +172,20 @@ class NmapScannerThread(QThread):
     scan_finished = pyqtSignal(str, dict, str)  # target, parsed_dict, raw_text
     scan_error = pyqtSignal(str)
 
-    def __init__(self, target: str, scan_profile: str = "quick", custom_args: str = ""):
+    def __init__(
+        self,
+        target: str,
+        scan_profile: str = "quick",
+        custom_args: str = "",
+        scripts: Optional[List[str]] = None,
+        ports: str = "",
+    ):
         super().__init__()
         self.target = target.strip()
         self.scan_profile = scan_profile
         self.custom_args = custom_args
+        self.scripts = scripts or []
+        self.ports = ports.strip()
         self._process: Optional[subprocess.Popen] = None
         self._is_stopped = False
 
@@ -189,8 +206,23 @@ class NmapScannerThread(QThread):
         cmd = [nmap]
 
         if self.custom_args.strip():
-            cmd.extend(self.custom_args.strip().split())
-            cmd.append(self.target)
+            try:
+                cmd.extend(shlex.split(self.custom_args.strip()))
+            except Exception:
+                cmd.extend(self.custom_args.strip().split())
+            if self.target not in cmd:
+                cmd.append(self.target)
+            return cmd
+
+        # If scripts are explicitly passed
+        if self.scripts:
+            cmd.extend(["-sT", "-sV", "--version-light"])
+            cmd.extend(["--script", ",".join(self.scripts)])
+            if self.ports:
+                cmd.extend(["-p", self.ports])
+            else:
+                cmd.append("-F")
+            cmd.extend(["-T4", self.target])
             return cmd
 
         if self.scan_profile == "quick":

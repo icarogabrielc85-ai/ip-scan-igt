@@ -36,6 +36,7 @@ a = Analysis(
         'interface_dialog',
         'nmap_dialog',
         'nmap_engine',
+        'nmap_scripts_db',
         'snmp_engine',
         'cve_engine',
         'watchdog_engine',

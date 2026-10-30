@@ -1,5 +1,5 @@
 # BLUEPRINT — IP SCAN IGT
-**Versão:** 2.12.1 (Edição Multiplataforma: Linux & Windows)  
+**Versão:** 2.12.2 (Edição Multiplataforma: Linux & Windows)  
 **Projeto:** IP Scan IGT  
 **Repositório GitHub:** [https://github.com/icarogabrielc85-ai/ip-scan-igt](https://github.com/icarogabrielc85-ai/ip-scan-igt)  
 **Diretório Local (PC):** `/home/icaro/linux-ipscan`  
@@ -139,7 +139,8 @@ flowchart TD
 | [`scanner_engine.py`](file:///home/icaro/linux-ipscan/scanner_engine.py) | Motor de varredura multithread (ThreadPoolExecutor). Abstração multiplataforma para ping com sub-milissegundo (Linux e Windows), tabela ARP (`/proc/net/arp` e `arp -a`), enumeração de placas (`iproute2` e `ipconfig`), banners HTTP/SSH, inspeção de certificados SSL em Python puro (`ssl.get_server_certificate`), classificação automática de SO e gateways padrão. |
 | [`onvif_engine.py`](file:///home/icaro/linux-ipscan/onvif_engine.py) | Motor de descoberta ONVIF via WS-Discovery multicast (`239.255.255.250:3702`), decodificador de scopes XML, resolução de token RTSP dinâmico via `GetStreamUri` (suporte a Xiongmai XM530, Hikvision, Dahua, Intelbras), probe RTSP (554) e detecção/disparo automático de players de vídeo (FFplay / VLC) em Linux e Windows. |
 | [`nmap_engine.py`](file:///home/icaro/linux-ipscan/nmap_engine.py) | Wrapper portável para execução assíncrona do Nmap sem privilégios de root (`-sT`), streaming de saída linha a linha (`NmapScannerThread`), parser regex de portas/serviços/versões, detecção automática do `nmap.exe` no Windows e gerador de diagnóstico inteligente de dispositivos. |
-| [`nmap_dialog.py`](file:///home/icaro/linux-ipscan/nmap_dialog.py) | Interface moderna de auditoria do Nmap (`NmapDialog`) com abas divididas entre **Relatório Estruturado**, **Vulnerabilidades (CVEs)** e **Terminal Nmap**. |
+| [`nmap_scripts_db.py`](file:///home/icaro/linux-ipscan/nmap_scripts_db.py) | Catálogo e banco de dados dos 605 scripts oficiais do Nmap Scripting Engine (NSE) com descrições em português, categorias oficiais, 9 presets de 1 clique, busca rápida e parser de severidade de achados. |
+| [`nmap_dialog.py`](file:///home/icaro/linux-ipscan/nmap_dialog.py) | Interface moderna de auditoria do Nmap (`NmapDialog`) maximizada por padrão com 4 abas estruturadas: **Scripts NSE (Seleção & Execução em 1-Clique)**, **Relatório & Portas**, **Resultados dos Scripts & CVEs** e **Terminal Nmap (Log Técnico)**. |
 | [`snmp_engine.py`](file:///home/icaro/linux-ipscan/snmp_engine.py) | Motor SNMPv1/v2c (UDP 161) em Python puro (ASN.1 BER) para extração de `sysDescr`, `sysName`, `sysUpTime`, contagem de interfaces de switches e níveis de toner/páginas em impressoras (Printer-MIB). |
 | [`cve_engine.py`](file:///home/icaro/linux-ipscan/cve_engine.py) | Motor de correlação de vulnerabilidades (CVEs) com banco SQLite local (`cve_knowledge.db`), cruzando banners HTTP/SSH/SSL/SNMP, portas expostas e versões do Nmap com cálculo de risco CVSS e recomendações de mitigação. |
 | [`watchdog_engine.py`](file:///home/icaro/linux-ipscan/watchdog_engine.py) | Motor de monitoramento contínuo em segundo plano (`WatchdogWorker` + `WatchdogDialog`) para os dispositivos em Favoritos com histerese de falhas, notificações nativas no desktop (`QSystemTrayIcon` / `notify-send`) e histórico persistente de incidentes. |
@@ -311,6 +312,27 @@ flowchart TD
 - **Reinicialização Automática Transparente (Auto-Restart):**
   - Ao concluir a gravação dos arquivos da nova versão, dispara um processo desacoplado (`QProcess.startDetached(sys.executable, [])`) e encerra o processo atual de forma limpa (`QApplication.quit()`), fazendo com que o programa reabra instantaneamente já executando a nova versão instalada.
 
+### 4.17. Integração do Catálogo Oficial de 605 Scripts NSE do Nmap e Presets 1-Clique (v2.12.2)
+- **Catálogo Oficial Completo de 605 Scripts NSE ([`nmap_scripts_db.py`](file:///home/icaro/linux-ipscan/nmap_scripts_db.py)):**
+  - Mapeamento nativo dos 605 scripts NSE a partir do banco oficial (`script.db` e `.nse` do repositório oficial Nmap `https://github.com/nmap/nmap/tree/master/scripts`).
+  - Metadados curados com nomes, categorias oficiais Nmap (`vuln`, `discovery`, `safe`, `default`, `auth`, `brute`, `malware`, `exploit`), tags e descrições técnicas em português.
+- **Presets Rápidos de 1-Clique para Auditoria Direta:**
+  - `🛡️ Vulnerabilidades (vuln)`: Disparo de auditoria de falhas e exploits conhecidos (CVEs).
+  - `🔍 Descoberta & Banners (discovery)`: Extração profunda de banners, NetBIOS, UPnP e mDNS.
+  - `🌐 Web & APIs (http-*)`: Títulos de páginas, cabeçalhos HTTP, métodos inseguros e diretórios.
+  - `🔒 Criptografia SSL/TLS (ssl-*)`: Avaliação de cifras A–F, expiração de certificados, Heartbleed e POODLE.
+  - `🪟 Windows & Redes SMB (smb-*)`: Varredura da falha EternalBlue (MS17-010), versão do Windows e compartilhamentos.
+  - `🔑 Contas & Autenticação (auth)`: Identificação de acessos anônimos (FTP/SMB) e senhas padrão de fábrica.
+  - `📹 Câmeras IP & CFTV (onvif/rtsp)`: Detecção de canais de streaming RTSP e serviços ONVIF WS-Discovery.
+  - `⚡ Padrão Seguro Oficial (-sC)`: Conjunto recomendado oficial do Nmap sem risco aos ativos.
+  - `🦠 Malware & Backdoors`: Busca de portas de trojans e botnets conhecidos.
+- **Interface e Usabilidade da Janela Nmap ([`nmap_dialog.py`](file:///home/icaro/linux-ipscan/nmap_dialog.py)):**
+  - **Aba 0: Scripts NSE (Seleção & Execução):** Tabela interativa com busca dinâmica em tempo real (por nome, categoria e utilidade prática), filtro por categoria (`vuln`, `discovery`, `safe`, etc.), checkboxes por linha com seleção/desmarcação em massa (`☑ Marcar Visíveis` / `☐ Desmarcar Visíveis`), contador em tempo real de scripts selecionados, visualização ao vivo do comando Nmap formatado e botão de ação direta `[▶ Executar Scripts Selecionados]`.
+  - **Aba 1: Relatório & Portas:** Cartão de diagnóstico de inteligência artificial com ícone semântico, badges de portas abertas/fechadas, latência, tempo de resposta e tabela completa de serviços com botões contextuais `[Abrir Web]` e `[🎬 Assistir RTSP (VLC)]`.
+  - **Aba 2: Resultados dos Scripts & CVEs:** Tabela de achados NSE com categorização de risco (`🚨 VULNERÁVEL`, `⚠️ ALERTA`, `ℹ️ INFO`) e cruzamento com a base de dados local SQLite de CVEs para recomendação de mitigação.
+  - **Aba 3: Terminal Nmap:** Console monospace para acompanhamento do log técnico em tempo real emitido pelo Nmap.
+  - **Abertura Maximizada & Tela Cheia:** Inicia maximizado por padrão para total legibilidade, com alternância para fullscreen via **F11**, atalho **Ctrl+Enter** para iniciar varredura e total padronização com os temas Dark e Light do IP Scan IGT.
+
 ---
 
 ## 5. UI/UX Design System e Regras de Interface
@@ -365,4 +387,4 @@ flowchart TD
 - **`Ctrl + Q`**: Sair do Aplicativo
 
 ---
-*Blueprint oficial v2.12.1 aprovado e sincronizado com o repositório do projeto IP Scan IGT.*
+*Blueprint oficial v2.12.2 aprovado e sincronizado com o repositório do projeto IP Scan IGT.*
