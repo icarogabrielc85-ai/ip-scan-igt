@@ -669,15 +669,15 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
 
     # --- TABS ---
     "tab_results": {
-        "pt_BR": "Resultado Scan",
-        "en": "Scan Results",
-        "es": "Resultado Scan",
-        "it": "Risultati Scan",
+        "pt_BR": "Resultados",
+        "en": "Results",
+        "es": "Resultados",
+        "it": "Risultati",
         "uk": "Результати",
         "ru": "Результаты",
         "zh_CN": "扫描结果",
-        "pl": "Wyniki Scan",
-        "fr": "Résultat Scan",
+        "pl": "Wyniki",
+        "fr": "Résultats",
     },
     "tab_favorites": {
         "pt_BR": "Favoritos",

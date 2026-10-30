@@ -6,7 +6,7 @@ import os
 import subprocess
 
 # Versão Semântica Oficial (MAJOR.MINOR.PATCH)
-APP_VERSION = "2.12.3"
+APP_VERSION = "2.12.4"
 APP_RELEASE_DATE = "30/10/2026"
 
 
@@ -73,6 +73,17 @@ def get_short_version() -> str:
 
 
 VERSION_HISTORY = [
+    {
+        "version": "v2.12.4",
+        "date": "30/10/2026",
+        "title": "Remoção de Simulação Wi-Fi, Padronização Fiel de Cores e Temas & Eliminação de Cortes de Texto (Pente Fino UI/UX)",
+        "changes": [
+            "Remoção Completa da Simulação Wi-Fi e Modo Demo: ferramentas de medição de rede sem fio (WifiDiagnosticDialog e CableDiagnosticDialog) agora operam exclusivamente com detecção física em tempo real de hardware e adaptadores sem fio locais.",
+            "Padronização Completa de Cores e Temas (UI/UX): harmonização total das paletas de cores do CableDiagnosticDialog, WifiDiagnosticDialog e NmapDialog com o padrão da janela principal (cinza clássico industrial no Modo Claro e azul marinho profundo no Modo Escuro).",
+            "Eliminação de Cortes em Caixas de Texto, Rótulos e Abas: introdução de área de rolagem responsiva na barra de ferramentas superior (Ribbon), remoção de limites verticais rígidos em linhas de resultados, e ajuste automático das abas principais ('Resultados') e campos de entrada/busca sem corte de texto.",
+            "Auditoria Completa 'Pente Fino' de Confiabilidade: bateria de testes cobrindo fluxo de usuário, autodetecção de sub-rede, speed test, LLDP/switches, nmap e integridade gráfica com 100% de sucesso.",
+        ],
+    },
     {
         "version": "v2.12.3",
         "date": "30/10/2026",

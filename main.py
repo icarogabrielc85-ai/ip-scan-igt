@@ -148,6 +148,8 @@ from PyQt5.QtWidgets import (
     QProgressBar,
     QProgressDialog,
     QPushButton,
+    QScrollArea,
+    QSizePolicy,
     QSplitter,
     QStatusBar,
     QSystemTrayIcon,
@@ -732,16 +734,19 @@ class MainWindow(QMainWindow):
 
         lbl_app_name = QLabel("IP Scan IGT")
         lbl_app_name.setObjectName("lblAppName")
+        lbl_app_name.setMinimumWidth(85)
         brand_layout.addWidget(lbl_app_name)
 
         self.lbl_version_badge = QLabel(get_short_version())
         self.lbl_version_badge.setObjectName("lblVersionBadge")
         self.lbl_version_badge.setFixedHeight(22)
+        self.lbl_version_badge.setMinimumWidth(50)
         self.lbl_version_badge.setToolTip(f"Versão Instalada: {get_full_version()}\nClique para ver o histórico completo de atualizações.")
         self.lbl_version_badge.setCursor(Qt.PointingHandCursor)
         self.lbl_version_badge.mousePressEvent = lambda e: self.show_changelog_dialog()
         brand_layout.addWidget(self.lbl_version_badge)
 
+        brand_frame.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
         top_layout.addWidget(brand_frame)
 
         # Subtle vertical separator line
@@ -798,7 +803,7 @@ class MainWindow(QMainWindow):
         top_layout.addWidget(self.lbl_mask)
 
         self.combo_mask = QComboBox()
-        self.combo_mask.setMinimumWidth(205)
+        self.combo_mask.setMinimumWidth(225)
         self.combo_mask.setFixedHeight(30)
         self.combo_mask.setToolTip("Máscara de sub-rede / Prefixo CIDR da rede")
         self.populate_mask_combo()
@@ -813,10 +818,10 @@ class MainWindow(QMainWindow):
 
         # Search filter
         self.txt_search = QLineEdit()
-        self.txt_search.setPlaceholderText("🔍 Filtrar (Nome, IP, MAC)...")
+        self.txt_search.setPlaceholderText("🔍 Filtrar...")
         self.txt_search.setClearButtonEnabled(True)
         self.txt_search.setFixedHeight(30)
-        self.txt_search.setMinimumWidth(130)
+        self.txt_search.setMinimumWidth(150)
         self.txt_search.setToolTip("Filtrar dispositivos por nome, IP, MAC ou fabricante")
         self.txt_search.textChanged.connect(self.filter_current_tree)
         top_layout.addWidget(self.txt_search, 1)
@@ -1021,7 +1026,15 @@ class MainWindow(QMainWindow):
         )
         ribbon_layout.addWidget(self.kpi_cves)
 
-        main_layout.addWidget(ribbon_bar)
+        self.ribbon_scroll = QScrollArea()
+        self.ribbon_scroll.setObjectName("ribbonScroll")
+        self.ribbon_scroll.setWidgetResizable(True)
+        self.ribbon_scroll.setFrameShape(QFrame.NoFrame)
+        self.ribbon_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.ribbon_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.ribbon_scroll.setFixedHeight(38)
+        self.ribbon_scroll.setWidget(ribbon_bar)
+        main_layout.addWidget(self.ribbon_scroll)
 
         # --- 2. MAIN CENTRAL SPLITTER (Vertical) ---
         self.main_splitter = QSplitter(Qt.Vertical)
@@ -1030,6 +1043,8 @@ class MainWindow(QMainWindow):
         # Upper Area: Main Tabs [Resultados], [Favoritos] & [Topologia da Rede]
         self.main_tabs = QTabWidget()
         self.main_tabs.setObjectName("mainTabs")
+        self.main_tabs.tabBar().setElideMode(Qt.ElideNone)
+        self.main_tabs.tabBar().setExpanding(False)
 
         # Tab 1: Resultados
         tab_results = QWidget()
@@ -1043,7 +1058,7 @@ class MainWindow(QMainWindow):
         self.tree.customContextMenuRequested.connect(self.show_results_context_menu)
         results_layout.addWidget(self.tree)
 
-        self.main_tabs.addTab(tab_results, tr("tab_results", "Resultado Scan"))
+        self.main_tabs.addTab(tab_results, tr("tab_results", "Resultados"))
 
         # Tab 2: Favoritos
         tab_favorites = QWidget()
@@ -1242,7 +1257,8 @@ class MainWindow(QMainWindow):
 
         self.lbl_stats = QLabel(f"Pronto • Interface: {self.local_info.get('interface')} ({self.local_info.get('ip')}) • 0 dispositivos online")
         self.lbl_stats.setStyleSheet("font-weight: 500; margin-left: 10px;")
-        self.status_bar.addWidget(self.lbl_stats)
+        self.lbl_stats.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.status_bar.addWidget(self.lbl_stats, 1)
 
         self.prog_bar = QProgressBar()
         self.prog_bar.setFixedWidth(200)
@@ -1410,7 +1426,7 @@ class MainWindow(QMainWindow):
 
         # Tabs
         if hasattr(self, "main_tabs"):
-            self.main_tabs.setTabText(0, tr("tab_results", "Resultado Scan"))
+            self.main_tabs.setTabText(0, tr("tab_results", "Resultados"))
             self.main_tabs.setTabText(1, tr("tab_favorites", "Favoritos"))
             if self.main_tabs.count() >= 3:
                 self.main_tabs.setTabText(2, tr("tab_topology", "🗺️ Topologia"))

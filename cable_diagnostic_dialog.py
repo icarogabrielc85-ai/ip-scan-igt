@@ -89,38 +89,39 @@ def get_theme_palette(is_dark: bool) -> dict:
             "danger_text": "#fca5a5",
         }
     else:
+        # Paleta Cinza Industrial Padronizada da Janela Principal (ui_theme.py)
         return {
-            "bg": "#f1f5f9",
-            "header_bg": "#ffffff",
-            "card_bg": "#ffffff",
-            "card_inner": "#f8fafc",
-            "border": "#cbd5e1",
-            "border_focus": "#0284c7",
-            "text_main": "#0f172a",
-            "text_sub": "#475569",
-            "text_muted": "#64748b",
-            "accent": "#0284c7",
-            "accent_hover": "#0369a1",
-            "btn_bg": "#f1f5f9",
-            "btn_hover": "#e2e8f0",
-            "btn_text": "#0f172a",
-            "primary_btn_bg": "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0284c7, stop:1 #0369a1)",
-            "primary_btn_hover": "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0369a1, stop:1 #075985)",
+            "bg": "#dcdcdc",
+            "header_bg": "#d2d2d2",
+            "card_bg": "#e2e2e2",
+            "card_inner": "#dedede",
+            "border": "#b4b4b4",
+            "border_focus": "#2b6595",
+            "text_main": "#1e242b",
+            "text_sub": "#3b424a",
+            "text_muted": "#555f69",
+            "accent": "#2b6595",
+            "accent_hover": "#1d4f7a",
+            "btn_bg": "#e0e0e0",
+            "btn_hover": "#d2dce6",
+            "btn_text": "#1e242b",
+            "primary_btn_bg": "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2b6595, stop:1 #1d4f7a)",
+            "primary_btn_hover": "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3579b0, stop:1 #2b6595)",
             "primary_btn_text": "#ffffff",
-            "table_bg": "#ffffff",
-            "table_alt": "#f8fafc",
-            "table_hdr": "#f1f5f9",
-            "table_hdr_text": "#475569",
-            "progress_bg": "#e2e8f0",
-            "progress_border": "#cbd5e1",
-            "progress_chunk": "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0284c7, stop:1 #38bdf8)",
-            "success": "#059669",
-            "success_bg": "#d1fae5",
-            "success_text": "#065f46",
+            "table_bg": "#e8e8e8",
+            "table_alt": "#dedede",
+            "table_hdr": "#cecece",
+            "table_hdr_text": "#1e242b",
+            "progress_bg": "#d0d0d0",
+            "progress_border": "#a8a8a8",
+            "progress_chunk": "#2b6595",
+            "success": "#107c41",
+            "success_bg": "#d5e8dd",
+            "success_text": "#0b5c36",
             "warning": "#d97706",
-            "warning_bg": "#fef3c7",
-            "warning_text": "#92400e",
-            "danger": "#dc2626",
+            "warning_bg": "#ece3cc",
+            "warning_text": "#7c4a08",
+            "danger": "#d13438",
             "danger_bg": "#fee2e2",
             "danger_text": "#991b1b",
         }
@@ -337,6 +338,7 @@ class CableDiagnosticDialog(QDialog):
 
         self.lbl_sub = QLabel("Medição Métrica (TDR / Propagação), Integridade dos 4 Pares (IEEE 802.3ab) e Ruído Elétrico")
         self.lbl_sub.setFont(QFont("Segoe UI", 9))
+        self.lbl_sub.setWordWrap(True)
         self.lbl_sub.setStyleSheet(f"color: {self.palette['text_sub']};")
         title_box.addWidget(self.lbl_sub)
         nav_layout.addLayout(title_box)
@@ -471,11 +473,13 @@ class CableDiagnosticDialog(QDialog):
         meta_box = QHBoxLayout()
         self.lbl_cable_cat = QLabel("Categoria: Analisando...")
         self.lbl_cable_cat.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        self.lbl_cable_cat.setWordWrap(True)
         self.lbl_cable_cat.setStyleSheet(f"color: {self.palette['success']};")
         meta_box.addWidget(self.lbl_cable_cat)
 
         self.lbl_cable_condition = QLabel("Condição Física: Aguardando teste...")
         self.lbl_cable_condition.setFont(QFont("Segoe UI", 9))
+        self.lbl_cable_condition.setWordWrap(True)
         self.lbl_cable_condition.setStyleSheet(f"color: {self.palette['text_main']};")
         meta_box.addWidget(self.lbl_cable_condition)
         meta_box.addStretch(1)
@@ -498,6 +502,7 @@ class CableDiagnosticDialog(QDialog):
 
         self.lbl_nic_model = QLabel("Controlador Ethernet Gigabit")
         self.lbl_nic_model.setFont(QFont("Segoe UI", 11, QFont.Bold))
+        self.lbl_nic_model.setWordWrap(True)
         self.lbl_nic_model.setStyleSheet(f"color: {self.palette['text_main']}; margin-top: 2px;")
         cn_layout.addWidget(self.lbl_nic_model)
 
@@ -508,11 +513,13 @@ class CableDiagnosticDialog(QDialog):
 
         self.lbl_nic_driver = QLabel("Driver: --")
         self.lbl_nic_driver.setFont(QFont("Segoe UI", 9))
+        self.lbl_nic_driver.setWordWrap(True)
         self.lbl_nic_driver.setStyleSheet(f"color: {self.palette['text_sub']};")
         cn_layout.addWidget(self.lbl_nic_driver)
 
         self.lbl_nic_carrier = QLabel("Link Físico: Detectado (Portadora Ativa)")
         self.lbl_nic_carrier.setFont(QFont("Segoe UI", 9, QFont.Bold))
+        self.lbl_nic_carrier.setWordWrap(True)
         self.lbl_nic_carrier.setStyleSheet(f"color: {self.palette['success']}; margin-top: 4px;")
         cn_layout.addWidget(self.lbl_nic_carrier)
 
@@ -559,6 +566,7 @@ class CableDiagnosticDialog(QDialog):
 
             lbl_v = QLabel(default_val)
             lbl_v.setFont(QFont("Segoe UI", 9, QFont.Bold))
+            lbl_v.setWordWrap(True)
             lbl_v.setStyleSheet(f"color: {self.palette['success']};")
             setattr(self, attr_n, lbl_v)
 
@@ -599,6 +607,7 @@ class CableDiagnosticDialog(QDialog):
 
             lbl_v = QLabel(def_v)
             lbl_v.setFont(QFont("Segoe UI", 9, QFont.Bold))
+            lbl_v.setWordWrap(True)
             lbl_v.setStyleSheet(f"color: {self.palette['success']};")
             setattr(self, attr_n, lbl_v)
 
@@ -640,10 +649,6 @@ class CableDiagnosticDialog(QDialog):
         self.btn_scan_nearby = QPushButton("📡 Redes Vizinhas")
         self.btn_scan_nearby.clicked.connect(self.scan_nearby_wifi_action)
         bw_layout.addWidget(self.btn_scan_nearby)
-
-        self.btn_demo_wifi = QPushButton("🧪 Simular Wi-Fi 6")
-        self.btn_demo_wifi.clicked.connect(self.run_wifi_demo_measurement)
-        bw_layout.addWidget(self.btn_demo_wifi)
 
         bw_layout.addStretch(1)
         self.lbl_wifi_badge = QLabel("Wi-Fi --")
@@ -914,11 +919,14 @@ class CableDiagnosticDialog(QDialog):
         self.wifi_worker.start()
 
     def run_wifi_demo_measurement(self):
-        self.wifi_worker = LocalWifiDiagWorker(interface_name="wlp3s0", force_demo=True)
-        self.wifi_worker.diag_completed.connect(self._on_wifi_diag_success)
-        self.wifi_worker.start()
+        """Redireciona para medição física real sem simulação."""
+        self.run_wifi_measurement()
 
     def scan_nearby_wifi_action(self):
+        self.run_wifi_measurement()
+
+    def run_wifi_demo_measurement(self):
+        """Redireciona para medição real."""
         self.run_wifi_measurement()
 
     @pyqtSlot(object)
@@ -1073,6 +1081,7 @@ class WifiDiagnosticDialog(QDialog):
 
         self.lbl_sub = QLabel("Medição de Sinal RSSI, Padrão Wi-Fi 4/5/6/7, Latência RF e Análise de Espectro")
         self.lbl_sub.setFont(QFont("Segoe UI", 9))
+        self.lbl_sub.setWordWrap(True)
         self.lbl_sub.setStyleSheet(f"color: {self.palette['text_sub']};")
         title_box.addWidget(self.lbl_sub)
         nav_layout.addLayout(title_box)
@@ -1099,11 +1108,6 @@ class WifiDiagnosticDialog(QDialog):
         self.btn_scan_nearby.setToolTip("Escanear pontos de acesso e canais vizinhos no espectro")
         self.btn_scan_nearby.clicked.connect(self.scan_nearby_wifi_action)
         nav_layout.addWidget(self.btn_scan_nearby)
-
-        self.btn_demo_wifi = QPushButton("🧪 Simular Wi-Fi 6")
-        self.btn_demo_wifi.setToolTip("Carregar simulação de Wi-Fi 6 empresarial de alta fidelidade para testes")
-        self.btn_demo_wifi.clicked.connect(self.run_wifi_demo_measurement)
-        nav_layout.addWidget(self.btn_demo_wifi)
 
         self.lbl_wifi_badge = QLabel("Wi-Fi --")
         self.lbl_wifi_badge.setStyleSheet(
@@ -1173,11 +1177,13 @@ class WifiDiagnosticDialog(QDialog):
 
         self.lbl_wifi_desc = QLabel("Qualidade: Aguardando auditoria...")
         self.lbl_wifi_desc.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        self.lbl_wifi_desc.setWordWrap(True)
         self.lbl_wifi_desc.setStyleSheet(f"color: {self.palette['accent']}; margin-top: 4px;")
         cs_layout.addWidget(self.lbl_wifi_desc)
 
         self.lbl_wifi_ssid_bssid = QLabel("Rede (SSID): -- • BSSID: --")
         self.lbl_wifi_ssid_bssid.setFont(QFont("Segoe UI", 9))
+        self.lbl_wifi_ssid_bssid.setWordWrap(True)
         self.lbl_wifi_ssid_bssid.setStyleSheet(f"color: {self.palette['text_main']};")
         cs_layout.addWidget(self.lbl_wifi_ssid_bssid)
 
@@ -1198,21 +1204,25 @@ class WifiDiagnosticDialog(QDialog):
 
         self.lbl_wifi_standard = QLabel("Padrão: --")
         self.lbl_wifi_standard.setFont(QFont("Segoe UI", 11, QFont.Bold))
+        self.lbl_wifi_standard.setWordWrap(True)
         self.lbl_wifi_standard.setStyleSheet(f"color: {self.palette['text_main']}; margin-top: 2px;")
         cspec_layout.addWidget(self.lbl_wifi_standard)
 
         self.lbl_wifi_band_chan = QLabel("Faixa / Canal: --")
         self.lbl_wifi_band_chan.setFont(QFont("Segoe UI", 9))
+        self.lbl_wifi_band_chan.setWordWrap(True)
         self.lbl_wifi_band_chan.setStyleSheet(f"color: {self.palette['text_sub']};")
         cspec_layout.addWidget(self.lbl_wifi_band_chan)
 
         self.lbl_wifi_bitrate = QLabel("Velocidade PHY: Tx -- Mbps • Rx -- Mbps")
         self.lbl_wifi_bitrate.setFont(QFont("Segoe UI", 9, QFont.Bold))
+        self.lbl_wifi_bitrate.setWordWrap(True)
         self.lbl_wifi_bitrate.setStyleSheet(f"color: {self.palette['success']};")
         cspec_layout.addWidget(self.lbl_wifi_bitrate)
 
         self.lbl_wifi_sec = QLabel("Segurança & Cifra: --")
         self.lbl_wifi_sec.setFont(QFont("Segoe UI", 9))
+        self.lbl_wifi_sec.setWordWrap(True)
         self.lbl_wifi_sec.setStyleSheet(f"color: {self.palette['text_sub']};")
         cspec_layout.addWidget(self.lbl_wifi_sec)
 
@@ -1251,6 +1261,7 @@ class WifiDiagnosticDialog(QDialog):
 
             lbl_v = QLabel(def_v)
             lbl_v.setFont(QFont("Segoe UI", 9, QFont.Bold))
+            lbl_v.setWordWrap(True)
             lbl_v.setStyleSheet(f"color: {self.palette['success']};")
             setattr(self, attr_n, lbl_v)
 
@@ -1370,19 +1381,11 @@ class WifiDiagnosticDialog(QDialog):
         self.wifi_worker.finished.connect(lambda: self.btn_measure_wifi.setEnabled(True))
         self.wifi_worker.start()
 
-    def run_wifi_demo_measurement(self):
-        self.btn_measure_wifi.setEnabled(False)
-        self.lbl_global_status.setText("● Carregando ambiente de homologação Wi-Fi 6...")
-        self.lbl_global_status.setStyleSheet(f"color: {self.palette['accent']};")
-
-        self.wifi_worker = LocalWifiDiagWorker(interface_name="wlp3s0", force_demo=True)
-        self.wifi_worker.status_updated.connect(lambda s: self.lbl_global_status.setText(f"● {s}"))
-        self.wifi_worker.diag_completed.connect(self._on_wifi_diag_success)
-        self.wifi_worker.error_occurred.connect(self._on_wifi_diag_error)
-        self.wifi_worker.finished.connect(lambda: self.btn_measure_wifi.setEnabled(True))
-        self.wifi_worker.start()
-
     def scan_nearby_wifi_action(self):
+        self.run_wifi_measurement()
+
+    def run_wifi_demo_measurement(self):
+        """Redireciona para medição real."""
         self.run_wifi_measurement()
 
     @pyqtSlot(object)
@@ -1416,7 +1419,7 @@ class WifiDiagnosticDialog(QDialog):
             self.progress_signal.setValue(0)
             self.lbl_wifi_desc.setText("Qualidade: Nenhum adaptador sem fio ativo detectado neste computador.")
             self.lbl_wifi_desc.setStyleSheet(f"color: {self.palette['text_sub']};")
-            self.lbl_wifi_ssid_bssid.setText("Para testar o visual de Wi-Fi, clique no botão '🧪 Simular Wi-Fi 6' acima.")
+            self.lbl_wifi_ssid_bssid.setText("Conecte um adaptador Wi-Fi USB ou ative a placa de rede sem fio para auditoria.")
 
         # 2. Padrão e Frequência
         self.lbl_wifi_standard.setText(f"Padrão: {res.wifi_standard}")
@@ -1433,8 +1436,6 @@ class WifiDiagnosticDialog(QDialog):
         self.lbl_wifi_sec.setText(f"Segurança & Cifra: {res.security}")
 
         badge_txt = res.wifi_standard.split(" ")[0] if res.wifi_standard != "--" else "Wi-Fi"
-        if res.is_demo:
-            badge_txt += " (Modo Demo)"
         self.lbl_wifi_badge.setText(badge_txt)
 
         # 3. Latência de Rádio e Ruído

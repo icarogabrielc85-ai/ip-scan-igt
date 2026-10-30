@@ -217,15 +217,25 @@ QPushButton#btnUpdate:hover {
     color: #0f172a;
 }
 
-/* Ribbon Tool Buttons */
+/* Ribbon Tool Buttons & Scroll Area */
+QScrollArea#ribbonScroll {
+    background: transparent;
+    border: none;
+}
+
+QScrollArea#ribbonScroll > QWidget > QWidget {
+    background: transparent;
+}
+
 QPushButton#ribbonBtn {
     background-color: #1e293b;
     border: 1px solid #334155;
     border-radius: 5px;
-    padding: 4px 10px;
+    padding: 3px 8px;
     font-size: 12px;
     font-weight: 600;
     color: #cbd5e1;
+    min-height: 22px;
 }
 
 QPushButton#ribbonBtn:hover {
@@ -350,9 +360,8 @@ QTreeWidget, QTableWidget {
 }
 
 QTreeWidget::item {
-    min-height: 19px;
-    max-height: 22px;
-    padding: 1px 4px;
+    min-height: 22px;
+    padding: 2px 4px;
 }
 
 QTreeWidget::item:hover {
@@ -403,12 +412,13 @@ QTabWidget::pane {
 QTabBar::tab {
     background-color: #162032;
     color: #94a3b8;
-    padding: 6px 16px;
+    padding: 6px 14px;
     border-top-left-radius: 6px;
     border-top-right-radius: 6px;
     margin-right: 3px;
     font-weight: bold;
     font-size: 13px;
+    min-width: 90px;
 }
 
 QTabBar::tab:selected {
@@ -736,7 +746,16 @@ QPushButton#btnUpdate:hover {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3579b0, stop:1 #2b6595);
 }
 
-/* Ribbon Tool Buttons */
+/* Ribbon Tool Buttons & Scroll Area */
+QScrollArea#ribbonScroll {
+    background: transparent;
+    border: none;
+}
+
+QScrollArea#ribbonScroll > QWidget > QWidget {
+    background: transparent;
+}
+
 QPushButton#ribbonBtn {
     background-color: #e2e2e2;
     border: 1px solid #a8a8a8;
@@ -745,6 +764,7 @@ QPushButton#ribbonBtn {
     font-size: 12px;
     font-weight: 600;
     color: #1e242b;
+    min-height: 22px;
 }
 
 QPushButton#ribbonBtn:hover {
@@ -867,9 +887,8 @@ QTreeWidget, QTableWidget {
 }
 
 QTreeWidget::item {
-    min-height: 19px;
-    max-height: 22px;
-    padding: 1px 4px;
+    min-height: 22px;
+    padding: 2px 4px;
 }
 
 QTreeWidget::item:hover {
@@ -906,7 +925,7 @@ QTabWidget::pane {
 QTabBar::tab {
     background-color: #cecece;
     color: #3b424a;
-    padding: 6px 16px;
+    padding: 6px 14px;
     border-top-left-radius: 5px;
     border-top-right-radius: 5px;
     margin-right: 3px;
@@ -914,6 +933,7 @@ QTabBar::tab {
     font-size: 13px;
     border: 1px solid #a8a8a8;
     border-bottom: none;
+    min-width: 90px;
 }
 
 QTabBar::tab:selected {

@@ -337,6 +337,15 @@ flowchart TD
   - **Aba 3: Terminal Nmap:** Console monospace para acompanhamento do log técnico em tempo real emitido pelo Nmap.
   - **Abertura Maximizada & Tela Cheia:** Inicia maximizado por padrão para total legibilidade, com alternância para fullscreen via **F11**, atalho **Ctrl+Enter** para iniciar varredura e total padronização com os temas Dark e Light do IP Scan IGT.
 
+### 4.18. Padronização Visual Global, Remoção de Demonstração Wi-Fi & Otimização UI/UX Sem Cortes (v2.12.4)
+- **Remoção de Simulações e Modo Demo:** O `WifiDiagnosticDialog` e `CableDiagnosticDialog` operam estritamente com detecção e auditoria de hardware real no sistema, eliminando botões e rotinas de demonstração fictícia.
+- **Harmonização Fiel de Cores e Temas:** Cores dos diálogos especializados (`CableDiagnosticDialog`, `WifiDiagnosticDialog`, `NmapDialog`) padronizadas com a folha de estilo oficial da janela principal (`#dcdcdc`, `#d2d2d2`, `#e2e2e2`, `#2b6595` no modo claro; `#0b0f17`, `#111827`, `#162032`, `#38bdf8` no modo escuro).
+- **Responsividade e Eliminação de Cortes de Texto:**
+  - Barra de ferramentas (Ribbon) encapsulada em `QScrollArea` horizontal (`ribbonScroll`) com altura fixa e sem esmagamento de botões.
+  - Altura máxima de itens da árvore de resultados removida (`min-height: 22px; padding: 2px 4px;`) para evitar cortes verticais em qualquer escala de fonte.
+  - Abas principais com `setElideMode(Qt.ElideNone)` e rótulo nativo padronizado `[Resultados]`, `[Favoritos]` e `[🗺️ Topologia]`.
+  - Quebra de linha automática (`setWordWrap(True)`) aplicada em todas as caixas descritivas, rótulos de status e linhas de comando.
+
 ---
 
 ## 5. UI/UX Design System e Regras de Interface

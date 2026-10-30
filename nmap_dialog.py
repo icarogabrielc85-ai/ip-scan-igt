@@ -100,36 +100,37 @@ def get_nmap_dialog_palette(is_dark: bool) -> dict:
             "danger_text": "#fca5a5",
         }
     else:
+        # Paleta Cinza Industrial Padronizada da Janela Principal (ui_theme.py)
         return {
-            "bg": "#f1f5f9",
-            "header_bg": "#ffffff",
-            "card_bg": "#ffffff",
-            "card_inner": "#f8fafc",
-            "border": "#cbd5e1",
-            "border_focus": "#0284c7",
-            "text_main": "#0f172a",
-            "text_sub": "#475569",
-            "text_muted": "#64748b",
-            "accent": "#0284c7",
-            "accent_dark": "#0369a1",
-            "btn_bg": "#f1f5f9",
-            "btn_hover": "#e2e8f0",
-            "btn_text": "#0f172a",
-            "primary_btn_bg": "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0284c7, stop:1 #0369a1)",
-            "primary_btn_hover": "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0369a1, stop:1 #075985)",
-            "run_btn_bg": "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #059669, stop:1 #047857)",
-            "run_btn_hover": "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #10b981, stop:1 #059669)",
-            "table_bg": "#ffffff",
-            "table_alt": "#f8fafc",
-            "table_hdr": "#f1f5f9",
-            "table_hdr_text": "#475569",
-            "success": "#059669",
-            "success_bg": "#d1fae5",
-            "success_text": "#065f46",
+            "bg": "#dcdcdc",
+            "header_bg": "#d2d2d2",
+            "card_bg": "#e2e2e2",
+            "card_inner": "#dedede",
+            "border": "#b4b4b4",
+            "border_focus": "#2b6595",
+            "text_main": "#1e242b",
+            "text_sub": "#3b424a",
+            "text_muted": "#555f69",
+            "accent": "#2b6595",
+            "accent_dark": "#1d4f7a",
+            "btn_bg": "#e0e0e0",
+            "btn_hover": "#d2dce6",
+            "btn_text": "#1e242b",
+            "primary_btn_bg": "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2b6595, stop:1 #1d4f7a)",
+            "primary_btn_hover": "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3579b0, stop:1 #2b6595)",
+            "run_btn_bg": "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #107c41, stop:1 #0c6334)",
+            "run_btn_hover": "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #15803d, stop:1 #107c41)",
+            "table_bg": "#e8e8e8",
+            "table_alt": "#dedede",
+            "table_hdr": "#cecece",
+            "table_hdr_text": "#1e242b",
+            "success": "#107c41",
+            "success_bg": "#d5e8dd",
+            "success_text": "#0b5c36",
             "warning": "#d97706",
-            "warning_bg": "#fef3c7",
-            "warning_text": "#92400e",
-            "danger": "#dc2626",
+            "warning_bg": "#ece3cc",
+            "warning_text": "#7c4a08",
+            "danger": "#d13438",
             "danger_bg": "#fee2e2",
             "danger_text": "#991b1b",
         }
@@ -461,6 +462,7 @@ class NmapDialog(QDialog):
         content_layout.setSpacing(10)
 
         self.tabs = QTabWidget()
+        self.tabs.tabBar().setElideMode(Qt.ElideNone)
 
         # ABA 0: SCRIPTS NSE (Catálogo Completo, Presets & Seleção)
         self.tab_scripts = self._create_scripts_tab()
@@ -606,6 +608,8 @@ class NmapDialog(QDialog):
 
         self.lbl_cmd_preview = QLabel("nmap -sT ...")
         self.lbl_cmd_preview.setFont(QFont("Monospace", 9, QFont.Bold))
+        self.lbl_cmd_preview.setWordWrap(True)
+        self.lbl_cmd_preview.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.lbl_cmd_preview.setStyleSheet(
             f"background-color: {p['table_bg']}; color: {p['accent']}; padding: 6px 12px; border-radius: 6px; border: 1px solid {p['border']};"
         )

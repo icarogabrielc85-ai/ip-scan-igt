@@ -688,8 +688,12 @@ def diagnose_wifi(iface: str = "", force_demo: bool = False) -> WifiDiagResult:
             driver="--",
             mac_address="--",
             is_connected=False,
+            signal_percent=0,
+            signal_dbm=-100,
+            signal_quality_desc="Sem Sinal (Hardware Ausente)",
             overall_condition="Nenhum adaptador Wi-Fi físico encontrado neste computador.",
             test_timestamp=datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+            is_demo=False,
         )
 
     target_iface = iface or ifaces[0]["name"]
