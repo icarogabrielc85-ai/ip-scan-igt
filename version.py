@@ -6,7 +6,7 @@ import os
 import subprocess
 
 # Versão Semântica Oficial (MAJOR.MINOR.PATCH)
-APP_VERSION = "2.12.2"
+APP_VERSION = "2.12.3"
 APP_RELEASE_DATE = "30/10/2026"
 
 
@@ -73,6 +73,17 @@ def get_short_version() -> str:
 
 
 VERSION_HISTORY = [
+    {
+        "version": "v2.12.3",
+        "date": "30/10/2026",
+        "title": "Tradução Multilíngue Completa do Catálogo de Scripts NSE (Descrições, Categorias e Presets)",
+        "changes": [
+            "Tradução Integral das Descrições Funcionais (nmap_scripts_i18n.py): todas as 605 descrições de scripts do catálogo NSE traduzidas com alta fidelidade para Português (pt_BR), adaptando-se instantaneamente quando o usuário altera o idioma do programa.",
+            "Tradução Dinâmica de Categorias e Presets: todas as classes oficiais do Nmap (vuln, discovery, safe, auth, brute, etc.) e os 9 presets traduzidos nos 9 idiomas da aplicação (pt_BR, en, es, it, fr, ru, uk, zh_CN, pl).",
+            "Seletor de Idioma Integrado no Diálogo Nmap (nmap_dialog.py): dropdown de bandeiras/idiomas no topo da tela do Nmap permitindo alternância instantânea sem sair da janela.",
+            "Busca Bilingue / Multilíngue em Tempo Real: o campo de pesquisa agora localiza scripts tanto pelos termos originais em inglês quanto pelos equivalentes em português e nas categorias traduzidas.",
+        ],
+    },
     {
         "version": "v2.12.2",
         "date": "30/10/2026",

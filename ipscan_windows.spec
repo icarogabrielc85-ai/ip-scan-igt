@@ -69,6 +69,7 @@ a = Analysis(
         'nmap_dialog',
         'nmap_engine',
         'nmap_scripts_db',
+        'nmap_scripts_i18n',
         'snmp_engine',
         'cve_engine',
         'watchdog_engine',

@@ -43,6 +43,17 @@ def test_nmap_scripts_db():
     assert len(vuln_results) >= 50, f"Esperado >= 50 scripts vuln, obtido: {len(vuln_results)}"
     print(f" -> Busca filtrada validada (smb-vuln: {len(smb_results)}, categoria vuln: {len(vuln_results)}).")
 
+    # Test translations
+    desc_pt = db.get_script_desc("smb-vuln-ms17-010", "pt_BR")
+    desc_en = db.get_script_desc("smb-vuln-ms17-010", "en")
+    assert "EternalBlue" in desc_pt or "vulnerabilidade" in desc_pt.lower() or "SMBv1" in desc_pt
+    assert desc_pt != desc_en, "Descrição em português não deveria ser idêntica ao inglês!"
+    cat_pt = db.get_category_label("vuln", "pt_BR")
+    cat_en = db.get_category_label("vuln", "en")
+    assert cat_pt == "Vulnerabilidade"
+    assert cat_en == "Vulnerability"
+    print(f" -> Tradução funcional e de categorias validada (PT: '{desc_pt[:50]}...', EN: '{desc_en[:50]}...').")
+
     # Test parser
     sample_raw = """
 Host is up (0.00085s latency).
@@ -82,6 +93,18 @@ def test_nmap_dialog_ui():
     # Verify table has items
     assert dialog.table_scripts.rowCount() >= 600
     print(f" -> Tabela interativa preenchida com {dialog.table_scripts.rowCount()} linhas de scripts.")
+
+    # Test dynamic language switching and column description translation
+    desc_row0_pt = dialog.table_scripts.item(0, 2).text()
+    assert len(desc_row0_pt) > 5
+    idx_en = dialog.combo_lang.findData("en")
+    dialog.combo_lang.setCurrentIndex(idx_en)
+    desc_row0_en = dialog.table_scripts.item(0, 2).text()
+    assert desc_row0_en != desc_row0_pt, "Descrição deveria ter mudado após alternar para inglês!"
+    idx_pt = dialog.combo_lang.findData("pt_BR")
+    dialog.combo_lang.setCurrentIndex(idx_pt)
+    assert dialog.table_scripts.item(0, 2).text() == desc_row0_pt
+    print(" -> Alternância dinâmica de idiomas da tabela e descrições funcionais validada com sucesso.")
 
     # Test preset application (e.g., 'smb')
     dialog._apply_preset("smb")

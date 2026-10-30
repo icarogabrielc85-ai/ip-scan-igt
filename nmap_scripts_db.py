@@ -4,8 +4,15 @@ Banco de Dados de Scripts NSE (Nmap Scripting Engine) — IP Scan IGT
 Catálogo oficial sincronizado com https://github.com/nmap/nmap/tree/master/scripts (605 scripts).
 Permite seleção intuitiva por categorias, busca instantânea, presets de 1 clique e execução direta.
 """
+import copy
 import re
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
+
+from nmap_scripts_i18n import (
+    get_category_translation,
+    get_preset_translation,
+    get_script_description,
+)
 
 NSE_PRESETS = {
     "vuln": {
@@ -5186,11 +5193,34 @@ def get_all_scripts() -> List[dict]:
     return NSE_SCRIPTS_CATALOG
 
 
-def get_presets() -> Dict[str, dict]:
-    return NSE_PRESETS
+def get_presets(lang: Optional[str] = None) -> Dict[str, dict]:
+    presets = copy.deepcopy(NSE_PRESETS)
+    if lang:
+        for pid, pdata in presets.items():
+            trans = get_preset_translation(pid, lang)
+            pdata["name"] = trans["name"]
+            pdata["desc"] = trans["desc"]
+    return presets
 
 
-def search_scripts(query: str = "", category: str = "") -> List[dict]:
+def get_script_desc(script_or_name: Union[dict, str], lang: Optional[str] = None) -> str:
+    """Retorna a descrição funcional do script traduzida no idioma selecionado."""
+    if isinstance(script_or_name, dict):
+        name = script_or_name.get("name", "")
+        english_desc = script_or_name.get("desc", "")
+    else:
+        name = str(script_or_name)
+        s = next((item for item in NSE_SCRIPTS_CATALOG if item["name"] == name), None)
+        english_desc = s.get("desc", "") if s else ""
+    return get_script_description(name, english_desc, lang)
+
+
+def get_category_label(cat_key: str, lang: Optional[str] = None) -> str:
+    """Retorna o rótulo traduzido da categoria no idioma selecionado."""
+    return get_category_translation(cat_key, lang)
+
+
+def search_scripts(query: str = "", category: str = "", lang: Optional[str] = None) -> List[dict]:
     q = query.strip().lower()
     cat = category.strip().lower()
     results = []
@@ -5199,8 +5229,9 @@ def search_scripts(query: str = "", category: str = "") -> List[dict]:
             continue
         if q:
             name_match = q in s["name"].lower()
-            cat_match = any(q in c.lower() for c in s["categories"])
-            desc_match = q in s["desc"].lower()
+            cat_match = any(q in c.lower() or q in get_category_translation(c, lang).lower() for c in s["categories"])
+            desc_trans = get_script_description(s["name"], s["desc"], lang)
+            desc_match = q in s["desc"].lower() or q in desc_trans.lower()
             if not (name_match or cat_match or desc_match):
                 continue
         results.append(s)

@@ -46,7 +46,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from i18n import tr
+from i18n import SUPPORTED_LANGUAGES, get_current_language, set_current_language, tr
 from nmap_engine import (
     NmapScannerThread,
     get_nmap_path,
@@ -56,7 +56,9 @@ from nmap_engine import (
 from nmap_scripts_db import (
     NSE_PRESETS,
     get_all_scripts,
+    get_category_label,
     get_presets,
+    get_script_desc,
     parse_nse_script_output,
     search_scripts,
 )
@@ -160,8 +162,9 @@ class NmapDialog(QDialog):
         self.all_scripts = get_all_scripts()
         self.selected_scripts: Set[str] = {"banner", "http-title"}
         self._updating_table_check = False
+        self.current_lang = get_current_language()
 
-        self.setWindowTitle(f"Auditoria Nmap & Scripts NSE — {self.hostname or self.target or 'Host'}")
+        self.setWindowTitle(f"{tr('nmap_window_title', 'Auditoria Nmap & Scripts NSE')} — {self.hostname or self.target or 'Host'}")
         self.setWindowFlags(self.windowFlags() | Qt.WindowMinMaxButtonsHint | Qt.WindowCloseButtonHint)
 
         # 90% dimension for restored geometry
@@ -352,37 +355,49 @@ class NmapDialog(QDialog):
         row_header = QHBoxLayout()
         title_box = QVBoxLayout()
         title_box.setSpacing(1)
-        lbl_title = QLabel("🔍 AUDITORIA NMAP & SCRIPTS NSE (NMAP SCRIPTING ENGINE)")
-        lbl_title.setFont(QFont("Segoe UI", 12, QFont.Bold))
-        lbl_title.setStyleSheet(f"color: {p['accent']}; letter-spacing: 0.5px;")
-        title_box.addWidget(lbl_title)
+        self.lbl_title = QLabel(tr("nmap_title", "🔍 AUDITORIA NMAP & SCRIPTS NSE (NMAP SCRIPTING ENGINE)"))
+        self.lbl_title.setFont(QFont("Segoe UI", 12, QFont.Bold))
+        self.lbl_title.setStyleSheet(f"color: {p['accent']}; letter-spacing: 0.5px;")
+        title_box.addWidget(self.lbl_title)
 
-        lbl_sub = QLabel("Catálogo com os 605 scripts oficiais (nmap.org/nsedoc) • Seleção e Execução Direta em 1 Clique")
-        lbl_sub.setFont(QFont("Segoe UI", 9))
-        lbl_sub.setStyleSheet(f"color: {p['text_sub']};")
-        title_box.addWidget(lbl_sub)
+        self.lbl_sub = QLabel(tr("nmap_subtitle", "Catálogo com os 605 scripts oficiais (nmap.org/nsedoc) • Seleção e Execução Direta em 1 Clique"))
+        self.lbl_sub.setFont(QFont("Segoe UI", 9))
+        self.lbl_sub.setStyleSheet(f"color: {p['text_sub']};")
+        title_box.addWidget(self.lbl_sub)
         row_header.addLayout(title_box)
 
         row_header.addStretch(1)
 
-        self.btn_toggle_fullscreen = QPushButton("⛶ Tela Cheia")
+        # Seletor de Idioma Integrado
+        self.combo_lang = QComboBox()
+        self.combo_lang.setFixedHeight(28)
+        self.combo_lang.setToolTip("Alterar idioma (Change application language)")
+        for code, lang_info in SUPPORTED_LANGUAGES.items():
+            self.combo_lang.addItem(f"{lang_info['flag']}  {lang_info['native']}", code)
+        idx_lang = self.combo_lang.findData(self.current_lang)
+        if idx_lang >= 0:
+            self.combo_lang.setCurrentIndex(idx_lang)
+        self.combo_lang.currentIndexChanged.connect(self._on_language_changed)
+        row_header.addWidget(self.combo_lang)
+
+        self.btn_toggle_fullscreen = QPushButton(tr("nmap_btn_fullscreen", "⛶ Tela Cheia"))
         self.btn_toggle_fullscreen.setToolTip("Alternar modo tela cheia / janela maximizada (F11)")
         self.btn_toggle_fullscreen.clicked.connect(self.toggle_fullscreen)
         row_header.addWidget(self.btn_toggle_fullscreen)
 
-        btn_copy = QPushButton("📋 Copiar")
-        btn_copy.setToolTip("Copiar saída completa")
-        btn_copy.clicked.connect(self.copy_output)
-        row_header.addWidget(btn_copy)
+        self.btn_copy = QPushButton(tr("nmap_btn_copy", "📋 Copiar"))
+        self.btn_copy.setToolTip("Copiar saída completa")
+        self.btn_copy.clicked.connect(self.copy_output)
+        row_header.addWidget(self.btn_copy)
 
-        btn_save = QPushButton("💾 Salvar")
-        btn_save.setToolTip("Salvar relatório em arquivo texto")
-        btn_save.clicked.connect(self.save_output)
-        row_header.addWidget(btn_save)
+        self.btn_save = QPushButton(tr("nmap_btn_save", "💾 Salvar"))
+        self.btn_save.setToolTip("Salvar relatório em arquivo texto")
+        self.btn_save.clicked.connect(self.save_output)
+        row_header.addWidget(self.btn_save)
 
-        btn_close = QPushButton("✕ Fechar")
-        btn_close.clicked.connect(self.close)
-        row_header.addWidget(btn_close)
+        self.btn_close = QPushButton(tr("nmap_btn_close", "✕ Fechar"))
+        self.btn_close.clicked.connect(self.close)
+        row_header.addWidget(self.btn_close)
 
         top_layout.addLayout(row_header)
 
@@ -390,16 +405,16 @@ class NmapDialog(QDialog):
         row_ctrl = QHBoxLayout()
         row_ctrl.setSpacing(10)
 
-        lbl_tgt = QLabel("<b>Alvo (IP / Host):</b>")
-        row_ctrl.addWidget(lbl_tgt)
+        self.lbl_tgt = QLabel(f"<b>{tr('nmap_target_ip', 'Alvo (IP / Host):')}</b>")
+        row_ctrl.addWidget(self.lbl_tgt)
 
         self.txt_target = QLineEdit(self.target or "192.168.1.1")
         self.txt_target.setMinimumWidth(180)
         self.txt_target.textChanged.connect(self._update_command_preview)
         row_ctrl.addWidget(self.txt_target)
 
-        lbl_port = QLabel("<b>Escopo de Portas:</b>")
-        row_ctrl.addWidget(lbl_port)
+        self.lbl_port = QLabel(f"<b>{tr('nmap_port_scope', 'Escopo de Portas:')}</b>")
+        row_ctrl.addWidget(self.lbl_port)
 
         self.combo_ports = QComboBox()
         self.combo_ports.setMinimumWidth(240)
@@ -419,7 +434,7 @@ class NmapDialog(QDialog):
 
         row_ctrl.addStretch(1)
 
-        self.btn_run = QPushButton("▶  Iniciar Varredura / Executar")
+        self.btn_run = QPushButton(tr("nmap_start_scan", "▶  Iniciar Varredura / Executar"))
         self.btn_run.setObjectName("runBtn")
         self.btn_run.setFixedHeight(32)
         self.btn_run.setToolTip("Dispara a execução do Nmap com as portas e scripts configurados (Ctrl+Enter)")
@@ -449,19 +464,19 @@ class NmapDialog(QDialog):
 
         # ABA 0: SCRIPTS NSE (Catálogo Completo, Presets & Seleção)
         self.tab_scripts = self._create_scripts_tab()
-        self.tabs.addTab(self.tab_scripts, "📜 Scripts NSE (Seleção & Execução)")
+        self.tabs.addTab(self.tab_scripts, tr("nmap_tab_scripts", "📜 Scripts NSE (Seleção & Execução)"))
 
         # ABA 1: RELATÓRIO ESTRUTURADO & PORTAS
         self.tab_report = self._create_report_tab()
-        self.tabs.addTab(self.tab_report, "📊 Relatório & Portas")
+        self.tabs.addTab(self.tab_report, tr("nmap_tab_report", "📊 Relatório & Portas"))
 
         # ABA 2: RESULTADOS DOS SCRIPTS & VULNERABILIDADES (CVEs)
         self.tab_cves = self._create_results_tab()
-        self.tabs.addTab(self.tab_cves, "🛡️ Resultados dos Scripts & CVEs")
+        self.tabs.addTab(self.tab_cves, tr("nmap_tab_results", "🛡️ Resultados dos Scripts & CVEs"))
 
         # ABA 3: TERMINAL NMAP (Log Técnico)
         self.tab_raw = self._create_terminal_tab()
-        self.tabs.addTab(self.tab_raw, "💻 Terminal Nmap (Log Técnico)")
+        self.tabs.addTab(self.tab_raw, tr("nmap_tab_terminal", "💻 Terminal Nmap (Log Técnico)"))
 
         content_layout.addWidget(self.tabs)
         root_layout.addWidget(content_widget, 1)
@@ -487,27 +502,29 @@ class NmapDialog(QDialog):
         pf_layout.setContentsMargins(12, 10, 12, 10)
         pf_layout.setSpacing(8)
 
-        lbl_preset_t = QLabel("<b>⚡ PRESETS RÁPIDOS DE SCRIPTS NSE (1-CLIQUE):</b>")
-        lbl_preset_t.setFont(QFont("Segoe UI", 9, QFont.Bold))
-        lbl_preset_t.setStyleSheet(f"color: {p['accent']};")
-        pf_layout.addWidget(lbl_preset_t)
+        self.lbl_preset_t = QLabel(f"<b>{tr('nmap_quick_presets', '⚡ PRESETS RÁPIDOS DE SCRIPTS NSE (1-CLIQUE):')}</b>")
+        self.lbl_preset_t.setFont(QFont("Segoe UI", 9, QFont.Bold))
+        self.lbl_preset_t.setStyleSheet(f"color: {p['accent']};")
+        pf_layout.addWidget(self.lbl_preset_t)
 
         presets_row = QHBoxLayout()
         presets_row.setSpacing(8)
 
-        presets = get_presets()
+        self.preset_buttons: Dict[str, QPushButton] = {}
+        presets = get_presets(self.current_lang)
         for pid, pdata in presets.items():
             btn_p = QPushButton(pdata["name"])
             btn_p.setObjectName("presetBtn")
             btn_p.setToolTip(f"{pdata['desc']}\nArgumento NSE: --script {pdata['arg']}")
             btn_p.clicked.connect(lambda _, key=pid: self._apply_preset(key))
+            self.preset_buttons[pid] = btn_p
             presets_row.addWidget(btn_p)
 
-        btn_clear = QPushButton("🧹 Limpar")
-        btn_clear.setObjectName("presetBtn")
-        btn_clear.setToolTip("Desmarcar todos os scripts")
-        btn_clear.clicked.connect(self._clear_all_scripts)
-        presets_row.addWidget(btn_clear)
+        self.btn_clear = QPushButton(tr("clear", "🧹 Limpar"))
+        self.btn_clear.setObjectName("presetBtn")
+        self.btn_clear.setToolTip("Desmarcar todos os scripts")
+        self.btn_clear.clicked.connect(self._clear_all_scripts)
+        presets_row.addWidget(self.btn_clear)
 
         presets_row.addStretch(1)
         pf_layout.addLayout(presets_row)
@@ -518,33 +535,25 @@ class NmapDialog(QDialog):
         search_bar.setSpacing(10)
 
         self.txt_script_search = QLineEdit()
-        self.txt_script_search.setPlaceholderText("🔍 Filtrar 605 scripts por nome, categoria ou palavra-chave (ex: ssl, smb, heartbleed, cve, auth, http)...")
+        self.txt_script_search.setPlaceholderText(tr("nmap_search_placeholder", "🔍 Filtrar 605 scripts por nome, categoria ou palavra-chave (ex: ssl, smb, heartbleed, cve, auth, http)..."))
         self.txt_script_search.textChanged.connect(self._filter_scripts)
         search_bar.addWidget(self.txt_script_search, 2)
 
-        lbl_cat = QLabel("<b>Categoria:</b>")
-        search_bar.addWidget(lbl_cat)
+        self.lbl_cat = QLabel(f"<b>{tr('nmap_col_categories', 'Categoria')}:</b>")
+        search_bar.addWidget(self.lbl_cat)
 
         self.combo_category = QComboBox()
-        self.combo_category.addItem("Todas as Categorias (605)", "todas")
-        self.combo_category.addItem("🛡️ vuln — Vulnerabilidades & CVEs (105)", "vuln")
-        self.combo_category.addItem("🔍 discovery — Descoberta & Banners (309)", "discovery")
-        self.combo_category.addItem("⚡ safe — Scripts Seguros / Sem Risco (347)", "safe")
-        self.combo_category.addItem("⭐ default — Padrão Recomendado (-sC) (126)", "default")
-        self.combo_category.addItem("🔑 auth — Contas & Credenciais (38)", "auth")
-        self.combo_category.addItem("🔨 brute — Força Bruta & Dicionário (75)", "brute")
-        self.combo_category.addItem("🦠 malware — Backdoors & Botnets (10)", "malware")
-        self.combo_category.addItem("💥 exploit — Testes Ativos de Exploit (45)", "exploit")
+        self._populate_category_combo()
         self.combo_category.currentIndexChanged.connect(self._filter_scripts)
         search_bar.addWidget(self.combo_category, 1)
 
-        btn_check_vis = QPushButton("☑ Marcar Visíveis")
-        btn_check_vis.clicked.connect(self._check_all_visible)
-        search_bar.addWidget(btn_check_vis)
+        self.btn_check_vis = QPushButton(tr("nmap_btn_check_vis", "☑ Marcar Visíveis"))
+        self.btn_check_vis.clicked.connect(self._check_all_visible)
+        search_bar.addWidget(self.btn_check_vis)
 
-        btn_uncheck_vis = QPushButton("☐ Desmarcar Visíveis")
-        btn_uncheck_vis.clicked.connect(self._uncheck_all_visible)
-        search_bar.addWidget(btn_uncheck_vis)
+        self.btn_uncheck_vis = QPushButton(tr("nmap_btn_uncheck_vis", "☐ Desmarcar Visíveis"))
+        self.btn_uncheck_vis.clicked.connect(self._uncheck_all_visible)
+        search_bar.addWidget(self.btn_uncheck_vis)
 
         self.lbl_selected_count = QLabel("<b>2 selecionados</b>")
         self.lbl_selected_count.setStyleSheet(
@@ -557,7 +566,9 @@ class NmapDialog(QDialog):
         # 3. TABELA COMPLETA DE SCRIPTS
         self.table_scripts = QTableWidget(0, 3)
         self.table_scripts.setHorizontalHeaderLabels([
-            "Script NSE", "Categorias", "Descrição Funcional & Utilidade Prática"
+            tr("nmap_col_script", "Script NSE"),
+            tr("nmap_col_categories", "Categorias"),
+            tr("nmap_col_description", "Descrição Funcional & Utilidade Prática")
         ])
         self.table_scripts.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.table_scripts.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
@@ -589,9 +600,9 @@ class NmapDialog(QDialog):
 
         # Prévia Visual do Comando
         preview_row = QHBoxLayout()
-        lbl_prev_t = QLabel("<b>Comando:</b>")
-        lbl_prev_t.setFont(QFont("Segoe UI", 9, QFont.Bold))
-        preview_row.addWidget(lbl_prev_t)
+        self.lbl_prev_t = QLabel(f"<b>{tr('nmap_cmd_preview', 'Comando:')}</b>")
+        self.lbl_prev_t.setFont(QFont("Segoe UI", 9, QFont.Bold))
+        preview_row.addWidget(self.lbl_prev_t)
 
         self.lbl_cmd_preview = QLabel("nmap -sT ...")
         self.lbl_cmd_preview.setFont(QFont("Monospace", 9, QFont.Bold))
@@ -600,7 +611,7 @@ class NmapDialog(QDialog):
         )
         preview_row.addWidget(self.lbl_cmd_preview, 1)
 
-        self.btn_run_scripts = QPushButton("▶ Executar Scripts Selecionados")
+        self.btn_run_scripts = QPushButton(tr("nmap_run_scripts", "▶ Executar Scripts Selecionados"))
         self.btn_run_scripts.setObjectName("runBtn")
         self.btn_run_scripts.setFixedHeight(34)
         self.btn_run_scripts.setToolTip("Dispara imediatamente a varredura com os scripts marcados acima")
@@ -610,6 +621,18 @@ class NmapDialog(QDialog):
 
         layout.addWidget(cmd_box)
         return tab
+
+    def _populate_category_combo(self):
+        lang = self.current_lang or get_current_language()
+        self.combo_category.addItem(tr("nmap_cat_all", "Todas as Categorias (605)"), "todas")
+        self.combo_category.addItem(f"🛡️ vuln — {get_category_label('vuln', lang)} & CVEs (105)", "vuln")
+        self.combo_category.addItem(f"🔍 discovery — {get_category_label('discovery', lang)} & Banners (309)", "discovery")
+        self.combo_category.addItem(f"⚡ safe — {get_category_label('safe', lang)} / Sem Risco (347)", "safe")
+        self.combo_category.addItem(f"⭐ default — {get_category_label('default', lang)} (-sC) (126)", "default")
+        self.combo_category.addItem(f"🔑 auth — {get_category_label('auth', lang)} (38)", "auth")
+        self.combo_category.addItem(f"🔨 brute — {get_category_label('brute', lang)} (75)", "brute")
+        self.combo_category.addItem(f"🦠 malware — {get_category_label('malware', lang)} (10)", "malware")
+        self.combo_category.addItem(f"💥 exploit — {get_category_label('exploit', lang)} (45)", "exploit")
 
     # =========================================================================
     # ABA 1: RELATÓRIO ESTRUTURADO & PORTAS
@@ -823,12 +846,13 @@ class NmapDialog(QDialog):
         self.table_scripts.setUpdatesEnabled(False)
         try:
             p = self.palette
+            lang = self.current_lang or get_current_language()
             self.table_scripts.setRowCount(len(scripts_list))
 
             for row, s in enumerate(scripts_list):
                 sname = s["name"]
                 cats = s["categories"]
-                desc = s["desc"]
+                desc = get_script_desc(s, lang)
 
                 # Col 0: Checkbox + Script Name
                 it_name = QTableWidgetItem(sname)
@@ -844,15 +868,16 @@ class NmapDialog(QDialog):
                 it_name.setData(Qt.UserRole, sname)
                 self.table_scripts.setItem(row, 0, it_name)
 
-                # Col 1: Categories
-                cat_str = " • ".join(cats)
+                # Col 1: Categories (Traduzidas conforme o idioma)
+                cat_translated = [get_category_label(c, lang) for c in cats]
+                cat_str = " • ".join(cat_translated)
                 it_cat = QTableWidgetItem(cat_str)
                 it_cat.setFont(QFont("Segoe UI", 8))
                 it_cat.setForeground(QColor(p["text_muted"]))
                 it_cat.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
                 self.table_scripts.setItem(row, 1, it_cat)
 
-                # Col 2: Description
+                # Col 2: Description (Traduzida conforme o idioma selecionado)
                 it_desc = QTableWidgetItem(desc)
                 it_desc.setFont(QFont("Segoe UI", 9))
                 it_desc.setForeground(QColor(p["text_main"]))
@@ -886,16 +911,91 @@ class NmapDialog(QDialog):
         count = len(self.selected_scripts)
         self.lbl_selected_count.setText(f"<b>🏷️ {count} selecionado(s)</b>")
         if hasattr(self, "btn_run_scripts"):
-            self.btn_run_scripts.setText(f"▶ Executar Scripts Selecionados ({count})")
+            self.btn_run_scripts.setText(f"{tr('nmap_run_scripts', '▶ Executar Scripts Selecionados')} ({count})")
 
     def _filter_scripts(self):
         q = self.txt_script_search.text().strip()
         cat = self.combo_category.currentData() or ""
-        filtered = search_scripts(q, cat)
+        lang = self.current_lang or get_current_language()
+        filtered = search_scripts(q, cat, lang)
         self._populate_scripts_table(filtered)
 
+    def _on_language_changed(self):
+        code = self.combo_lang.currentData()
+        if code and code != self.current_lang:
+            self.current_lang = code
+            set_current_language(code)
+            self.retranslate_ui()
+
+    def retranslate_ui(self):
+        lang = self.current_lang or get_current_language()
+        self.setWindowTitle(f"{tr('nmap_window_title', 'Auditoria Nmap & Scripts NSE')} — {self.hostname or self.target or 'Host'}")
+
+        if hasattr(self, "lbl_title"):
+            self.lbl_title.setText(tr("nmap_title", "🔍 AUDITORIA NMAP & SCRIPTS NSE (NMAP SCRIPTING ENGINE)"))
+        if hasattr(self, "lbl_sub"):
+            self.lbl_sub.setText(tr("nmap_subtitle", "Catálogo com os 605 scripts oficiais (nmap.org/nsedoc) • Seleção e Execução Direta em 1 Clique"))
+
+        if hasattr(self, "tabs"):
+            self.tabs.setTabText(0, tr("nmap_tab_scripts", "📜 Scripts NSE (Seleção & Execução)"))
+            self.tabs.setTabText(1, tr("nmap_tab_report", "📊 Relatório & Portas"))
+            self.tabs.setTabText(2, tr("nmap_tab_results", "🛡️ Resultados dos Scripts & CVEs"))
+            self.tabs.setTabText(3, tr("nmap_tab_terminal", "💻 Terminal Nmap (Log Técnico)"))
+
+        if hasattr(self, "lbl_preset_t"):
+            self.lbl_preset_t.setText(f"<b>{tr('nmap_quick_presets', '⚡ PRESETS RÁPIDOS DE SCRIPTS NSE (1-CLIQUE):')}</b>")
+
+        if hasattr(self, "preset_buttons"):
+            presets = get_presets(lang)
+            for pid, btn in self.preset_buttons.items():
+                if pid in presets:
+                    btn.setText(presets[pid]["name"])
+                    btn.setToolTip(f"{presets[pid]['desc']}\nArgumento NSE: --script {presets[pid]['arg']}")
+
+        if hasattr(self, "btn_clear"):
+            self.btn_clear.setText(tr("clear", "🧹 Limpar"))
+
+        if hasattr(self, "txt_script_search"):
+            self.txt_script_search.setPlaceholderText(tr("nmap_search_placeholder", "🔍 Filtrar 605 scripts por nome, categoria ou utilidade..."))
+
+        if hasattr(self, "combo_category"):
+            curr_cat = self.combo_category.currentData() or "todas"
+            self.combo_category.blockSignals(True)
+            self.combo_category.clear()
+            self._populate_category_combo()
+            idx = self.combo_category.findData(curr_cat)
+            if idx >= 0:
+                self.combo_category.setCurrentIndex(idx)
+            self.combo_category.blockSignals(False)
+
+        if hasattr(self, "btn_check_vis"):
+            self.btn_check_vis.setText(tr("nmap_btn_check_vis", "☑ Marcar Visíveis"))
+        if hasattr(self, "btn_uncheck_vis"):
+            self.btn_uncheck_vis.setText(tr("nmap_btn_uncheck_vis", "☐ Desmarcar Visíveis"))
+
+        if hasattr(self, "table_scripts"):
+            self.table_scripts.setHorizontalHeaderLabels([
+                tr("nmap_col_script", "Script NSE"),
+                tr("nmap_col_categories", "Categorias"),
+                tr("nmap_col_description", "Descrição Funcional & Utilidade Prática")
+            ])
+
+        if hasattr(self, "btn_run"):
+            self.btn_run.setText(tr("nmap_start_scan", "▶ Iniciar Varredura / Executar"))
+        if hasattr(self, "btn_toggle_fullscreen"):
+            self.btn_toggle_fullscreen.setText(tr("nmap_btn_fullscreen", "⛶ Tela Cheia"))
+        if hasattr(self, "btn_copy"):
+            self.btn_copy.setText(tr("nmap_btn_copy", "📋 Copiar"))
+        if hasattr(self, "btn_save"):
+            self.btn_save.setText(tr("nmap_btn_save", "💾 Salvar"))
+        if hasattr(self, "btn_close"):
+            self.btn_close.setText(tr("nmap_btn_close", "✕ Fechar"))
+
+        self._filter_scripts()
+        self._update_selected_count_badge()
+
     def _apply_preset(self, preset_key: str):
-        presets = get_presets()
+        presets = get_presets(self.current_lang)
         if preset_key in presets:
             pdata = presets[preset_key]
             key_scripts = pdata.get("key_scripts", [])

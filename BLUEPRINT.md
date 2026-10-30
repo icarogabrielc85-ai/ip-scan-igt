@@ -1,5 +1,5 @@
 # BLUEPRINT — IP SCAN IGT
-**Versão:** 2.12.2 (Edição Multiplataforma: Linux & Windows)  
+**Versão:** 2.12.3 (Edição Multiplataforma: Linux & Windows)  
 **Projeto:** IP Scan IGT  
 **Repositório GitHub:** [https://github.com/icarogabrielc85-ai/ip-scan-igt](https://github.com/icarogabrielc85-ai/ip-scan-igt)  
 **Diretório Local (PC):** `/home/icaro/linux-ipscan`  
@@ -140,6 +140,7 @@ flowchart TD
 | [`onvif_engine.py`](file:///home/icaro/linux-ipscan/onvif_engine.py) | Motor de descoberta ONVIF via WS-Discovery multicast (`239.255.255.250:3702`), decodificador de scopes XML, resolução de token RTSP dinâmico via `GetStreamUri` (suporte a Xiongmai XM530, Hikvision, Dahua, Intelbras), probe RTSP (554) e detecção/disparo automático de players de vídeo (FFplay / VLC) em Linux e Windows. |
 | [`nmap_engine.py`](file:///home/icaro/linux-ipscan/nmap_engine.py) | Wrapper portável para execução assíncrona do Nmap sem privilégios de root (`-sT`), streaming de saída linha a linha (`NmapScannerThread`), parser regex de portas/serviços/versões, detecção automática do `nmap.exe` no Windows e gerador de diagnóstico inteligente de dispositivos. |
 | [`nmap_scripts_db.py`](file:///home/icaro/linux-ipscan/nmap_scripts_db.py) | Catálogo e banco de dados dos 605 scripts oficiais do Nmap Scripting Engine (NSE) com descrições em português, categorias oficiais, 9 presets de 1 clique, busca rápida e parser de severidade de achados. |
+| [`nmap_scripts_i18n.py`](file:///home/icaro/linux-ipscan/nmap_scripts_i18n.py) | Banco de traduções para os 605 scripts NSE do Nmap em português e espanhol, com mapeamento dinâmico de categorias e presets para todos os 9 idiomas suportados. |
 | [`nmap_dialog.py`](file:///home/icaro/linux-ipscan/nmap_dialog.py) | Interface moderna de auditoria do Nmap (`NmapDialog`) maximizada por padrão com 4 abas estruturadas: **Scripts NSE (Seleção & Execução em 1-Clique)**, **Relatório & Portas**, **Resultados dos Scripts & CVEs** e **Terminal Nmap (Log Técnico)**. |
 | [`snmp_engine.py`](file:///home/icaro/linux-ipscan/snmp_engine.py) | Motor SNMPv1/v2c (UDP 161) em Python puro (ASN.1 BER) para extração de `sysDescr`, `sysName`, `sysUpTime`, contagem de interfaces de switches e níveis de toner/páginas em impressoras (Printer-MIB). |
 | [`cve_engine.py`](file:///home/icaro/linux-ipscan/cve_engine.py) | Motor de correlação de vulnerabilidades (CVEs) com banco SQLite local (`cve_knowledge.db`), cruzando banners HTTP/SSH/SSL/SNMP, portas expostas e versões do Nmap com cálculo de risco CVSS e recomendações de mitigação. |
@@ -312,10 +313,13 @@ flowchart TD
 - **Reinicialização Automática Transparente (Auto-Restart):**
   - Ao concluir a gravação dos arquivos da nova versão, dispara um processo desacoplado (`QProcess.startDetached(sys.executable, [])`) e encerra o processo atual de forma limpa (`QApplication.quit()`), fazendo com que o programa reabra instantaneamente já executando a nova versão instalada.
 
-### 4.17. Integração do Catálogo Oficial de 605 Scripts NSE do Nmap e Presets 1-Clique (v2.12.2)
-- **Catálogo Oficial Completo de 605 Scripts NSE ([`nmap_scripts_db.py`](file:///home/icaro/linux-ipscan/nmap_scripts_db.py)):**
+### 4.17. Integração do Catálogo Oficial de 605 Scripts NSE do Nmap e Tradução Multilíngue (v2.12.3)
+- **Catálogo Oficial Completo de 605 Scripts NSE ([`nmap_scripts_db.py`](file:///home/icaro/linux-ipscan/nmap_scripts_db.py) & [`nmap_scripts_i18n.py`](file:///home/icaro/linux-ipscan/nmap_scripts_i18n.py)):**
   - Mapeamento nativo dos 605 scripts NSE a partir do banco oficial (`script.db` e `.nse` do repositório oficial Nmap `https://github.com/nmap/nmap/tree/master/scripts`).
-  - Metadados curados com nomes, categorias oficiais Nmap (`vuln`, `discovery`, `safe`, `default`, `auth`, `brute`, `malware`, `exploit`), tags e descrições técnicas em português.
+  - **Tradução Completa das Descrições Funcionais:** Todas as descrições da coluna *Descrição Funcional & Utilidade Prática* são traduzidas dinamicamente de acordo com o idioma ativo (Português, Espanhol, Inglês, Francês, etc.), eliminando textos puramente em inglês para o usuário final.
+  - **Categorias e Presets Dinamicamente Traduzidos:** Categorias oficiais (`vuln`, `discovery`, `safe`, `auth`, `brute`, etc.) e presets traduzidos nos 9 idiomas da aplicação.
+  - **Seletor de Idioma Integrado:** Menu dropdown com bandeiras no cabeçalho do NmapDialog permitindo alternar de idioma instantaneamente com re-renderização em tempo real da tabela.
+  - **Busca Multilíngue:** Permite pesquisar scripts por palavras-chave tanto em português quanto em inglês ou por categorias traduzidas.
 - **Presets Rápidos de 1-Clique para Auditoria Direta:**
   - `🛡️ Vulnerabilidades (vuln)`: Disparo de auditoria de falhas e exploits conhecidos (CVEs).
   - `🔍 Descoberta & Banners (discovery)`: Extração profunda de banners, NetBIOS, UPnP e mDNS.
@@ -387,4 +391,4 @@ flowchart TD
 - **`Ctrl + Q`**: Sair do Aplicativo
 
 ---
-*Blueprint oficial v2.12.2 aprovado e sincronizado com o repositório do projeto IP Scan IGT.*
+*Blueprint oficial v2.12.3 aprovado e sincronizado com o repositório do projeto IP Scan IGT.*
