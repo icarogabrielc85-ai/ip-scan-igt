@@ -816,6 +816,8 @@ class CableDiagnosticDialog(QDialog):
         return txt.split(" ")[0].strip()
 
     def run_cable_measurement(self):
+        if self.cable_worker and self.cable_worker.isRunning():
+            return
         iface_name = self._get_current_cable_iface_name()
         if not iface_name:
             QMessageBox.information(self, "Placa de Rede", "Nenhuma placa de rede selecionada.")
@@ -914,6 +916,8 @@ class CableDiagnosticDialog(QDialog):
 
     def run_wifi_measurement(self):
         """Preservado para compatibilidade de testes."""
+        if self.wifi_worker and self.wifi_worker.isRunning():
+            return
         self.wifi_worker = LocalWifiDiagWorker(interface_name="", force_demo=False)
         self.wifi_worker.diag_completed.connect(self._on_wifi_diag_success)
         self.wifi_worker.start()
@@ -923,10 +927,6 @@ class CableDiagnosticDialog(QDialog):
         self.run_wifi_measurement()
 
     def scan_nearby_wifi_action(self):
-        self.run_wifi_measurement()
-
-    def run_wifi_demo_measurement(self):
-        """Redireciona para medição real."""
         self.run_wifi_measurement()
 
     @pyqtSlot(object)
@@ -948,6 +948,30 @@ class CableDiagnosticDialog(QDialog):
                 self.table_nearby.setItem(row, 4, QTableWidgetItem(f"Ch {net.channel}"))
                 self.table_nearby.setItem(row, 5, QTableWidgetItem(f"{net.frequency_mhz} MHz"))
                 self.table_nearby.setItem(row, 6, QTableWidgetItem(net.security))
+
+    def _cleanup_workers(self):
+        """Encerra com segurança os workers assíncronos de cabo e Wi-Fi."""
+        for worker_attr in ["cable_worker", "wifi_worker"]:
+            worker = getattr(self, worker_attr, None)
+            if worker and worker.isRunning():
+                try:
+                    worker.disconnect()
+                except Exception:
+                    pass
+                if hasattr(worker, "stop"):
+                    worker.stop()
+                if not worker.wait(1000):
+                    worker.terminate()
+                    worker.wait(300)
+            setattr(self, worker_attr, None)
+
+    def closeEvent(self, event):
+        self._cleanup_workers()
+        event.accept()
+
+    def reject(self):
+        self._cleanup_workers()
+        super().reject()
 
     def copy_current_report(self):
         if self.current_tab == "cable" or not self.current_wifi_result:
@@ -1369,8 +1393,12 @@ class WifiDiagnosticDialog(QDialog):
         return txt.split(" ")[0].strip()
 
     def run_wifi_measurement(self):
+        if self.wifi_worker and self.wifi_worker.isRunning():
+            return
+
         w_iface = self._get_current_wifi_iface_name()
         self.btn_measure_wifi.setEnabled(False)
+        self.btn_scan_nearby.setEnabled(False)
         self.lbl_global_status.setText("● Executando diagnóstico e medição de sinal Wi-Fi...")
         self.lbl_global_status.setStyleSheet(f"color: {self.palette['accent']};")
 
@@ -1378,8 +1406,12 @@ class WifiDiagnosticDialog(QDialog):
         self.wifi_worker.status_updated.connect(lambda s: self.lbl_global_status.setText(f"● {s}"))
         self.wifi_worker.diag_completed.connect(self._on_wifi_diag_success)
         self.wifi_worker.error_occurred.connect(self._on_wifi_diag_error)
-        self.wifi_worker.finished.connect(lambda: self.btn_measure_wifi.setEnabled(True))
+        self.wifi_worker.finished.connect(self._on_wifi_measurement_finished)
         self.wifi_worker.start()
+
+    def _on_wifi_measurement_finished(self):
+        self.btn_measure_wifi.setEnabled(True)
+        self.btn_scan_nearby.setEnabled(True)
 
     def scan_nearby_wifi_action(self):
         self.run_wifi_measurement()
@@ -1387,6 +1419,27 @@ class WifiDiagnosticDialog(QDialog):
     def run_wifi_demo_measurement(self):
         """Redireciona para medição real."""
         self.run_wifi_measurement()
+
+    def _cleanup_worker(self):
+        """Encerra com segurança o worker assíncrono antes da destruição do diálogo."""
+        if self.wifi_worker and self.wifi_worker.isRunning():
+            try:
+                self.wifi_worker.disconnect()
+            except Exception:
+                pass
+            self.wifi_worker.stop()
+            if not self.wifi_worker.wait(1000):
+                self.wifi_worker.terminate()
+                self.wifi_worker.wait(300)
+        self.wifi_worker = None
+
+    def closeEvent(self, event):
+        self._cleanup_worker()
+        event.accept()
+
+    def reject(self):
+        self._cleanup_worker()
+        super().reject()
 
     @pyqtSlot(object)
     def _on_wifi_diag_success(self, res: WifiDiagResult):

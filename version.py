@@ -6,7 +6,7 @@ import os
 import subprocess
 
 # Versão Semântica Oficial (MAJOR.MINOR.PATCH)
-APP_VERSION = "2.12.4"
+APP_VERSION = "2.12.5"
 APP_RELEASE_DATE = "30/10/2026"
 
 
@@ -73,6 +73,18 @@ def get_short_version() -> str:
 
 
 VERSION_HISTORY = [
+    {
+        "version": "v2.12.5",
+        "date": "30/10/2026",
+        "title": "Correção Crítica de Concorrência de Threads e Eliminação de Travamentos no Diagnóstico Wi-Fi",
+        "changes": [
+            "Eliminação do Travamento e Crash (SIGABRT/Exit 6): implementação de gerenciamento estrito do ciclo de vida das threads secundárias (LocalWifiDiagWorker e LocalCableDiagWorker) com métodos cooperativos de stop() e cancelamento gracioso em closeEvent() e reject().",
+            "Prevenção contra Sobrescrita Concorrente de Workers: bloqueio de múltiplos disparos simultâneos ao alternar entre medições ('Medir Sinal' e 'Redes Vizinhas') com desativação síncrona dos botões de controle durante auditorias ativas.",
+            "Otimização da Medição de Ping e Subprocessos: redução do tempo de resposta da auditoria Wi-Fi de ~9 segundos para ~1 segundo através de ping compacto (-c 2 -W 1 -i 0.2) e timeouts estritos em chamadas de sistema (ethtool, iw, nmcli, ip route).",
+            "Correção do Padrão Wi-Fi (Wi-Fi 7 vs Wi-Fi 4): regex aprimorada com delimitadores de palavra inteira em deduce_wifi_standard, eliminando o falso positivo causado pelo termo 'beacon' no link do iw e identificando com exatidão redes 802.11n MIMO.",
+            "Nova Suíte de Testes de Estabilidade (test_wifi_lifecycle.py): 6 novos testes automatizados cobrindo parada cooperativa de threads, proteção contra duplo clique e fechamento instantâneo do diálogo em meio à varredura.",
+        ],
+    },
     {
         "version": "v2.12.4",
         "date": "30/10/2026",

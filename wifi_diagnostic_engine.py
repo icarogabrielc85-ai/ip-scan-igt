@@ -114,17 +114,30 @@ def freq_to_band_and_channel(freq_mhz: int, chan: int = 0) -> Tuple[str, int]:
 def deduce_wifi_standard(freq_mhz: int, tx_rate: float, security: str, raw_proto: str = "") -> str:
     """Deduce o padrão comercial do Wi-Fi (Wi-Fi 4 / 5 / 6 / 6E / 7)."""
     raw_lower = raw_proto.lower()
-    if "be" in raw_lower or "wifi 7" in raw_lower or "wifi7" in raw_lower:
+    # Wi-Fi 7 (802.11be / EHT) - exige correspondência de palavra inteira ou eht-mcs para evitar falso positivo com "beacon"
+    if re.search(r"\b(802\.11be|eht|wifi\s*7)\b", raw_lower) or "eht-mcs" in raw_lower:
         return "Wi-Fi 7 (IEEE 802.11be Extreme Throughput)"
-    if "ax" in raw_lower or "wifi 6" in raw_lower or "wifi6" in raw_lower:
-        if freq_mhz >= 5925:
+    # Wi-Fi 6 / 6E (802.11ax / HE)
+    if re.search(r"\b(802\.11ax|he|wifi\s*6e?)\b", raw_lower) or "he-mcs" in raw_lower:
+        if freq_mhz >= 5925 or "6e" in raw_lower:
             return "Wi-Fi 6E (IEEE 802.11ax 6 GHz Ultra-Band)"
         return "Wi-Fi 6 (IEEE 802.11ax High Efficiency)"
-    if "ac" in raw_lower or "vht" in raw_lower or tx_rate > 450:
+    # Wi-Fi 5 (802.11ac / VHT)
+    if re.search(r"\b(802\.11ac)\b", raw_lower) or "vht" in raw_lower or "vht-mcs" in raw_lower or tx_rate > 450:
         return "Wi-Fi 5 (IEEE 802.11ac Gigabit Wave 2)"
-    if "n" in raw_lower or "ht" in raw_lower or (tx_rate > 54 and freq_mhz < 5000):
+    # Wi-Fi 4 (802.11n / HT)
+    if (
+        re.search(r"\b(802\.11n)\b", raw_lower)
+        or "ht-mcs" in raw_lower
+        or "40mhz" in raw_lower
+        or "20mhz" in raw_lower
+        or "mcs" in raw_lower
+        or "ht" in raw_lower
+        or (tx_rate > 54 and freq_mhz < 5000)
+    ):
         return "Wi-Fi 4 (IEEE 802.11n MIMO)"
-    if "g" in raw_lower or (tx_rate <= 54 and freq_mhz < 3000):
+    # Legado 802.11g/b/a
+    if re.search(r"\b(802\.11[abg])\b", raw_lower) or (tx_rate <= 54 and freq_mhz < 3000):
         return "Wi-Fi Legacy (IEEE 802.11g 54 Mbps)"
     if freq_mhz >= 5000:
         return "Wi-Fi 5 (IEEE 802.11ac)"
@@ -214,15 +227,15 @@ def get_wifi_interfaces() -> List[Dict[str, str]]:
 
 
 def measure_gateway_wifi_ping(gateway_ip: str) -> Tuple[float, float, float]:
-    """Mede a latência média, jitter e perda de pacotes até o gateway Wi-Fi."""
+    """Mede a latência média, jitter e perda de pacotes até o gateway Wi-Fi de forma ultrarrápida."""
     if not gateway_ip or gateway_ip == "--":
         return 0.0, 0.0, 0.0
 
     is_windows = platform.system() == "Windows"
-    cmd = ["ping", "-n", "4", "-w", "1000", gateway_ip] if is_windows else ["ping", "-c", "4", "-W", "1", gateway_ip]
+    cmd = ["ping", "-n", "2", "-w", "800", gateway_ip] if is_windows else ["ping", "-c", "2", "-W", "1", "-i", "0.2", gateway_ip]
 
     try:
-        out = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL, timeout=5)
+        out = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL, timeout=2.5)
         # Linux RTT: rtt min/avg/max/mdev = 1.123/2.345/3.456/0.567 ms
         rtt_match = re.search(r"= ([\d\.]+)/([\d\.]+)/([\d\.]+)/([\d\.]+) ms", out)
         if rtt_match:
@@ -397,7 +410,7 @@ def diagnose_wifi_linux(iface: str) -> WifiDiagResult:
 
     # 1. Hardware e Driver
     try:
-        ethtool_out = subprocess.check_output(["ethtool", "-i", iface], text=True, stderr=subprocess.DEVNULL)
+        ethtool_out = subprocess.check_output(["ethtool", "-i", iface], text=True, stderr=subprocess.DEVNULL, timeout=3)
         for line in ethtool_out.splitlines():
             if line.startswith("driver:"):
                 res.driver = line.split(":", 1)[1].strip()
@@ -415,7 +428,7 @@ def diagnose_wifi_linux(iface: str) -> WifiDiagResult:
     iw_link_out = ""
     if shutil.which("iw"):
         try:
-            iw_link_out = subprocess.check_output(["iw", "dev", iface, "link"], text=True, stderr=subprocess.DEVNULL)
+            iw_link_out = subprocess.check_output(["iw", "dev", iface, "link"], text=True, stderr=subprocess.DEVNULL, timeout=3)
             if "Connected to" in iw_link_out:
                 res.is_connected = True
                 bssid_m = re.search(r"Connected to ([0-9a-fA-F:]{17})", iw_link_out)
@@ -457,6 +470,7 @@ def diagnose_wifi_linux(iface: str) -> WifiDiagResult:
                 ["nmcli", "-t", "-f", "ACTIVE,SSID,BSSID,CHAN,FREQ,RATE,SIGNAL,SECURITY", "dev", "wifi"],
                 text=True,
                 stderr=subprocess.DEVNULL,
+                timeout=4,
             )
             for line in nm_out.splitlines():
                 parts = re.split(r"(?<!\\):", line)
@@ -501,7 +515,7 @@ def diagnose_wifi_linux(iface: str) -> WifiDiagResult:
 
     # 5. Gateway Wi-Fi Ping & Jitter
     try:
-        route_out = subprocess.check_output(["ip", "route", "show", "dev", iface], text=True, stderr=subprocess.DEVNULL)
+        route_out = subprocess.check_output(["ip", "route", "show", "dev", iface], text=True, stderr=subprocess.DEVNULL, timeout=2)
         gw_match = re.search(r"default via ([\d\.]+)", route_out)
         if gw_match:
             res.gateway_ip = gw_match.group(1)
@@ -714,24 +728,42 @@ class LocalWifiDiagWorker(QThread):
         super().__init__(parent)
         self.interface_name = interface_name
         self.force_demo = force_demo
+        self._is_running = True
+
+    def stop(self):
+        """Sinaliza parada cooperativa imediata do worker."""
+        self._is_running = False
 
     def run(self):
         try:
+            if not self._is_running:
+                return
             self.status_updated.emit("Identificando placas e adaptadores sem fio Wi-Fi...")
-            time.sleep(0.1)
+            time.sleep(0.05)
+            if not self._is_running:
+                return
 
             if self.force_demo:
                 self.status_updated.emit("Carregando ambiente de homologação e medição Wi-Fi 6...")
-                time.sleep(0.3)
+                time.sleep(0.1)
+                if not self._is_running:
+                    return
                 res = get_demo_wifi_result()
-                self.diag_completed.emit(res)
+                if self._is_running:
+                    self.diag_completed.emit(res)
                 return
 
             self.status_updated.emit(f"Medindo nível de sinal RSSI e potência em '{self.interface_name or 'Wi-Fi'}'...")
-            time.sleep(0.15)
+            time.sleep(0.05)
+            if not self._is_running:
+                return
             self.status_updated.emit("Auditando modulação, canal, largura de banda e relação sinal-ruído (SNR)...")
             res = diagnose_wifi(self.interface_name)
+            if not self._is_running:
+                return
             self.status_updated.emit("Escaneando redes vizinhas e analisando sobreposição de canais...")
-            self.diag_completed.emit(res)
+            if self._is_running:
+                self.diag_completed.emit(res)
         except Exception as e:
-            self.error_occurred.emit(f"Falha no diagnóstico de Wi-Fi: {str(e)}")
+            if self._is_running:
+                self.error_occurred.emit(f"Falha no diagnóstico de Wi-Fi: {str(e)}")

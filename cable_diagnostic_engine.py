@@ -292,19 +292,34 @@ class LocalCableDiagWorker(QThread):
         super().__init__()
         self.interface_name = interface_name
         self.gateway_ip = gateway_ip
+        self._is_running = True
+
+    def stop(self):
+        """Sinaliza parada cooperativa imediata do worker."""
+        self._is_running = False
 
     def run(self):
-        self.status_updated.emit(f"Analisando hardware da placa de rede '{self.interface_name}'...")
-        time.sleep(0.2)
-        self.status_updated.emit(f"Verificando auto-negociação física e modulação PAM-5 nos 4 pares...")
-        time.sleep(0.3)
-        self.status_updated.emit(f"Medindo ruído elétrico (CRC/Alinhamento) e estabilidade de portadora...")
-        time.sleep(0.3)
-        self.status_updated.emit(f"Calculando atraso de propagação de hardware e comprimento do cabo...")
-
         try:
+            if not self._is_running:
+                return
+            self.status_updated.emit(f"Analisando hardware da placa de rede '{self.interface_name}'...")
+            time.sleep(0.05)
+            if not self._is_running:
+                return
+            self.status_updated.emit(f"Verificando auto-negociação física e modulação PAM-5 nos 4 pares...")
+            time.sleep(0.05)
+            if not self._is_running:
+                return
+            self.status_updated.emit(f"Medindo ruído elétrico (CRC/Alinhamento) e estabilidade de portadora...")
+            time.sleep(0.05)
+            if not self._is_running:
+                return
+            self.status_updated.emit(f"Calculando atraso de propagação de hardware e comprimento do cabo...")
+
             result = diagnose_nic_cable(self.interface_name, self.gateway_ip)
-            self.status_updated.emit("✓ Diagnóstico de cabo de rede concluído com sucesso!")
-            self.diag_completed.emit(result)
+            if self._is_running:
+                self.status_updated.emit("✓ Diagnóstico de cabo de rede concluído com sucesso!")
+                self.diag_completed.emit(result)
         except Exception as ex:
-            self.error_occurred.emit(f"Erro ao testar cabo na placa '{self.interface_name}': {ex}")
+            if self._is_running:
+                self.error_occurred.emit(f"Erro ao testar cabo na placa '{self.interface_name}': {ex}")
