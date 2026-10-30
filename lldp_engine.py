@@ -45,6 +45,9 @@ class LLDPPortInfo:
     local_mac: str = ""                  # MAC da placa local
     capture_time: str = ""               # Horário da captura
     port_status_map: Dict[int, str] = field(default_factory=dict) # Status das portas {porta: "connected"|"up"|"down"}
+    cable_length_m: float = 0.0          # Comprimento físico do cabo medido via TDR em metros (ex: 8.0)
+    cable_status: str = ""               # Diagnóstico de integridade do cabo (ex: "Normal / Íntegro")
+    cable_pairs_info: str = ""           # Detalhamento de cada par (A, B, C, D)
 
     def format_summary(self) -> str:
         parts = []
@@ -719,6 +722,9 @@ def probe_switch_web_airoha(switch_ip: str, local_mac: str = "", user: str = "ad
         "switch_model": "Airoha EN8851 24-Port Gigabit Smart Switch (FreeRTOS)",
         "switch_vendor": "Airoha / MediaTek",
         "chassis_id": "",
+        "cable_length_m": 0.0,
+        "cable_status": "",
+        "cable_pairs_info": "",
     }
 
     try:
@@ -804,6 +810,40 @@ def probe_switch_web_airoha(switch_ip: str, local_mac: str = "", user: str = "ad
 
         # Marca a porta conectada como "connected" no mapa de status
         result_data["status_map"][result_data["detected_port"]] = "connected"
+
+        # 4.5. Medição Física do Cabo de Rede (TDR / Virtual Cable Tester) na porta conectada
+        try:
+            target_p = result_data.get("detected_port", 16)
+            p_sel = target_p - 1
+            req_test = urllib.request.Request(
+                f"http://{switch_ip}/cablediag.cgi?port_sel={p_sel}",
+                headers={"Cookie": cookie, "Referer": f"http://{switch_ip}/tools_Cablediag.html"}
+            )
+            urllib.request.urlopen(req_test, timeout=2.0)
+            for _ in range(6):
+                time.sleep(0.4)
+                req_cur = urllib.request.Request(
+                    f"http://{switch_ip}/cableCur.xml",
+                    headers={"Cookie": cookie, "Referer": f"http://{switch_ip}/tools_Cablediag.html"}
+                )
+                cur_text = urllib.request.urlopen(req_cur, timeout=2.0).read().decode("utf-8", errors="replace")
+                rst = cur_text.strip().split("&")
+                if len(rst) >= 4 and rst[0].split(",")[0] == "0":
+                    lens = [round(float(x) * 0.1, 1) for x in rst[1].split(",") if x]
+                    states_idx = [int(x) for x in rst[2].split(",") if x]
+                    state_map = {0: "Aberto", 1: "Curto", 2: "Normal"}
+                    states = [state_map.get(s, "Desconhecido") for s in states_idx]
+                    avg_len = round(sum(lens) / max(1, len(lens)), 1)
+                    all_normal = all(s == "Normal" for s in states)
+                    result_data["cable_length_m"] = avg_len
+                    result_data["cable_status"] = "Normal (Íntegro)" if all_normal else ("Aberto" if any(s == "Aberto" for s in states) else "Curto-circuito")
+                    pair_names = ["Par A (1-2)", "Par B (3-6)", "Par C (4-5)", "Par D (7-8)"]
+                    result_data["cable_pairs_info"] = " • ".join(
+                        f"{pn}: {pl}m ({ps})" for pn, pl, ps in zip(pair_names, lens, states)
+                    )
+                    break
+        except Exception:
+            pass
 
     finally:
         # 5. Encerramento limpo da sessão no switch para liberar o login
@@ -934,6 +974,9 @@ class SNMPSwitchWorker(QThread):
             info.vlan_id = 1
             info.duplex_speed = "1000 Mbps Full-Duplex"
             info.port_status_map = web_res["status_map"]
+            info.cable_length_m = web_res.get("cable_length_m", 0.0)
+            info.cable_status = web_res.get("cable_status", "")
+            info.cable_pairs_info = web_res.get("cable_pairs_info", "")
         else:
             # Fallback padrão para outros fabricantes
             total_ports = estimate_total_ports(res.sys_descr, snmp_ports=res.if_count)
@@ -964,6 +1007,117 @@ class SNMPSwitchWorker(QThread):
 
         self.status_updated.emit("✓ Auditoria de Switch concluída com sucesso!")
         self.switch_audited.emit(info)
+
+
+def measure_switch_cable(switch_ip: str, port_num: int, user: str = "admin", pwd: str = "admin") -> dict:
+    """
+    Executa a medição física do cabo de rede via Time Domain Reflectometry (TDR / VCT)
+    no switch Airoha / EcoNet / FreeRTOS, medindo o comprimento em metros de cada par
+    e detectando rompimentos (aberto), curto-circuitos ou funcionamento normal.
+    """
+    import hashlib
+    import urllib.parse
+    import urllib.request
+
+    res = {
+        "port": port_num,
+        "cable_length_m": 0.0,
+        "cable_status": "Não medido",
+        "cable_pairs_info": "",
+        "pairs_len": [],
+        "pairs_state": [],
+    }
+
+    pwd_hash = hashlib.sha256(pwd.encode("utf-8")).hexdigest()
+    data = urllib.parse.urlencode({"username": user, "password": pwd_hash, "logon": "Login"}).encode("utf-8")
+    req_login = urllib.request.Request(f"http://{switch_ip}/logon.cgi", data=data, headers={
+        "User-Agent": "Mozilla/5.0 (IPScanIGT-AuditEngine/2.11.3)",
+        "Referer": f"http://{switch_ip}/",
+    })
+
+    cookie = ""
+    try:
+        resp = urllib.request.urlopen(req_login, timeout=2.5)
+        set_cookie = resp.headers.get("Set-Cookie", "")
+        if "Cookies=" in set_cookie:
+            cookie = set_cookie.split(";")[0]
+        if not cookie:
+            return res
+    except Exception:
+        return res
+
+    try:
+        p_sel = max(0, port_num - 1)
+        req_test = urllib.request.Request(
+            f"http://{switch_ip}/cablediag.cgi?port_sel={p_sel}",
+            headers={"Cookie": cookie, "Referer": f"http://{switch_ip}/tools_Cablediag.html"}
+        )
+        urllib.request.urlopen(req_test, timeout=2.0)
+
+        for _ in range(8):
+            time.sleep(0.4)
+            req_cur = urllib.request.Request(
+                f"http://{switch_ip}/cableCur.xml",
+                headers={"Cookie": cookie, "Referer": f"http://{switch_ip}/tools_Cablediag.html"}
+            )
+            cur_text = urllib.request.urlopen(req_cur, timeout=2.0).read().decode("utf-8", errors="replace")
+            rst = cur_text.strip().split("&")
+            if len(rst) >= 4 and rst[0].split(",")[0] == "0":
+                lens = [round(float(x) * 0.1, 1) for x in rst[1].split(",") if x]
+                states_idx = [int(x) for x in rst[2].split(",") if x]
+                state_map = {0: "Aberto", 1: "Curto", 2: "Normal"}
+                states = [state_map.get(s, "Desconhecido") for s in states_idx]
+                avg_len = round(sum(lens) / max(1, len(lens)), 1)
+                all_normal = all(s == "Normal" for s in states)
+
+                res["cable_length_m"] = avg_len
+                res["cable_status"] = "Normal (Íntegro)" if all_normal else ("Aberto" if any(s == "Aberto" for s in states) else "Curto-circuito")
+                res["pairs_len"] = lens
+                res["pairs_state"] = states
+                pair_names = ["Par A (1-2)", "Par B (3-6)", "Par C (4-5)", "Par D (7-8)"]
+                res["cable_pairs_info"] = " • ".join(
+                    f"{pn}: {pl}m ({ps})" for pn, pl, ps in zip(pair_names, lens, states)
+                )
+                break
+    finally:
+        try:
+            req_out = urllib.request.Request(f"http://{switch_ip}/logout.cgi", headers={
+                "Cookie": cookie,
+                "Referer": f"http://{switch_ip}/Menu.html"
+            })
+            urllib.request.urlopen(req_out, timeout=1.5)
+        except Exception:
+            pass
+
+    return res
+
+
+class CableDiagWorker(QThread):
+    """
+    Worker em segundo plano para execução de teste TDR e diagnóstico de cabo de rede
+    sem travar a interface gráfica do usuário.
+    """
+    diag_completed = pyqtSignal(dict)
+    status_updated = pyqtSignal(str)
+    error_occurred = pyqtSignal(str)
+
+    def __init__(self, switch_ip: str, port_num: int, username: str = "admin", password: str = "admin"):
+        super().__init__()
+        self.switch_ip = switch_ip
+        self.port_num = port_num
+        self.username = username
+        self.password = password
+
+    def run(self):
+        self.status_updated.emit(f"Disparando teste de reflectometria TDR na Porta {self.port_num}...")
+        try:
+            res = measure_switch_cable(self.switch_ip, self.port_num, self.username, self.password)
+            if res.get("cable_length_m", 0) > 0 or res.get("cable_status"):
+                self.diag_completed.emit(res)
+            else:
+                self.error_occurred.emit(f"Não foi possível obter a medição de cabo na Porta {self.port_num}.")
+        except Exception as ex:
+            self.error_occurred.emit(f"Erro na medição do cabo: {ex}")
 
 
 def get_demo_preset(preset_key: str) -> LLDPPortInfo:

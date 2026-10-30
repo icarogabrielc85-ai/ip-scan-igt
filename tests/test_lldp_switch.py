@@ -250,14 +250,17 @@ def run_tests():
     assert 12 in clicked_ports, f"Evento de clique não disparou para a porta 12 (recebeu {clicked_ports})"
     print(" -> Renderização visual e interação de clique na porta OK.")
 
-    # Testa abertura do diálogo
+    # Testa abertura do diálogo e diagnóstico de cabo TDR
     dialog = LLDPSwitchDialog(gateway_ip="192.168.1.254", is_dark=True)
     dialog.resize(1100, 750)
     dialog.show()
     app.processEvents()
     assert dialog.lbl_port_id.text() != "", "Card da porta está vazio"
+    assert hasattr(dialog, "lbl_cable_len"), "Label de comprimento do cabo não encontrada"
+    assert hasattr(dialog, "lbl_cable_status"), "Label de status do cabo não encontrada"
+    assert hasattr(dialog, "btn_cable_diag"), "Botão de medição de cabo TDR não encontrado"
     dialog.close()
-    print(" -> Diálogo LLDPSwitchDialog instanciado e validado OK.")
+    print(" -> Diálogo LLDPSwitchDialog com medição de cabo TDR instanciado e validado OK.")
 
     print("\n" + "=" * 66)
     print("   TODOS OS TESTES DE LLDP E SWITCH CONCLUÍDOS COM 100% SUCESSO!  ")

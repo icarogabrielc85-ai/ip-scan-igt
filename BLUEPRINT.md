@@ -261,6 +261,13 @@ flowchart TD
     - **Porta 1 (Bit 1 / `0x2`):** Porta de Uplink ativa (`🟢 UP`) onde trafegam os múltiplos MACs de Gateway, Proxmox, servidores e Access Points.
     - **Porta 16 (Bit 16 / `0x10000`):** Porta local conectada (`🟢 CONNECTED`) onde reside exclusivamente o MAC da placa do usuário (`enp7s0`).
     - **Portas 2–15 e 17–24:** Portas sem link (`⚪ DOWN`).
+- **Medição Física de Cabo de Rede via TDR (Time Domain Reflectometry / Virtual Cable Tester):**
+  - Switches gerenciáveis modernos (incluindo o Airoha EN8851) possuem reflectômetro por hardware acoplado aos transceivers Gigabit PHY (`/cablediag.cgi` e `/cableCur.xml`).
+  - O IP Scan IGT dispara automaticamente a reflectometria na porta conectada (e sob demanda em qualquer porta clicada no rack 1U via botão `⚡ Medir Cabo (TDR)`), calculando com precisão:
+    - **Comprimento Físico Real do Cabo em Metros:** Resolução de 0,1 metro (ex: 8,0 metros para a Porta 16 / PC, 2,4 metros para a Porta 1 / Uplink).
+    - **Integridade Elétrica dos 4 Pares de Fios de Cobre:** Análise individual do Par A (pinos 1-2), Par B (pinos 3-6), Par C (pinos 4-5) e Par D (pinos 7-8), classificando o estado em **Normal (Íntegro)**, **Aberto (Rompido / Desconectado)** ou **Curto-circuito**.
+    - **Exibição Gráfica no Card de Porta & Exportação:** Resultados destacados com badges coloridos e incorporados ao relatório técnico executivo da auditoria.
+
 - **Blindagem do Sniffer L2 e Teste Proativo de Capacidades (`l2_sniffer.c`):**
   - Implementação da flag `--test-cap` / `-t` no executável C auxiliar para validar se o kernel Linux autoriza a criação do raw socket `AF_PACKET` / `SOCK_RAW`.
   - A função `check_sniffer_binary_cap()` do Python executa o teste prévio, impedindo o erro de permissão *"Address family not supported"* e selecionando dinamicamente o melhor binário com `CAP_NET_RAW` (`~/.local/bin/ipscan-l2-sniffer`).

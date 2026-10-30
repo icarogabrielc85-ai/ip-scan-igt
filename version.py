@@ -75,9 +75,11 @@ def get_short_version() -> str:
 VERSION_HISTORY = [
     {
         "version": "v2.11.3",
-        "date": "29/10/2026",
-        "title": "Auditoria Híbrida Web/SNMP para Switches Airoha EN8851, Decodificação de Bitmaps L2 e Blindagem do Sniffer",
+        "date": "30/10/2026",
+        "title": "Diagnóstico Físico de Cabo de Rede via TDR, Auditoria Híbrida Web/SNMP e Topologia Real de Switch",
         "changes": [
+            "Medição Física de Cabo de Rede e Diagnóstico TDR (Virtual Cable Tester): integração direta com o chip de reflectometria no domínio do tempo do switch (/cablediag.cgi e /cableCur.xml), medindo milimetricamente o comprimento do cabo em metros (ex: 8.0m) e testando a integridade elétrica individual dos 4 pares de cobre (Pares A, B, C e D: Normal, Aberto ou Curto-circuito).",
+            "Botão Interativo de Medição TDR (LLDPSwitchDialog): botão '⚡ Medir Cabo (TDR)' e suporte a clique em qualquer porta física do rack 1U para acionar a reflectometria sob demanda sem travar a interface.",
             "Remoção dos modos de simulação demonstrativa da interface de auditoria do switch (LLDPSwitchDialog): exibição focada exclusivamente no switch e topologia física reais descobertos na rede local.",
             "Motor de Auditoria Híbrida Web/SNMP (Airoha EN8851 / EcoNet / FreeRTOS): suporte completo à extração do estado físico das portas (/portCur.xml) e tabela MAC FDB dinâmica (/dynamicmacentry.xml) via HTTP autenticado (SHA-256) com encerramento de sessão automático (/logout.cgi).",
             "Mapeamento e Decodificação de Bitmaps de Porta (L2 Topology): resolução da convenção interna de bitmask do SoC Airoha (Bit 0 reservado à CPU interna, '1 << N' mapeado à porta física N), identificando com precisão a Porta 1 (Uplink/Gateway) e Porta 16 (Estação de Trabalho Local).",

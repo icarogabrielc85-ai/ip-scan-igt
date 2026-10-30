@@ -39,10 +39,12 @@ from PyQt5.QtWidgets import (
 
 from i18n import tr
 from lldp_engine import (
+    CableDiagWorker,
     LLDPPortInfo,
     LLDPSnifferWorker,
     SNMPSwitchWorker,
     get_demo_preset,
+    measure_switch_cable,
 )
 from scanner_engine import get_all_network_interfaces
 from switch_visual_widget import SwitchFrontPanelWidget
@@ -60,6 +62,8 @@ class LLDPSwitchDialog(QDialog):
 
         self.sniffer_worker: Optional[LLDPSnifferWorker] = None
         self.snmp_worker: Optional[SNMPSwitchWorker] = None
+        self.cable_worker: Optional[CableDiagWorker] = None
+        self.selected_port_num: int = 16
 
         self.setWindowTitle(tr("lldp_window_title", "🔌 Identificador de Porta do Switch (LLDP / CDP / SNMP) — IP Scan IGT"))
         self.setMinimumSize(1050, 720)
@@ -204,6 +208,12 @@ class LLDPSwitchDialog(QDialog):
         self.btn_snmp.clicked.connect(self.run_snmp_audit)
         tb_layout.addWidget(self.btn_snmp)
 
+        # Botão: Diagnóstico e Medição Física de Cabo de Rede via TDR
+        self.btn_cable_diag = QPushButton(tr("lldp_btn_cable_diag", "⚡ Medir Cabo (TDR)"))
+        self.btn_cable_diag.setToolTip("Executa medição física de reflectometria (TDR / VCT) para medir o comprimento exato do cabo em metros e diagnosticar a integridade dos 4 pares de fios")
+        self.btn_cable_diag.clicked.connect(lambda: self.run_cable_test())
+        tb_layout.addWidget(self.btn_cable_diag)
+
 
         tb_layout.addStretch(1)
 
@@ -287,11 +297,14 @@ class LLDPSwitchDialog(QDialog):
         ])
         cards_layout.addWidget(self.card_switch)
 
-        # CARD 2: DADOS DA PORTA LOCAL CONECTADA
-        self.card_port = self._create_card("🔌 Porta Local Identificada", [
+        # CARD 2: DADOS DA PORTA & CABO DE REDE (TDR)
+        self.card_port = self._create_card("🔌 Porta Local & Diagnóstico de Cabo (TDR)", [
             ("Porta Física:", "lbl_port_id", "--"),
             ("Número no Painel:", "lbl_port_num", "Aguardando detecção"),
             ("Descrição da Porta:", "lbl_port_desc", "--"),
+            ("Comprimento do Cabo:", "lbl_cable_len", "--"),
+            ("Status do Cabo (TDR):", "lbl_cable_status", "--"),
+            ("Pares de Fios:", "lbl_cable_pairs", "--"),
             ("VLAN Nativa (PVID):", "lbl_port_vlan", "--"),
             ("Velocidade / Duplex:", "lbl_port_speed", "--"),
             ("PoE (Power over Eth):", "lbl_port_poe", "--"),
@@ -458,6 +471,23 @@ class LLDPSwitchDialog(QDialog):
 
         self.lbl_port_speed.setText(info.duplex_speed or "1000 Mbps Full-Duplex (Auto-MDIX)")
         self.lbl_port_poe.setText(info.poe_info or "Não aplicável")
+
+        # Medição e Diagnóstico de Cabo (TDR)
+        if hasattr(self, "lbl_cable_len"):
+            if info.cable_length_m > 0:
+                self.lbl_cable_len.setText(f"<span style='color:#38bdf8; font-size:11px;'><b>{info.cable_length_m:.1f} metros</b> (TDR)</span>")
+            else:
+                self.lbl_cable_len.setText("Clique em 'Medir Cabo' para testar")
+
+        if hasattr(self, "lbl_cable_status"):
+            if info.cable_status:
+                col = "#10b981" if ("normal" in info.cable_status.lower() or "íntegro" in info.cable_status.lower()) else "#ef4444"
+                self.lbl_cable_status.setText(f"<span style='color:{col}; font-weight:bold;'>{info.cable_status}</span>")
+            else:
+                self.lbl_cable_status.setText("--")
+
+        if hasattr(self, "lbl_cable_pairs"):
+            self.lbl_cable_pairs.setText(info.cable_pairs_info or "--")
 
         # 4. Atualiza Card de Diagnóstico
         self.lbl_diag_proto.setText(info.protocol or "LLDP")
@@ -649,7 +679,8 @@ class LLDPSwitchDialog(QDialog):
         QMessageBox.warning(self, "Falha na Consulta SNMP", err)
 
     def _on_port_clicked(self, port_num: int):
-        """Ao clicar em qualquer porta no painel, exibe os detalhes daquela porta específica."""
+        """Ao clicar em qualquer porta no painel, exibe os detalhes daquela porta específica e permite medir seu cabo."""
+        self.selected_port_num = port_num
         if not self.current_info:
             return
 
@@ -663,14 +694,88 @@ class LLDPSwitchDialog(QDialog):
             self.lbl_port_id.setText(f"<span style='color:#00e5ff; font-size:11px;'><b>📍 {port_name} (SUA CONEXÃO)</b></span>")
             self.lbl_port_num.setText(f"Porta {port_num} (Conectada)")
             self.lbl_port_desc.setText(self.current_info.port_description or "Conexão Ativa Local")
+            if hasattr(self, "lbl_cable_len") and self.current_info.cable_length_m > 0:
+                self.lbl_cable_len.setText(f"<span style='color:#38bdf8; font-size:11px;'><b>{self.current_info.cable_length_m:.1f} metros</b> (TDR)</span>")
+                col = "#10b981" if "normal" in self.current_info.cable_status.lower() else "#ef4444"
+                self.lbl_cable_status.setText(f"<span style='color:{col}; font-weight:bold;'>{self.current_info.cable_status}</span>")
+                self.lbl_cable_pairs.setText(self.current_info.cable_pairs_info or "--")
         elif status == "up":
             self.lbl_port_id.setText(f"<span style='color:#10b981;'><b>{port_name} (Link Ativo)</b></span>")
             self.lbl_port_num.setText(f"Porta {port_num}")
-            self.lbl_port_desc.setText("Dispositivo de Rede Conectado")
+            self.lbl_port_desc.setText("Dispositivo de Rede Conectado (Clique em 'Medir Cabo (TDR)' para testar)")
+            if hasattr(self, "lbl_cable_len"):
+                self.lbl_cable_len.setText("Clique em 'Medir Cabo (TDR)'")
+                self.lbl_cable_status.setText("Link Ativo (Conectado)")
+                self.lbl_cable_pairs.setText("--")
         else:
             self.lbl_port_id.setText(f"<span style='color:#94a3b8;'><b>{port_name} (Sem Link)</b></span>")
             self.lbl_port_num.setText(f"Porta {port_num}")
             self.lbl_port_desc.setText("Porta Desconectada / Inativa")
+            if hasattr(self, "lbl_cable_len"):
+                self.lbl_cable_len.setText("Sem cabo conectado")
+                self.lbl_cable_status.setText("Circuito Aberto (Down)")
+                self.lbl_cable_pairs.setText("--")
+
+    def run_cable_test(self, port_override: int = None):
+        """Dispara a medição física do cabo de rede via reflectometria TDR no switch."""
+        sw_ip = self.edit_switch_ip.text().strip()
+        sw_user = self.edit_sw_user.text().strip() if hasattr(self, "edit_sw_user") else "admin"
+        sw_pwd = self.edit_sw_pwd.text().strip() if hasattr(self, "edit_sw_pwd") else "admin"
+
+        if not sw_ip:
+            QMessageBox.information(self, "IP do Switch", "Por favor, informe o endereço IP do switch para teste de cabo.")
+            return
+
+        target_port = port_override or getattr(self, "selected_port_num", 0) or (self.current_info.port_number if self.current_info else 16)
+        if not target_port:
+            target_port = 16
+
+        self.lbl_status.setText(f"● Executando reflectometria TDR no cabo da Porta {target_port}...")
+        self.lbl_status.setStyleSheet("color: #38bdf8;")
+        self.btn_cable_diag.setEnabled(False)
+
+        self.cable_worker = CableDiagWorker(
+            switch_ip=sw_ip,
+            port_num=target_port,
+            username=sw_user,
+            password=sw_pwd,
+        )
+        self.cable_worker.diag_completed.connect(self._on_cable_diag_success)
+        self.cable_worker.status_updated.connect(self._on_sniffer_status)
+        self.cable_worker.error_occurred.connect(self._on_cable_diag_error)
+        self.cable_worker.finished.connect(lambda: self.btn_cable_diag.setEnabled(True))
+        self.cable_worker.start()
+
+    @pyqtSlot(dict)
+    def _on_cable_diag_success(self, res: dict):
+        p_len = res.get("cable_length_m", 0.0)
+        p_st = res.get("cable_status", "")
+        p_info = res.get("cable_pairs_info", "")
+        p_num = res.get("port", 0)
+
+        if self.current_info and (p_num == self.current_info.port_number or not self.current_info.cable_length_m):
+            self.current_info.cable_length_m = p_len
+            self.current_info.cable_status = p_st
+            self.current_info.cable_pairs_info = p_info
+
+        if hasattr(self, "lbl_cable_len"):
+            self.lbl_cable_len.setText(f"<span style='color:#38bdf8; font-size:11px;'><b>{p_len:.1f} metros</b> (TDR)</span>")
+        if hasattr(self, "lbl_cable_status"):
+            col = "#10b981" if ("normal" in p_st.lower() or "íntegro" in p_st.lower()) else "#ef4444"
+            self.lbl_cable_status.setText(f"<span style='color:{col}; font-weight:bold;'>{p_st}</span>")
+        if hasattr(self, "lbl_cable_pairs"):
+            self.lbl_cable_pairs.setText(p_info)
+
+        self.lbl_status.setText(
+            f"✓ Medição do cabo concluída na Porta {p_num}! Comprimento: {p_len:.1f}m • Condição: {p_st}."
+        )
+        self.lbl_status.setStyleSheet("color: #10b981;")
+
+    @pyqtSlot(str)
+    def _on_cable_diag_error(self, err: str):
+        self.lbl_status.setText(f"⚠️ {err}")
+        self.lbl_status.setStyleSheet("color: #f87171;")
+        QMessageBox.warning(self, "Diagnóstico de Cabo (TDR)", err)
 
     def _on_ports_override(self, index: int):
         txt = self.combo_ports.currentText()
@@ -704,9 +809,12 @@ Data/Hora: {info.capture_time or 'N/A'}
 • Capacidades Ativas: {', '.join(info.capabilities) if info.capabilities else 'Switch L2'}
 • Total de Portas: {info.total_ports} portas
 
---- PORTA IDENTIFICADA (CONEXÃO LOCAL) ---
+--- PORTA IDENTIFICADA & DIAGNÓSTICO DE CABO (TDR) ---
 • Porta Física: {info.port_id or f'Porta {info.port_number}'}
 • Número no Painel: Porta {info.port_number}
+• Comprimento do Cabo: {info.cable_length_m:.1f} metros
+• Condição do Cabo: {info.cable_status or 'N/A'}
+• Detalhamento dos Pares: {info.cable_pairs_info or 'N/A'}
 • Descrição da Porta: {info.port_description or 'N/A'}
 • VLAN Nativa (PVID): VLAN {info.vlan_id} {f'({info.vlan_name})' if info.vlan_name else ''}
 • Velocidade & Duplex: {info.duplex_speed or '1000 Mbps Full-Duplex'}
