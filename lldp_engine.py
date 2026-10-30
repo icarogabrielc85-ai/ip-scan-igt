@@ -698,7 +698,7 @@ def probe_switch_web_airoha(switch_ip: str, local_mac: str = "", user: str = "ad
     }).encode("utf-8")
 
     req_login = urllib.request.Request(login_url, data=data, headers={
-        "User-Agent": "Mozilla/5.0 (IPScanIGT-AuditEngine/2.11.3)",
+        "User-Agent": "Mozilla/5.0 (IPScanIGT-AuditEngine/2.12.0)",
         "Referer": f"http://{switch_ip}/",
     })
 
@@ -1031,7 +1031,7 @@ def measure_switch_cable(switch_ip: str, port_num: int, user: str = "admin", pwd
     pwd_hash = hashlib.sha256(pwd.encode("utf-8")).hexdigest()
     data = urllib.parse.urlencode({"username": user, "password": pwd_hash, "logon": "Login"}).encode("utf-8")
     req_login = urllib.request.Request(f"http://{switch_ip}/logon.cgi", data=data, headers={
-        "User-Agent": "Mozilla/5.0 (IPScanIGT-AuditEngine/2.11.3)",
+        "User-Agent": "Mozilla/5.0 (IPScanIGT-AuditEngine/2.12.0)",
         "Referer": f"http://{switch_ip}/",
     })
 

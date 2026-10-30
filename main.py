@@ -334,278 +334,36 @@ class PingSweepWorker(QThread):
 
 class AppUpdateWorker(QThread):
     progress_status = pyqtSignal(str)
-    update_finished = pyqtSignal(bool, str, bool)  # success, message, needs_restart
+    check_completed = pyqtSignal(dict)
+    apply_completed = pyqtSignal(bool, str, bool)  # success, message, needs_restart
 
-    def __init__(self, repo_dir: str):
+    def __init__(self, repo_dir: str, action: str = "check", update_info: dict = None):
         super().__init__()
         self.repo_dir = repo_dir
+        self.action = action  # "check" or "apply"
+        self.update_info = update_info or {}
 
     def run(self):
         try:
-            self.progress_status.emit("Verificando ambiente de instalação...")
-            is_git = False
-            try:
-                res = subprocess.run(
-                    ["git", "rev-parse", "--is-inside-work-tree"],
-                    cwd=self.repo_dir,
-                    capture_output=True,
-                    text=True,
-                    timeout=4
-                )
-                if res.returncode == 0 and "true" in res.stdout:
-                    is_git = True
-            except Exception:
-                is_git = False
+            if self.action == "check":
+                self.progress_status.emit("Consultando versões mais recentes no GitHub...")
+                from updater_engine import check_for_updates
+                info = check_for_updates(self.repo_dir)
+                self.check_completed.emit(info)
+            elif self.action == "apply":
+                self.progress_status.emit("Iniciando download e aplicação da nova versão...")
+                from updater_engine import apply_update
 
-            if is_git:
-                self._update_via_git()
+                def _cb(pct, cur, total, msg):
+                    self.progress_status.emit(msg)
+
+                success, msg = apply_update(self.update_info, self.repo_dir, _cb)
+                self.apply_completed.emit(success, msg, success)
+        except Exception as e:
+            if self.action == "check":
+                self.check_completed.emit({"has_update": False, "error": str(e)})
             else:
-                self._update_via_http_zip()
-        except Exception as e:
-            self.update_finished.emit(False, f"Erro durante o processo de atualização:\n{str(e)}", False)
-
-    def _update_via_git(self):
-        old_ver = get_full_version(self.repo_dir)
-        self.progress_status.emit(f"Versão atual instalada: {old_ver}\nConsultando atualizações no GitHub...")
-        fetch_res = subprocess.run(
-            ["git", "fetch", "origin", "main"],
-            cwd=self.repo_dir,
-            capture_output=True,
-            text=True,
-            timeout=15
-        )
-        if fetch_res.returncode != 0:
-            err_msg = fetch_res.stderr.strip() or fetch_res.stdout.strip()
-            self.update_finished.emit(False, f"Não foi possível conectar ao GitHub:\n{err_msg}", False)
-            return
-
-        rev_res = subprocess.run(
-            ["git", "rev-list", "HEAD..origin/main", "--count"],
-            cwd=self.repo_dir,
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        count = 0
-        if rev_res.returncode == 0:
-            try:
-                count = int(rev_res.stdout.strip())
-            except ValueError:
-                count = 0
-
-        if count == 0:
-            self.progress_status.emit(f"O aplicativo já está na versão mais recente: {old_ver}")
-            self.update_finished.emit(
-                True,
-                f"O IP Scan IGT já está na versão mais recente!\n\n"
-                f"• Versão Atual: {old_ver}\n"
-                f"Nenhuma nova atualização disponível no momento.",
-                False
-            )
-            return
-
-        self.progress_status.emit(f"Baixando e aplicando {count} nova(s) atualização(ões)...")
-        pull_res = subprocess.run(
-            ["git", "pull", "--rebase", "origin", "main"],
-            cwd=self.repo_dir,
-            capture_output=True,
-            text=True,
-            timeout=25
-        )
-        if pull_res.returncode != 0:
-            pull_res = subprocess.run(
-                ["git", "pull", "origin", "main"],
-                cwd=self.repo_dir,
-                capture_output=True,
-                text=True,
-                timeout=25
-            )
-            if pull_res.returncode != 0:
-                err_str = pull_res.stderr.strip() or pull_res.stdout.strip()
-                self.update_finished.emit(False, f"Erro ao aplicar atualizações via git pull:\n{err_str}", False)
-                return
-
-        self._update_python_dependencies()
-
-        new_ver = get_full_version(self.repo_dir)
-        self.progress_status.emit(f"Atualização concluída: {old_ver} ➔ {new_ver}")
-        self.update_finished.emit(
-            True,
-            f"O IP Scan IGT foi atualizado com sucesso!\n\n"
-            f"• Versão Anterior: {old_ver}\n"
-            f"• Nova Versão Instalada: {new_ver}\n"
-            f"• {count} melhoria(s) e alterações integradas.\n\n"
-            f"Deseja reiniciar o aplicativo agora para carregar a nova versão?",
-            True
-        )
-
-    def _update_via_http_zip(self):
-        old_ver = get_full_version(self.repo_dir)
-        self.progress_status.emit(f"Versão atual instalada: {old_ver}\nConsultando atualizações no GitHub...")
-
-        # 1. Se for aplicativo compilado (.exe / PyInstaller)
-        is_frozen = getattr(sys, "frozen", False)
-        if is_frozen:
-            self.progress_status.emit("Consultando versões compiladas no GitHub Releases...")
-            try:
-                rel_url = "https://api.github.com/repos/icarogabrielc85-ai/ip-scan-igt/releases/latest"
-                req = urllib.request.Request(rel_url, headers={"User-Agent": "IPScanIGT-Updater"})
-                with robust_urlopen(req, timeout=8) as resp:
-                    rel_data = json.loads(resp.read().decode("utf-8"))
-                    latest_tag = rel_data.get("tag_name", "").lstrip("v")
-                    html_url = rel_data.get("html_url", "https://github.com/icarogabrielc85-ai/ip-scan-igt/releases")
-
-                    from version import APP_VERSION
-                    if latest_tag and latest_tag != APP_VERSION:
-                        self.update_finished.emit(
-                            True,
-                            f"Nova versão compilada disponível: v{latest_tag}!\n\n"
-                            f"• Versão Atual: v{APP_VERSION}\n"
-                            f"• Nova Versão: v{latest_tag}\n\n"
-                            f"Clique em OK para abrir a página oficial de download no navegador.",
-                            False
-                        )
-                        QDesktopServices.openUrl(QUrl(html_url))
-                        return
-                    else:
-                        self.update_finished.emit(
-                            True,
-                            f"O IP Scan IGT já está na versão compilada mais recente (v{APP_VERSION})!",
-                            False
-                        )
-                        return
-            except Exception as e:
-                self.update_finished.emit(
-                    False,
-                    f"Não foi possível consultar os lançamentos no GitHub Releases:\n{str(e)}\n\n"
-                    f"Acesse diretamente: https://github.com/icarogabrielc85-ai/ip-scan-igt/releases",
-                    False
-                )
-                return
-
-        # 2. Instalação de código-fonte (Windows ou Linux sem Git)
-        self.progress_status.emit("Consultando último commit no repositório GitHub...")
-        meta_file = os.path.join(self.repo_dir, ".version_meta.json")
-        local_sha = ""
-        if os.path.exists(meta_file):
-            try:
-                with open(meta_file, "r", encoding="utf-8") as mf:
-                    local_sha = json.load(mf).get("commit_sha", "").strip()
-            except Exception:
-                pass
-
-        latest_sha = ""
-        latest_msg = ""
-        commit_date = ""
-
-        try:
-            api_url = "https://api.github.com/repos/icarogabrielc85-ai/ip-scan-igt/commits/main"
-            req = urllib.request.Request(api_url, headers={"User-Agent": "IPScanIGT-Updater"})
-            with robust_urlopen(req, timeout=8) as resp:
-                c_data = json.loads(resp.read().decode("utf-8"))
-                latest_sha = c_data.get("sha", "")[:7]
-                latest_msg = c_data.get("commit", {}).get("message", "").split("\n")[0]
-                commit_date = c_data.get("commit", {}).get("author", {}).get("date", "")
-        except Exception:
-            pass
-
-        # Se já temos o commit_sha registrado e é igual ao mais recente
-        if local_sha and latest_sha and local_sha == latest_sha:
-            self.progress_status.emit(f"O aplicativo já está na versão mais recente: {old_ver}")
-            self.update_finished.emit(
-                True,
-                f"O IP Scan IGT já está na versão mais recente!\n\n"
-                f"• Versão Atual: {old_ver}\n"
-                f"Nenhuma nova atualização disponível no momento.",
-                False
-            )
-            return
-
-        # 3. Baixar pacote ZIP com o repositório completo do GitHub
-        self.progress_status.emit("Baixando pacote de atualização do GitHub...")
-        zip_url = "https://github.com/icarogabrielc85-ai/ip-scan-igt/archive/refs/heads/main.zip"
-        req = urllib.request.Request(zip_url, headers={"User-Agent": "IPScanIGT-Updater"})
-        try:
-            with robust_urlopen(req, timeout=35) as resp:
-                zip_data = resp.read()
-        except Exception as e:
-            self.update_finished.emit(
-                False,
-                f"Falha ao baixar o arquivo de atualização do GitHub:\n{str(e)}\n\n"
-                f"Verifique sua conexão com a internet.",
-                False
-            )
-            return
-
-        # 4. Extrair e sobrescrever arquivos da aplicação
-        self.progress_status.emit("Extraindo e aplicando arquivos da nova versão...")
-        try:
-            count_files = 0
-            with zipfile.ZipFile(io.BytesIO(zip_data)) as z:
-                namelist = z.namelist()
-                prefix = namelist[0].split("/")[0] + "/" if namelist and "/" in namelist[0] else "ip-scan-igt-main/"
-                for member in z.infolist():
-                    if not member.filename.startswith(prefix):
-                        continue
-                    rel_path = member.filename[len(prefix):]
-                    if not rel_path or rel_path.endswith("/"):
-                        continue
-
-                    target_path = os.path.join(self.repo_dir, rel_path)
-                    os.makedirs(os.path.dirname(target_path), exist_ok=True)
-                    with z.open(member) as src_file, open(target_path, "wb") as dst_file:
-                        dst_file.write(src_file.read())
-                    count_files += 1
-
-            if latest_sha:
-                try:
-                    with open(meta_file, "w", encoding="utf-8") as mf:
-                        json.dump(
-                            {
-                                "commit_sha": latest_sha,
-                                "date": commit_date,
-                                "message": latest_msg,
-                            },
-                            mf,
-                            indent=2
-                        )
-                except Exception:
-                    pass
-        except Exception as e:
-            self.update_finished.emit(
-                False,
-                f"Falha ao extrair os arquivos da atualização:\n{str(e)}",
-                False
-            )
-            return
-
-        # 5. Atualizar dependências Python se houver requirements
-        self._update_python_dependencies()
-
-        new_ver = get_full_version(self.repo_dir)
-        self.progress_status.emit(f"Atualização concluída: {new_ver}")
-        self.update_finished.emit(
-            True,
-            f"O IP Scan IGT foi atualizado com sucesso via download direto!\n\n"
-            f"• Versão Anterior: {old_ver}\n"
-            f"• Nova Versão Instalada: {new_ver}\n"
-            f"• {count_files} arquivo(s) atualizado(s) diretamente do GitHub.\n"
-            + (f"• Último commit: {latest_sha} — {latest_msg}\n\n" if latest_sha else "\n") +
-            f"Deseja reiniciar o aplicativo agora para carregar a nova versão?",
-            True
-        )
-
-    def _update_python_dependencies(self):
-        self.progress_status.emit("Verificando dependências Python...")
-        req_file = os.path.join(self.repo_dir, "requirements.txt")
-        if os.path.exists(req_file):
-            try:
-                pip_args = [sys.executable, "-m", "pip", "install", "-r", req_file, "--quiet"]
-                if not IS_WINDOWS:
-                    pip_args.extend(["--break-system-packages", "--user"])
-                subprocess.run(pip_args, cwd=self.repo_dir, timeout=30)
-            except Exception:
-                pass
+                self.apply_completed.emit(False, f"Erro durante a atualização:\n{str(e)}", False)
 
 
 def ip_sort_tuple(ip_str: str) -> tuple:
@@ -2045,8 +1803,8 @@ class MainWindow(QMainWindow):
     def check_and_apply_update(self):
         repo_dir = os.path.dirname(os.path.abspath(__file__))
         
-        self._update_dialog = QProgressDialog("Iniciando verificação de atualização...", "Cancelar", 0, 0, self)
-        self._update_dialog.setWindowTitle("IP Scan IGT — Atualização do Sistema")
+        self._update_dialog = QProgressDialog("Consultando versões mais recentes no GitHub...", "Cancelar", 0, 0, self)
+        self._update_dialog.setWindowTitle("IP Scan IGT — Verificador de Atualização")
         self._update_dialog.setWindowModality(Qt.WindowModal)
         self._update_dialog.setMinimumDuration(0)
         self._update_dialog.setAutoClose(False)
@@ -2054,9 +1812,9 @@ class MainWindow(QMainWindow):
         self._update_dialog.setStyleSheet("QProgressDialog { padding: 15px; font-size: 13px; }")
         self._update_dialog.show()
 
-        self._update_worker = AppUpdateWorker(repo_dir)
+        self._update_worker = AppUpdateWorker(repo_dir, action="check")
         self._update_worker.progress_status.connect(self.on_update_status)
-        self._update_worker.update_finished.connect(self.on_update_completed)
+        self._update_worker.check_completed.connect(self.on_update_checked)
         self._update_dialog.canceled.connect(self._update_worker.terminate)
         self._update_worker.start()
 
@@ -2064,29 +1822,89 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_update_dialog") and self._update_dialog:
             self._update_dialog.setLabelText(text)
 
+    def on_update_checked(self, info: dict):
+        if hasattr(self, "_update_dialog") and self._update_dialog:
+            self._update_dialog.close()
+            self._update_dialog = None
+
+        err = info.get("error")
+        if err:
+            QMessageBox.warning(self, "Aviso de Atualização", f"Não foi possível consultar atualizações:\n{err}")
+            return
+
+        has_update = info.get("has_update", False)
+        current_ver = info.get("current_version", "")
+        remote_ver = info.get("remote_version", "")
+
+        if not has_update:
+            QMessageBox.information(
+                self,
+                "IP Scan IGT Atualizado",
+                f"O IP Scan IGT já está na versão mais recente!\n\n"
+                f"• Versão Atual: v{current_ver}\n"
+                f"Nenhuma nova atualização disponível no momento."
+            )
+            return
+
+        # Compara as versões e apresenta a confirmação
+        title = info.get("release_title", f"Versão v{remote_ver}")
+        notes = info.get("release_notes", "")
+        if len(notes) > 350:
+            notes = notes[:350] + "..."
+
+        msg = (
+            f"🚀 <b>Nova Versão Disponível: v{remote_ver}</b><br><br>"
+            f"• <b>Versão Instalada:</b> v{current_ver}<br>"
+            f"• <b>Versão Mais Recente:</b> v{remote_ver}<br>"
+            f"• <b>Destaques:</b> {title}<br><br>"
+            f"<i>{notes}</i><br><br>"
+            f"<b>Deseja baixar e atualizar agora?</b><br>"
+            f"Ao clicar em 'Sim', o programa baixará a nova versão e será reiniciado automaticamente."
+        )
+
+        reply = QMessageBox.question(
+            self,
+            "Atualização Disponível — IP Scan IGT",
+            msg,
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes
+        )
+
+        if reply != QMessageBox.Yes:
+            return
+
+        # Dispara o download e a aplicação em segundo plano
+        repo_dir = os.path.dirname(os.path.abspath(__file__))
+        self._update_dialog = QProgressDialog("Baixando atualização do GitHub...", "Cancelar", 0, 0, self)
+        self._update_dialog.setWindowTitle("IP Scan IGT — Atualizando...")
+        self._update_dialog.setWindowModality(Qt.WindowModal)
+        self._update_dialog.setMinimumDuration(0)
+        self._update_dialog.setAutoClose(False)
+        self._update_dialog.setAutoReset(False)
+        self._update_dialog.setStyleSheet("QProgressDialog { padding: 15px; font-size: 13px; }")
+        self._update_dialog.show()
+
+        self._update_worker = AppUpdateWorker(repo_dir, action="apply", update_info=info)
+        self._update_worker.progress_status.connect(self.on_update_status)
+        self._update_worker.apply_completed.connect(self.on_update_completed)
+        self._update_dialog.canceled.connect(self._update_worker.terminate)
+        self._update_worker.start()
+
     def on_update_completed(self, success: bool, message: str, needs_restart: bool):
         if hasattr(self, "_update_dialog") and self._update_dialog:
             self._update_dialog.close()
             self._update_dialog = None
 
-        if success:
-            if needs_restart:
-                reply = QMessageBox.question(
-                    self,
-                    "Atualização Concluída",
-                    message,
-                    QMessageBox.Yes | QMessageBox.No,
-                    QMessageBox.Yes
-                )
-                if reply == QMessageBox.Yes:
-                    if getattr(sys, "frozen", False):
-                        QProcess.startDetached(sys.executable, [])
-                    else:
-                        main_py = os.path.abspath(__file__)
-                        QProcess.startDetached(sys.executable, [main_py])
-                    QApplication.quit()
-            else:
-                QMessageBox.information(self, "IP Scan IGT Atualizado", message)
+        if success and needs_restart:
+            QMessageBox.information(
+                self,
+                "Atualização Concluída",
+                f"{message}\n\nO aplicativo será reiniciado agora automaticamente."
+            )
+            from updater_engine import restart_application
+            restart_application()
+        elif success:
+            QMessageBox.information(self, "IP Scan IGT Atualizado", message)
         else:
             QMessageBox.warning(self, "Aviso de Atualização", message)
 

@@ -1,13 +1,13 @@
 # BLUEPRINT — IP SCAN IGT
-**Versão:** 2.11.3 (Edição Multiplataforma: Linux & Windows)  
+**Versão:** 2.12.0 (Edição Multiplataforma: Linux & Windows)  
 **Projeto:** IP Scan IGT  
 **Repositório GitHub:** [https://github.com/icarogabrielc85-ai/ip-scan-igt](https://github.com/icarogabrielc85-ai/ip-scan-igt)  
 **Diretório Local (PC):** `/home/icaro/linux-ipscan`  
 **Executável do Sistema (Linux):** `/home/icaro/.local/bin/ip-scan-igt`  
-**Pacote Debian (.deb):** `/home/icaro/Área de trabalho/ipscan-igt_2.11.3_amd64.deb`  
+**Pacote Debian (.deb):** `/home/icaro/Área de trabalho/ipscan-igt_2.12.0_amd64.deb`  
 **Atalho da Área de Trabalho:** `/home/icaro/Área de trabalho/ip-scan-igt.desktop`  
 **Atalho do Menu do Sistema:** `~/.local/share/applications/ip-scan-igt.desktop`  
-**Data da Última Atualização:** 29/10/2026  
+**Data da Última Atualização:** 30/10/2026  
 
 ---
 
@@ -294,6 +294,20 @@ flowchart TD
   - Navegação fluida em abas segmentadas: **[⚡ Cabo de Rede (Ethernet)]** e **[📶 Wi-Fi (Sinal & Redes)]**.
   - Barra visual de distância métrica relativa ao limite de 100m, medidor gráfico de nível de sinal RSSI com gradientes dinâmicos, tabela de redes vizinhas e botão para cópia instantânea de laudo técnico completo.
 
+### 4.16. Atualizador Automático In-App com Auto-Restart em 1 Clique (v2.12.0)
+- **Comparação Semântica Inteligente de Versões ([`updater_engine.py`](file:///home/icaro/linux-ipscan/updater_engine.py)):**
+  - Consulta assíncrona contra a API de Releases do GitHub (`https://api.github.com/repos/icarogabrielc85-ai/ip-scan-igt/releases/latest`) com parser semântico de versões (SemVer).
+  - Compara a versão localmente instalada (`v2.12.0`) com a versão de lançamento remota no GitHub.
+  - Se a estação estiver atualizada, exibe confirmação imediata sem redirecionamento externo.
+- **Diálogo Interativo de Comparativo e Atualização:**
+  - Quando uma nova versão é encontrada, a interface apresenta uma janela modal com o comparativo detalhado: versão atual vs nova versão, título e resumo das novidades/changelog.
+  - Solicita a confirmação do usuário com o botão **`[▶ Atualizar e Reiniciar Agora]`**.
+- **Download em Segundo Plano e Substituição Atômica de Executáveis:**
+  - O aplicativo baixa o pacote/binário atualizado diretamente dentro do programa com barra de progresso em tempo real (`progress_status`), sem arremessar o usuário para o navegador web.
+  - **Prevenção de 'Text File Busy' (ETXTBSY):** Utiliza desvinculação atômica de inodes (`install -m 755` / `unlink`) para substituir com segurança o executável ativo (`sys.executable` e `~/.local/bin/ip-scan-igt`) enquanto o processo ainda está em execução.
+- **Reinicialização Automática Transparente (Auto-Restart):**
+  - Ao concluir a gravação dos arquivos da nova versão, dispara um processo desacoplado (`QProcess.startDetached(sys.executable, [])`) e encerra o processo atual de forma limpa (`QApplication.quit()`), fazendo com que o programa reabra instantaneamente já executando a nova versão instalada.
+
 ---
 
 ## 5. UI/UX Design System e Regras de Interface
@@ -346,4 +360,4 @@ flowchart TD
 - **`Ctrl + Q`**: Sair do Aplicativo
 
 ---
-*Blueprint oficial v2.11.3 aprovado e sincronizado com o repositório do projeto IP Scan IGT.*
+*Blueprint oficial v2.12.0 aprovado e sincronizado com o repositório do projeto IP Scan IGT.*

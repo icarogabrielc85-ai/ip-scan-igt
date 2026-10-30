@@ -6,8 +6,8 @@ import os
 import subprocess
 
 # Versão Semântica Oficial (MAJOR.MINOR.PATCH)
-APP_VERSION = "2.11.3"
-APP_RELEASE_DATE = "29/10/2026"
+APP_VERSION = "2.12.0"
+APP_RELEASE_DATE = "30/10/2026"
 
 
 def get_git_info(repo_dir: str = None) -> tuple:
@@ -73,6 +73,17 @@ def get_short_version() -> str:
 
 
 VERSION_HISTORY = [
+    {
+        "version": "v2.12.0",
+        "date": "30/10/2026",
+        "title": "Atualizador Automático In-App com Auto-Restart, Diagnóstico Wi-Fi Completo e Botão Cable Test no Ribbon",
+        "changes": [
+            "Atualizador Automático In-App em 1 Clique (updater_engine.py): comparação inteligente de versões diretamente contra o GitHub Releases, download de binários com barra de progresso em tempo real, substituição atômica de executáveis e reinicialização automática instantânea do aplicativo sem precisar abrir navegador.",
+            "Diagnóstico Completo de Sinal e Redes Wi-Fi (wifi_diagnostic_engine.py): auditoria precisa de potência RSSI (-dBm e %), medidor de sinal gráfico colorido, reconhecimento de padrões Wi-Fi 4/5/6/7, frequência (2.4, 5 e 6 GHz), largura de canal (20/40/80/160 MHz), taxa de enlace PHY (Tx/Rx Bitrate), relação sinal-ruído (SNR), ping/jitter até o gateway e varredura de redes vizinhas com análise de congestionamento de canal.",
+            "Botão Dedicado '⚡ Cable Test' no Ribbon Principal: atalho rápido na barra superior posicionado imediatamente ao lado do botão '🔌 Porta Switch' (Ctrl+K).",
+            "Overhaul UI/UX da Janela de Diagnóstico (cable_diagnostic_dialog.py): alternância fluida entre [⚡ Cabo de Rede (Ethernet)] e [📶 Wi-Fi (Sinal & Redes)], barra visual de distância métrica (0-100m Cat 5e/6), layout gráfico dos 4 pares (IEEE 802.3ab PAM-5) e modo de homologação Wi-Fi 6 corporativo.",
+        ],
+    },
     {
         "version": "v2.11.3",
         "date": "30/10/2026",
