@@ -1,10 +1,10 @@
 # BLUEPRINT — IP SCAN IGT
-**Versão:** 2.12.3 (Edição Multiplataforma: Linux & Windows)  
+**Versão:** 2.12.5 (Edição Multiplataforma: Linux & Windows)  
 **Projeto:** IP Scan IGT  
 **Repositório GitHub:** [https://github.com/icarogabrielc85-ai/ip-scan-igt](https://github.com/icarogabrielc85-ai/ip-scan-igt)  
 **Diretório Local (PC):** `/home/icaro/linux-ipscan`  
 **Executável do Sistema (Linux):** `/home/icaro/.local/bin/ip-scan-igt`  
-**Pacote Debian (.deb):** `/home/icaro/Área de trabalho/ipscan-igt_2.12.0_amd64.deb`  
+**Pacote Debian (.deb):** `/home/icaro/Área de trabalho/ipscan-igt_2.12.5_amd64.deb`  
 **Atalho da Área de Trabalho:** `/home/icaro/Área de trabalho/ip-scan-igt.desktop`  
 **Atalho do Menu do Sistema:** `~/.local/share/applications/ip-scan-igt.desktop`  
 **Data da Última Atualização:** 30/10/2026  
@@ -150,8 +150,11 @@ flowchart TD
 | [`snapshot_engine.py`](file:///home/icaro/linux-ipscan/snapshot_engine.py) | Motor de **Snapshots de Auditoria & Comparador de Mudanças (Baseline Diff)** (`SnapshotManager` + `SnapshotDiffDialog`), destacando novos hosts (`🟢`), servidores ausentes (`🔴`) e portas/CVEs/MAC modificados (`🟠`). |
 | [`upnp_engine.py`](file:///home/icaro/linux-ipscan/upnp_engine.py) | Descoberta multicast e unicast **UPnP / SSDP (UDP 1900)** com parser de XML RootDevice para extrair fabricante, modelo exato e número de série de Smart TVs, roteadores Wi-Fi Mesh, Chromecasts e IoT. |
 | [`traceroute_dialog.py`](file:///home/icaro/linux-ipscan/traceroute_dialog.py) | Ferramenta gráfica de **Traceroute Visual por Saltos (TTL)** (`TracerouteWorker` + `TracerouteDialog`) com grafo encadeado de roteadores intermediários e diagnóstico de latência por salto. |
+| [`cable_diagnostic_engine.py`](file:///home/icaro/linux-ipscan/cable_diagnostic_engine.py) | Motor de diagnóstico físico e reflectometria TDR via placas de rede locais (ethtool, netlink, Windows WMI/GetAdaptersAddresses), cálculo de comprimento do cabo, integridade dos 4 pares e atenuação. |
 | [`cable_diagnostic_dialog.py`](file:///home/icaro/linux-ipscan/cable_diagnostic_dialog.py) | Janela dedicada em tela cheia (`CableDiagnosticDialog`) para diagnóstico elétrico e medição métrica TDR de cabo de rede Ethernet via placa local (IEEE 802.3ab PAM-5). |
+| [`wifi_diagnostic_engine.py`](file:///home/icaro/linux-ipscan/wifi_diagnostic_engine.py) | Motor de auditoria e telemetria Wi-Fi (Linux `iw`/`nmcli`/`wpa_supplicant` e Windows `netsh wlan`), dedução precisa do padrão (802.11a/b/g/n/ac/ax/be), taxas PHY, canal, largura de banda, BSSID e varredura de redes vizinhas. |
 | [`wifi_diagnostic_dialog.py`](file:///home/icaro/linux-ipscan/wifi_diagnostic_dialog.py) | Janela dedicada em tela cheia (`WifiDiagnosticDialog`) para auditoria de sinal Wi-Fi (RSSI dBm e %), identificação de padrão (Wi-Fi 4 ao 7), taxas PHY, latência RF e análise de espectro. |
+| [`updater_engine.py`](file:///home/icaro/linux-ipscan/updater_engine.py) | Motor de atualização in-app transparente (`CheckUpdateWorker` + `DownloadUpdateWorker`), comparador SemVer com API de Releases do GitHub, substituição atômica de executáveis e reinicialização automática em 1 clique. |
 | [`lldp_engine.py`](file:///home/icaro/linux-ipscan/lldp_engine.py) | Motor de descoberta L2 **LLDP (IEEE 802.1AB)**, **Cisco CDP** e mapeamento SNMP Bridge-MIB (`dot1dTpFdbTable`), extraindo modelo do switch, IP de gerência, VLAN, capacidades, número total de portas e a porta física exata em que o computador está conectado. |
 | [`lldp_dialog.py`](file:///home/icaro/linux-ipscan/lldp_dialog.py) | Janela dedicada (`LLDPSwitchDialog`) com controles de escuta passiva L2, consulta SNMP, seletor de placas e cards informativos detalhados de infraestrutura. |
 | [`switch_visual_widget.py`](file:///home/icaro/linux-ipscan/switch_visual_widget.py) | Componente gráfico vetorial de alta precisão (`SwitchFrontPanelWidget`) que renderiza o painel frontal 1U de switch em rack de 19" (8, 16, 24 ou 48 portas RJ45 + SFP+ uplinks), destacando com animação pulsante, patch cord conectado e badge a porta física conectada. |
@@ -346,6 +349,20 @@ flowchart TD
   - Abas principais com `setElideMode(Qt.ElideNone)` e rótulo nativo padronizado `[Resultados]`, `[Favoritos]` e `[🗺️ Topologia]`.
   - Quebra de linha automática (`setWordWrap(True)`) aplicada em todas as caixas descritivas, rótulos de status e linhas de comando.
 
+### 4.19. Blindagem de Ciclo de Vida de Threads, Scanner Concorrente e CI/CD Windows Estrito (v2.12.5)
+- **Eliminação de Travamento/Crash (SIGABRT/Exit 6) no Diagnóstico Wi-Fi:**
+  - Gerenciamento estrito do ciclo de vida das threads secundárias (`LocalWifiDiagWorker` e `LocalCableDiagWorker`) com métodos cooperativos de `stop()` e cancelamento gracioso em `closeEvent()` e `reject()`.
+  - Prevenção contra sobrescrita concorrente de workers: bloqueio de múltiplos disparos simultâneos ao alternar medições ("Medir Sinal" e "Redes Vizinhas") com desativação síncrona dos botões de controle durante auditorias ativas.
+  - Suíte de testes dedicada de ciclo de vida (`test_wifi_lifecycle.py`) cobrindo parada limpa de threads, descarte em fechamento rápido e imunidade a cliques repetidos.
+- **Otimização da Auditoria Wi-Fi e Chamadas de Sistema:**
+  - Redução drástica do tempo de resposta da auditoria Wi-Fi de ~9 segundos para ~1 segundo através de ping compacto (`-c 2 -W 1 -i 0.2`) e timeouts estritos em chamadas de sistema (`ethtool`, `iw`, `nmcli`, `ip route`).
+  - Correção na dedução do padrão Wi-Fi (Wi-Fi 7 vs Wi-Fi 4): regex com delimitadores de palavra inteira em `deduce_wifi_standard`, eliminando falso positivo causado pelo termo 'beacon' no link do iw e identificando com precisão redes 802.11n MIMO.
+- **Blindagem do Motor de Escaneamento (ScanWorker):**
+  - Pré-importação estática de `concurrent.futures.ThreadPoolExecutor` prevenindo Deadlocks e Exceptions de importação concorrente no PyInstaller.
+  - Proteção de `ScanWorker.run()` com tratamento completo de exceções e emissão garantida de `scan_finished` no bloco `finally`, prevenindo travamentos ou saídas inesperadas da interface durante varreduras intensivas.
+- **Automação CI/CD Windows (Inno Setup & WiX Toolset):**
+  - Declaração estrita de versão `2.12.5` e saneamento das variáveis nos scripts `ipscan_windows.iss` e `ipscan_windows.wxs`, garantindo geração 100% automatizada e limpa de instaladores `.exe` e `.msi` no GitHub Actions.
+
 ---
 
 ## 5. UI/UX Design System e Regras de Interface
@@ -400,4 +417,4 @@ flowchart TD
 - **`Ctrl + Q`**: Sair do Aplicativo
 
 ---
-*Blueprint oficial v2.12.3 aprovado e sincronizado com o repositório do projeto IP Scan IGT.*
+*Blueprint oficial v2.12.5 aprovado e sincronizado com o repositório do projeto IP Scan IGT.*
