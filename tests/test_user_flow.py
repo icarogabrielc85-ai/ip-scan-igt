@@ -205,9 +205,11 @@ def run_e2e_tests():
         assert tr("kpi_online").split("{")[0].strip() in window.kpi_online.text(), f"KPI Online incompatível em {lang}"
         assert tr("kpi_services").split("{")[0].strip() in window.kpi_services.text(), f"KPI Serviços incompatível em {lang}"
 
-        # Check Switch Port button and menu translation
+        # Check Switch Port & Cable Test buttons and menu translation
         assert window.btn_switch_port.text() == tr("btn_switch_port"), f"Botão Porta Switch não traduzido em {lang}"
         assert window.act_lldp_switch.text() == tr("menu_lldp_switch"), f"Menu Porta Switch não traduzido em {lang}"
+        assert window.btn_cable_test.text() == tr("btn_cable_test"), f"Botão Cable Test não traduzido em {lang}"
+        assert window.act_cable_diag.text() == tr("menu_cable_test"), f"Menu Cable Test não traduzido em {lang}"
 
         print(f" -> Idioma '{lang}' ({SUPPORTED_LANGUAGES[lang]['native']}) OK!")
 

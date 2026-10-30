@@ -78,6 +78,9 @@ VERSION_HISTORY = [
         "date": "30/10/2026",
         "title": "Diagnóstico e Medição de Cabo de Rede via Placa Local (NIC), Auditoria Híbrida Web/SNMP e Topologia Real",
         "changes": [
+            "Botão Dedicado '⚡ Cable Test' no Ribbon Principal: posicionado estrategicamente ao lado do botão '🔌 Porta Switch' para acesso em 1 clique ao centro de diagnósticos físicos e de rádio da rede (atalho Ctrl+K).",
+            "Novo Motor de Diagnóstico Completo de Wi-Fi (wifi_diagnostic_engine.py): auditoria de potência de sinal RSSI (-dBm e %), identificação de geração (Wi-Fi 4, Wi-Fi 5 Wave 2, Wi-Fi 6/6E 802.11ax, Wi-Fi 7), taxa PHY Tx/Rx, frequência e largura de canal (20/40/80/160 MHz), relação sinal-ruído (SNR), ping/jitter sem fio e varredura de redes vizinhas com análise de congestionamento de canal.",
+            "Overhaul Visual UI/UX do CableDiagnosticDialog: nova interface em abas segmentadas [⚡ Cabo de Rede] e [📶 Wi-Fi], barra gráfica de distância do cabo (0-100m Cat 5e/6), mostrador luminoso de nível de sinal RSSI, tabela de espectro de canais e modo demonstrativo Wi-Fi 6 corporativo.",
             "Motor de Diagnóstico e Medição de Cabo de Rede via Placa Local (cable_diagnostic_engine.py): auditoria física e elétrica do cabo de rede executada diretamente através da placa de rede selecionada pelo usuário no computador (ex: enp7s0 / Realtek RTL8111/8168), sem depender de credenciais de switch.",
             "Janela Dedicada CableDiagnosticDialog (Ctrl+K): nova interface visual exibindo diagrama elétrico dos 4 pares de fios RJ-45 (Pares A, B, C e D em modulação IEEE 802.3ab PAM-5), medição de comprimento em metros (ex: 8.0m), análise de ruído/EMI (erros CRC e alinhamento) e estabilidade de conector (carrier flapping).",
             "Integração do Botão '⚡ Medir Cabo da Placa' no Diálogo do Switch (LLDPSwitchDialog): acionamento direto ao lado do seletor de interfaces de rede e no menu 'Ferramentas' da janela principal.",
@@ -85,7 +88,6 @@ VERSION_HISTORY = [
             "Motor de Auditoria Híbrida Web/SNMP (Airoha EN8851 / EcoNet / FreeRTOS): suporte completo à extração do estado físico das portas (/portCur.xml) e tabela MAC FDB dinâmica (/dynamicmacentry.xml) via HTTP autenticado (SHA-256) com encerramento de sessão automático (/logout.cgi).",
             "Mapeamento e Decodificação de Bitmaps de Porta (L2 Topology): resolução da convenção interna de bitmask do SoC Airoha (Bit 0 reservado à CPU interna, '1 << N' mapeado à porta física N), identificando com precisão a Porta 1 (Uplink/Gateway) e Porta 16 (Estação de Trabalho Local).",
             "Validação Proativa de Capacidades no Sniffer L2 (l2_sniffer.c): nova flag '--test-cap' / '-t' e função check_sniffer_binary_cap() prevenindo 'Address family not supported' e garantindo seleção automática do binário auxiliar com CAP_NET_RAW no Linux.",
-            "Preset de Demonstração Airoha 24GE: adição do perfil demonstrativo de switch Airoha EN8851 de 24 portas com porta 1 (Uplink) e porta 16 (Conectada) para testes rápidos e validação visual.",
             "Interface de Credenciais no Diálogo LLDP (lldp_dialog.py): inclusão de campos de autenticação web rápida (usuário/senha) no painel de auditoria do switch com repasse ao worker assíncrono.",
         ],
     },

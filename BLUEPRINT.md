@@ -273,7 +273,7 @@ flowchart TD
   - A função `check_sniffer_binary_cap()` do Python executa o teste prévio, impedindo o erro de permissão *"Address family not supported"* e selecionando dinamicamente o melhor binário com `CAP_NET_RAW` (`~/.local/bin/ipscan-l2-sniffer`).
   - Suporte expandido a tags 802.1Q (VLAN ID) e 802.1ad (QinQ) no tratador do sniffer C.
 
-### 4.15. Diagnóstico e Medição de Cabo de Rede via Placa Local (NIC)
+### 4.15. Diagnóstico e Medição de Rede Física e Sem Fio (Cabo Ethernet & Wi-Fi)
 - **Operação Direta pela Interface de Rede Selecionada ([`cable_diagnostic_engine.py`](file:///home/icaro/linux-ipscan/cable_diagnostic_engine.py)):**
   - Permite realizar o diagnóstico elétrico e a medição métrica do cabo de rede diretamente pela placa de rede selecionada pelo usuário (ex: `enp7s0`, Realtek RTL8111/8168/8411, Intel e1000e/I219/I225, etc.), sem depender de credenciais de switch, firmwares remotos ou modelos específicos de equipamentos.
   - **Identificação do Controlador Físico:** Extrai via `ethtool -i` e `lspci` o nome do hardware, fabricante, versão de firmware e barramento PCI.
@@ -282,10 +282,17 @@ flowchart TD
   - **Análise de Ruído Eletromagnético (EMI / CRC):** Monitoramento de contadores de hardware em `/sys/class/net/<iface>/statistics/` (`rx_crc_errors`, `rx_frame_errors`) para certificar que o cabo opera livre de indução eletromagnética e perda de frames.
   - **Estabilidade do Conector Físico RJ45:** Avaliação de transições de portadora (`carrier_changes`) para detectar mau contato, conectores mal crimpados ou oscilações de link (flapping).
   - **Certificação da Categoria do Cabo:** Emite parecer técnico validando se o cabo cumpre os requisitos normativos para Cat 5e / Cat 6 Gigabit Ethernet.
-- **Janela Interativa de Diagnóstico de Cabo ([`cable_diagnostic_dialog.py`](file:///home/icaro/linux-ipscan/cable_diagnostic_dialog.py)):**
-  - Acessível pelo atalho global **`Ctrl + K`** na tela principal ou pelo menu **Ferramentas > Diagnóstico de Cabo de Rede (NIC)**.
-  - Botão dedicado **`⚡ Medir Cabo da Placa`** integrado diretamente no Identificador de Switch (`lldp_dialog.py`) ao lado do seletor de interfaces.
-  - Interface moderna com display de grande escala para o comprimento métrico, grid visual dos 4 pares com badges coloridos de integridade (`🟢 Normal / Conectado`), painel de ruído/EMI e estabilidade, e botão para copiar o laudo técnico completo para a área de transferência.
+- **Motor Completo de Diagnóstico Wi-Fi ([`wifi_diagnostic_engine.py`](file:///home/icaro/linux-ipscan/wifi_diagnostic_engine.py)):**
+  - **Medição Precisa de Sinal (RSSI & %):** Conversão logarítmica/linear de potência em dBm (-100 a -30 dBm) e percentual correspondente com código de cores semântico.
+  - **Identificação de Padrão e Geração Wi-Fi:** Reconhecimento automático de gerações IEEE (Wi-Fi 7 / 802.11be, Wi-Fi 6E/6 / 802.11ax, Wi-Fi 5 / 802.11ac, Wi-Fi 4 / 802.11n e Legacy 802.11g).
+  - **Frequência, Largura de Canal & Taxas PHY:** Extração do canal, faixa (2.4 GHz, 5 GHz ou 6 GHz), largura de banda (20, 40, 80 ou 160 MHz) e taxas nominais de transmissão/recepção (Tx/Rx Bitrate em Mbps).
+  - **Relação Sinal-Ruído (SNR) e Latência de Rádio:** Cálculo de SNR contra o ruído de fundo (Noise Floor), medição de latência ICMP sub-milissegundo até o Access Point/Gateway, jitter e taxa de perda de pacotes sem fio.
+  - **Espectro de Redes Vizinhas e Análise de Congestionamento:** Varredura em tempo real de APs vizinhos, identificando sobreposição de canais e recomendando canais menos congestionados.
+  - **Modo de Demonstração / Homologação Wi-Fi 6:** Suporte à simulação de enlace Wi-Fi 6 corporativo para validação em estações sem placa Wi-Fi física.
+- **Janela Interativa Unificada (UI/UX) ([`cable_diagnostic_dialog.py`](file:///home/icaro/linux-ipscan/cable_diagnostic_dialog.py)):**
+  - Acessível pelo atalho global **`Ctrl + K`**, pelo novo botão dedicado **`⚡ Cable Test`** no Ribbon superior da tela principal (posicionado ao lado do botão `🔌 Porta Switch`) ou pelo menu **Ferramentas > Diagnóstico de Cabo e Wi-Fi (NIC)**.
+  - Navegação fluida em abas segmentadas: **[⚡ Cabo de Rede (Ethernet)]** e **[📶 Wi-Fi (Sinal & Redes)]**.
+  - Barra visual de distância métrica relativa ao limite de 100m, medidor gráfico de nível de sinal RSSI com gradientes dinâmicos, tabela de redes vizinhas e botão para cópia instantânea de laudo técnico completo.
 
 ---
 
@@ -328,7 +335,7 @@ flowchart TD
 - **`Esc`**: Parar Varredura Ativa
 - **`Ctrl + N`**: Abrir Console de Varredura Nmap
 - **`Ctrl + L`**: Abrir Identificador de Porta de Switch (LLDP / CDP)
-- **`Ctrl + K`**: Abrir Diagnóstico e Medição do Cabo de Rede (NIC)
+- **`Ctrl + K`**: Abrir Diagnóstico e Medição de Rede (Cabo & Wi-Fi — Botão `⚡ Cable Test`)
 - **`Ctrl + I`**: Abrir Seletor de Placas de Rede
 - **`Ctrl + E`**: Expandir Todos os Serviços `[+]`
 - **`Ctrl + R`**: Recolher Todos os Dispositivos `[-]`
