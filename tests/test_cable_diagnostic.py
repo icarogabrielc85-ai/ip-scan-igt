@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from PyQt5.QtWidgets import QApplication
 
-from cable_diagnostic_dialog import CableDiagnosticDialog
+from cable_diagnostic_dialog import CableDiagnosticDialog, WifiDiagnosticDialog
 from cable_diagnostic_engine import (
     CableDiagResult,
     diagnose_nic_cable,
@@ -103,6 +103,22 @@ def run_tests():
 
     dlg.close()
     print(" -> Navegação entre abas Cabo e Wi-Fi e renderização validadas OK.")
+
+    # 6. Teste da Janela Dedicada de Wi-Fi (WifiDiagnosticDialog)
+    print("\n[TEST 6] Renderização Gráfica do WifiDiagnosticDialog (Tela Dedicada)...")
+    dlg_wifi = WifiDiagnosticDialog(is_dark=False)
+    dlg_wifi.resize(980, 720)
+    dlg_wifi.show()
+    app.processEvents()
+
+    assert dlg_wifi.combo_wifi_iface is not None
+    dlg_wifi._on_wifi_diag_success(demo_res)
+    app.processEvents()
+    assert "-48 dBm" in dlg_wifi.lbl_big_signal.text()
+    assert "IGT-Enterprise-Wi-Fi6" in dlg_wifi.lbl_wifi_ssid_bssid.text()
+    assert dlg_wifi.table_nearby.rowCount() == len(demo_res.nearby_networks)
+    dlg_wifi.close()
+    print(" -> Janela dedicada de Wi-Fi e renderização validadas OK.")
 
     print("\n" + "=" * 68)
     print("   TODOS OS TESTES DE CABO E WI-FI CONCLUÍDOS COM 100% SUCESSO!   ")

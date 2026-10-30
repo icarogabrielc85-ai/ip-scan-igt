@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """
-Diálogo Visual de Diagnóstico e Medição de Rede (Cabo & Wi-Fi) — IP Scan IGT
-Interface moderna de alta fidelidade visual (UI/UX) que integra:
- 1. Diagnóstico Elétrico e Medição Métrica de Cabo de Rede via Placa Local (NIC / IEEE 802.3ab PAM-5);
- 2. Diagnóstico Completo de Rede Sem Fio Wi-Fi (Sinal RSSI, SNR, Padrão Wi-Fi 4/5/6/7, Canal, Ruído, Latência/Jitter e Redes Vizinhas).
+Diálogos Visuais de Diagnóstico e Medição de Rede (Cabo & Wi-Fi) — IP Scan IGT
+Interface moderna de alta fidelidade visual (UI/UX) separada em duas ferramentas especializadas:
+ 1. CableDiagnosticDialog: Diagnóstico Elétrico, Medição Métrica (TDR) e 4 Pares via Placa Local (NIC / IEEE 802.3ab PAM-5);
+ 2. WifiDiagnosticDialog: Diagnóstico Completo de Rede Sem Fio Wi-Fi (Sinal RSSI, SNR, Padrão Wi-Fi 4/5/6/7, Canal, Ruído, Latência/Jitter e Redes Vizinhas).
+
+Ambos os diálogos iniciam maximizados (tela cheia responsiva), contam com atalho F11 / botão de alternância de tela cheia,
+e acompanham fielmente o tema ativo (Modo Escuro / Modo Claro) com tokens de cores padronizados.
 """
 
 from datetime import datetime
@@ -12,7 +15,7 @@ import sys
 from typing import Dict, List, Optional
 
 from PyQt5.QtCore import Qt, QTimer, pyqtSlot
-from PyQt5.QtGui import QColor, QFont, QIcon, QPainter, QPainterPath, QPen
+from PyQt5.QtGui import QColor, QFont, QIcon
 from PyQt5.QtWidgets import (
     QApplication,
     QComboBox,
@@ -47,160 +50,269 @@ from wifi_diagnostic_engine import (
 )
 
 
+def get_theme_palette(is_dark: bool) -> dict:
+    """Retorna os tokens de cores padronizados do IP Scan IGT para o tema selecionado."""
+    if is_dark:
+        return {
+            "bg": "#0b0f17",
+            "header_bg": "#111827",
+            "card_bg": "#111827",
+            "card_inner": "#162032",
+            "border": "#1f2937",
+            "border_focus": "#38bdf8",
+            "text_main": "#f8fafc",
+            "text_sub": "#94a3b8",
+            "text_muted": "#64748b",
+            "accent": "#38bdf8",
+            "accent_hover": "#0284c7",
+            "btn_bg": "#1e293b",
+            "btn_hover": "#334155",
+            "btn_text": "#f8fafc",
+            "primary_btn_bg": "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0284c7, stop:1 #0369a1)",
+            "primary_btn_hover": "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0369a1, stop:1 #0284c7)",
+            "primary_btn_text": "#ffffff",
+            "table_bg": "#0e141f",
+            "table_alt": "#131d31",
+            "table_hdr": "#162032",
+            "table_hdr_text": "#94a3b8",
+            "progress_bg": "#1e293b",
+            "progress_border": "#334155",
+            "progress_chunk": "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0284c7, stop:1 #38bdf8)",
+            "success": "#10b981",
+            "success_bg": "#064e3b",
+            "success_text": "#6ee7b7",
+            "warning": "#f59e0b",
+            "warning_bg": "#78350f",
+            "warning_text": "#fde68a",
+            "danger": "#ef4444",
+            "danger_bg": "#7f1d1d",
+            "danger_text": "#fca5a5",
+        }
+    else:
+        return {
+            "bg": "#f1f5f9",
+            "header_bg": "#ffffff",
+            "card_bg": "#ffffff",
+            "card_inner": "#f8fafc",
+            "border": "#cbd5e1",
+            "border_focus": "#0284c7",
+            "text_main": "#0f172a",
+            "text_sub": "#475569",
+            "text_muted": "#64748b",
+            "accent": "#0284c7",
+            "accent_hover": "#0369a1",
+            "btn_bg": "#f1f5f9",
+            "btn_hover": "#e2e8f0",
+            "btn_text": "#0f172a",
+            "primary_btn_bg": "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0284c7, stop:1 #0369a1)",
+            "primary_btn_hover": "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0369a1, stop:1 #075985)",
+            "primary_btn_text": "#ffffff",
+            "table_bg": "#ffffff",
+            "table_alt": "#f8fafc",
+            "table_hdr": "#f1f5f9",
+            "table_hdr_text": "#475569",
+            "progress_bg": "#e2e8f0",
+            "progress_border": "#cbd5e1",
+            "progress_chunk": "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0284c7, stop:1 #38bdf8)",
+            "success": "#059669",
+            "success_bg": "#d1fae5",
+            "success_text": "#065f46",
+            "warning": "#d97706",
+            "warning_bg": "#fef3c7",
+            "warning_text": "#92400e",
+            "danger": "#dc2626",
+            "danger_bg": "#fee2e2",
+            "danger_text": "#991b1b",
+        }
+
+
+def get_diagnostic_stylesheet(p: dict) -> str:
+    """Gera folha de estilo QSS completa de alta fidelidade visual."""
+    return f"""
+        QDialog {{
+            background-color: {p['bg']};
+            color: {p['text_main']};
+            font-family: "Segoe UI", "Noto Sans", "Ubuntu", -apple-system, sans-serif;
+        }}
+        QFrame#topNavFrame {{
+            background-color: {p['header_bg']};
+            border-bottom: 1px solid {p['border']};
+            padding: 8px 16px;
+        }}
+        QFrame#bottomStatusBar {{
+            background-color: {p['header_bg']};
+            border-top: 1px solid {p['border']};
+            padding: 6px 16px;
+        }}
+        QFrame#cardFrame {{
+            background-color: {p['card_bg']};
+            border: 1px solid {p['border']};
+            border-radius: 10px;
+            padding: 14px;
+        }}
+        QFrame#cardSubFrame {{
+            background-color: {p['card_inner']};
+            border: 1px solid {p['border']};
+            border-radius: 8px;
+            padding: 10px;
+        }}
+        QLabel {{
+            color: {p['text_main']};
+        }}
+        QComboBox {{
+            background-color: {p['card_bg']};
+            color: {p['text_main']};
+            border: 1px solid {p['border']};
+            border-radius: 6px;
+            padding: 4px 12px;
+            min-height: 28px;
+            font-weight: 500;
+        }}
+        QComboBox:focus {{
+            border: 1.5px solid {p['border_focus']};
+        }}
+        QComboBox QAbstractItemView {{
+            background-color: {p['card_bg']};
+            color: {p['text_main']};
+            selection-background-color: {p['accent']};
+            selection-color: #ffffff;
+            border: 1px solid {p['border']};
+        }}
+        QPushButton {{
+            background-color: {p['btn_bg']};
+            color: {p['btn_text']};
+            border: 1px solid {p['border']};
+            border-radius: 6px;
+            padding: 6px 14px;
+            font-weight: 600;
+            font-size: 12px;
+        }}
+        QPushButton:hover {{
+            background-color: {p['btn_hover']};
+            border-color: {p['border_focus']};
+        }}
+        QPushButton#primaryBtn {{
+            background: {p['primary_btn_bg']};
+            color: {p['primary_btn_text']};
+            border: 1px solid {p['accent']};
+            border-radius: 6px;
+            padding: 6px 18px;
+            font-weight: bold;
+        }}
+        QPushButton#primaryBtn:hover {{
+            background: {p['primary_btn_hover']};
+            border-color: {p['border_focus']};
+        }}
+        QProgressBar {{
+            background-color: {p['progress_bg']};
+            border: 1px solid {p['progress_border']};
+            border-radius: 6px;
+            text-align: center;
+            color: {p['text_main']};
+            font-size: 11px;
+            font-weight: bold;
+            height: 18px;
+        }}
+        QProgressBar::chunk {{
+            background: {p['progress_chunk']};
+            border-radius: 5px;
+        }}
+        QTableWidget {{
+            background-color: {p['table_bg']};
+            alternate-background-color: {p['table_alt']};
+            color: {p['text_main']};
+            border: 1px solid {p['border']};
+            border-radius: 8px;
+            gridline-color: {p['border']};
+            font-size: 12px;
+        }}
+        QHeaderView::section {{
+            background-color: {p['table_hdr']};
+            color: {p['table_hdr_text']};
+            font-weight: bold;
+            font-size: 11px;
+            border: none;
+            border-bottom: 1px solid {p['border']};
+            padding: 6px;
+        }}
+        QScrollArea {{
+            border: none;
+            background-color: transparent;
+        }}
+        QScrollBar:vertical {{
+            border: none;
+            background: {p['bg']};
+            width: 10px;
+            margin: 0px;
+        }}
+        QScrollBar::handle:vertical {{
+            background: {p['border']};
+            min-height: 20px;
+            border-radius: 5px;
+        }}
+        QScrollBar::handle:vertical:hover {{
+            background: {p['accent']};
+        }}
+    """
+
+
+# =============================================================================
+# 1. DIÁLOGO DEDICADO: DIAGNÓSTICO DE CABO DE REDE (ETHERNET)
+# =============================================================================
 class CableDiagnosticDialog(QDialog):
     """
-    Janela moderna de diagnóstico unificado para Cabo de Rede e Wi-Fi.
+    Tela Cheia Dedicada de Diagnóstico Físico e Medição de Cabo de Rede (Ethernet).
+    Inicia maximizada por padrão, adaptada à resolução da tela, acompanhando temas e cores padrão do sistema.
     """
 
     def __init__(
         self,
         parent=None,
         initial_iface: str = "",
-        is_dark: bool = True,
+        is_dark: Optional[bool] = None,
         initial_tab: str = "cable",
     ):
         super().__init__(parent)
-        self.is_dark = is_dark
+        if is_dark is None:
+            self.is_dark = getattr(parent, "is_dark_mode", False) if parent else True
+        else:
+            self.is_dark = is_dark
+
         self.initial_iface = initial_iface or "enp7s0"
-        self.current_tab = initial_tab  # 'cable' ou 'wifi'
+        self.current_tab = initial_tab
 
         self.cable_worker: Optional[LocalCableDiagWorker] = None
         self.wifi_worker: Optional[LocalWifiDiagWorker] = None
         self.current_cable_result: Optional[CableDiagResult] = None
         self.current_wifi_result: Optional[WifiDiagResult] = None
 
-        self.setWindowTitle("⚡ Diagnóstico e Medição de Rede (Cabo & Wi-Fi) — IP Scan IGT")
-        self.setMinimumSize(940, 680)
-        self.resize(980, 720)
+        self.palette = get_theme_palette(self.is_dark)
+        self.setWindowTitle("⚡ Diagnóstico e Medição de Cabo de Rede (Ethernet) — IP Scan IGT")
+        self.setWindowFlags(self.windowFlags() | Qt.WindowMinMaxButtonsHint | Qt.WindowCloseButtonHint)
 
-        self._apply_styling()
+        # Ajuste de geometria inteligente (90% da resolução para modo restaurado)
+        screen = QApplication.primaryScreen()
+        if screen:
+            geo = screen.availableGeometry()
+            w = max(960, min(1400, int(geo.width() * 0.90)))
+            h = max(680, min(900, int(geo.height() * 0.88)))
+            x = geo.x() + (geo.width() - w) // 2
+            y = geo.y() + (geo.height() - h) // 2
+            self.setGeometry(x, y, w, h)
+        else:
+            self.resize(1080, 760)
+
+        self.setStyleSheet(get_diagnostic_stylesheet(self.palette))
         self._init_ui()
         self._load_interfaces()
 
-        # Seleciona a aba inicial
+        # Inicia maximizado em tela cheia por padrão
+        self.showMaximized()
+
         if initial_tab == "wifi":
             self.switch_to_wifi()
         else:
-            self.switch_to_cable()
             QTimer.singleShot(250, self.run_cable_measurement)
-
-    def _apply_styling(self):
-        bg = "#090d16" if self.is_dark else "#f1f5f9"
-        fg = "#f8fafc" if self.is_dark else "#0f172a"
-        card_bg = "#111827" if self.is_dark else "#ffffff"
-        card_bg_sub = "#162032" if self.is_dark else "#f8fafc"
-        border_col = "#1f293d" if self.is_dark else "#cbd5e1"
-        btn_bg = "#1e293b" if self.is_dark else "#e2e8f0"
-        header_bg = "#0f172a" if self.is_dark else "#ffffff"
-
-        self.setStyleSheet(f"""
-            QDialog {{
-                background-color: {bg};
-                color: {fg};
-            }}
-            QFrame#cardFrame {{
-                background-color: {card_bg};
-                border: 1px solid {border_col};
-                border-radius: 10px;
-                padding: 14px;
-            }}
-            QFrame#cardSubFrame {{
-                background-color: {card_bg_sub};
-                border: 1px solid {border_col};
-                border-radius: 8px;
-                padding: 10px;
-            }}
-            QFrame#topNavFrame {{
-                background-color: {header_bg};
-                border-bottom: 2px solid {border_col};
-                padding: 8px 16px;
-            }}
-            QLabel {{
-                color: {fg};
-            }}
-            QPushButton {{
-                background-color: {btn_bg};
-                color: {fg};
-                border: 1px solid {border_col};
-                border-radius: 6px;
-                padding: 6px 16px;
-                font-weight: 600;
-                font-size: 12px;
-            }}
-            QPushButton:hover {{
-                background-color: #2563eb;
-                color: #ffffff;
-                border-color: #3b82f6;
-            }}
-            QPushButton#primaryBtn {{
-                background-color: #0284c7;
-                color: #ffffff;
-                font-weight: bold;
-                border: none;
-                border-radius: 6px;
-                padding: 6px 18px;
-            }}
-            QPushButton#primaryBtn:hover {{
-                background-color: #0369a1;
-            }}
-            QPushButton#navActiveBtn {{
-                background-color: #0284c7;
-                color: #ffffff;
-                font-weight: bold;
-                border: 1px solid #38bdf8;
-                border-radius: 20px;
-                padding: 6px 20px;
-            }}
-            QPushButton#navInactiveBtn {{
-                background-color: transparent;
-                color: #94a3b8;
-                border: 1px solid {border_col};
-                border-radius: 20px;
-                padding: 6px 20px;
-            }}
-            QPushButton#navInactiveBtn:hover {{
-                background-color: {btn_bg};
-                color: {fg};
-            }}
-            QComboBox {{
-                background-color: {card_bg};
-                color: {fg};
-                border: 1px solid {border_col};
-                border-radius: 6px;
-                padding: 4px 12px;
-                min-height: 28px;
-                font-weight: 500;
-            }}
-            QProgressBar {{
-                border: 1px solid {border_col};
-                border-radius: 5px;
-                text-align: center;
-                background-color: #1e293b;
-                color: #ffffff;
-                font-size: 11px;
-                font-weight: bold;
-            }}
-            QProgressBar::chunk {{
-                border-radius: 4px;
-            }}
-            QTableWidget {{
-                background-color: {card_bg};
-                color: {fg};
-                border: 1px solid {border_col};
-                border-radius: 8px;
-                gridline-color: {border_col};
-                font-size: 12px;
-            }}
-            QHeaderView::section {{
-                background-color: {card_bg_sub};
-                color: #94a3b8;
-                font-weight: bold;
-                font-size: 11px;
-                border: none;
-                border-bottom: 1px solid {border_col};
-                padding: 6px;
-            }}
-        """)
 
     def _init_ui(self):
         root_layout = QVBoxLayout(self)
@@ -208,244 +320,246 @@ class CableDiagnosticDialog(QDialog):
         root_layout.setSpacing(0)
 
         # ---------------------------------------------------------------------
-        # 1. BARRA SUPERIOR DE NAVEGAÇÃO (Cabo vs Wi-Fi)
+        # 1. BARRA SUPERIOR DE CABEÇALHO & CONTROLE DA PLACA
         # ---------------------------------------------------------------------
         top_nav = QFrame(self)
         top_nav.setObjectName("topNavFrame")
         nav_layout = QHBoxLayout(top_nav)
-        nav_layout.setContentsMargins(16, 10, 16, 10)
+        nav_layout.setContentsMargins(18, 10, 18, 10)
         nav_layout.setSpacing(12)
 
         title_box = QVBoxLayout()
         title_box.setSpacing(2)
-        lbl_title = QLabel("⚡ DIAGNÓSTICO DE REDE FÍSICA & SEM FIO")
-        lbl_title.setFont(QFont("Segoe UI", 12, QFont.Bold))
-        lbl_title.setStyleSheet("color: #38bdf8;")
-        title_box.addWidget(lbl_title)
+        self.lbl_title = QLabel("⚡ DIAGNÓSTICO DE CABO DE REDE (ETHERNET)")
+        self.lbl_title.setFont(QFont("Segoe UI", 12, QFont.Bold))
+        self.lbl_title.setStyleSheet(f"color: {self.palette['accent']}; letter-spacing: 0.5px;")
+        title_box.addWidget(self.lbl_title)
 
-        lbl_sub = QLabel("Medição de Cabo Ethernet (TDR / 4 Pares) e Auditoria Completa de Sinal Wi-Fi")
-        lbl_sub.setFont(QFont("Segoe UI", 9))
-        lbl_sub.setStyleSheet("color: #94a3b8;")
-        title_box.addWidget(lbl_sub)
+        self.lbl_sub = QLabel("Medição Métrica (TDR / Propagação), Integridade dos 4 Pares (IEEE 802.3ab) e Ruído Elétrico")
+        self.lbl_sub.setFont(QFont("Segoe UI", 9))
+        self.lbl_sub.setStyleSheet(f"color: {self.palette['text_sub']};")
+        title_box.addWidget(self.lbl_sub)
         nav_layout.addLayout(title_box)
 
         nav_layout.addStretch(1)
 
-        # Botões de alternância de aba (Segmented Buttons)
-        self.btn_nav_cable = QPushButton("⚡ Cabo de Rede (Ethernet)")
-        self.btn_nav_cable.setObjectName("navActiveBtn")
-        self.btn_nav_cable.clicked.connect(self.switch_to_cable)
-        nav_layout.addWidget(self.btn_nav_cable)
-
-        self.btn_nav_wifi = QPushButton("📶 Wi-Fi (Sinal & Redes)")
-        self.btn_nav_wifi.setObjectName("navInactiveBtn")
-        self.btn_nav_wifi.clicked.connect(self.switch_to_wifi)
-        nav_layout.addWidget(self.btn_nav_wifi)
-
-        root_layout.addWidget(top_nav)
-
-        # ---------------------------------------------------------------------
-        # 2. ÁREA CENTRAL EM STACK (Página 0: Cabo | Página 1: Wi-Fi)
-        # ---------------------------------------------------------------------
-        content_container = QWidget(self)
-        self.main_content_layout = QVBoxLayout(content_container)
-        self.main_content_layout.setContentsMargins(16, 12, 16, 12)
-        self.main_content_layout.setSpacing(10)
-
-        self.stack = QStackedWidget(self)
-
-        # PÁGINA 1: CABO DE REDE
-        self.page_cable = self._create_cable_page()
-        self.stack.addWidget(self.page_cable)
-
-        # PÁGINA 2: WI-FI
-        self.page_wifi = self._create_wifi_page()
-        self.stack.addWidget(self.page_wifi)
-
-        self.main_content_layout.addWidget(self.stack)
-
-        # ---------------------------------------------------------------------
-        # 3. BARRA DE STATUS INFERIOR GLOBAL
-        # ---------------------------------------------------------------------
-        status_bar = QFrame(self)
-        status_layout = QHBoxLayout(status_bar)
-        status_layout.setContentsMargins(16, 6, 16, 10)
-        status_layout.setSpacing(10)
-
-        self.lbl_global_status = QLabel("● Pronto para auditoria.")
-        self.lbl_global_status.setFont(QFont("Segoe UI", 9, QFont.Bold))
-        self.lbl_global_status.setStyleSheet("color: #38bdf8;")
-        status_layout.addWidget(self.lbl_global_status, 1)
-
-        self.btn_copy_global = QPushButton("📋 Copiar Relatório Técnico")
-        self.btn_copy_global.clicked.connect(self.copy_current_report)
-        status_layout.addWidget(self.btn_copy_global)
-
-        btn_close = QPushButton("Fechar")
-        btn_close.clicked.connect(self.close)
-        status_layout.addWidget(btn_close)
-
-        root_layout.addWidget(content_container, 1)
-        root_layout.addWidget(status_bar)
-
-    # =========================================================================
-    # CONSTRUÇÃO DA PÁGINA DE CABO DE REDE (ETHERNET)
-    # =========================================================================
-    def _create_cable_page(self) -> QWidget:
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(10)
-
-        # 1. Barra de Controle da Placa de Rede
-        bar_ctrl = QFrame(page)
-        bar_ctrl.setObjectName("cardFrame")
-        bc_layout = QHBoxLayout(bar_ctrl)
-        bc_layout.setContentsMargins(12, 8, 12, 8)
-        bc_layout.setSpacing(10)
-
-        lbl_iface = QLabel("<b>Placa de Rede Selecionada:</b>")
-        lbl_iface.setFont(QFont("Segoe UI", 9))
-        bc_layout.addWidget(lbl_iface)
+        # Seletor de Interface e Ação Principal
+        lbl_iface_t = QLabel("<b>Placa:</b>")
+        lbl_iface_t.setFont(QFont("Segoe UI", 9))
+        nav_layout.addWidget(lbl_iface_t)
 
         self.combo_iface = QComboBox()
         self.combo_iface.setMinimumWidth(260)
         self.combo_iface.setToolTip("Selecione a placa de rede com cabo conectado para medição")
-        bc_layout.addWidget(self.combo_iface)
+        nav_layout.addWidget(self.combo_iface)
 
-        self.btn_measure_cable = QPushButton("▶ Medir Cabo da Placa")
+        self.btn_measure_cable = QPushButton("▶ Medir Cabo")
         self.btn_measure_cable.setObjectName("primaryBtn")
         self.btn_measure_cable.setToolTip("Executa medição de comprimento, integridade dos 4 pares e ruído elétrico")
         self.btn_measure_cable.clicked.connect(self.run_cable_measurement)
-        bc_layout.addWidget(self.btn_measure_cable)
-
-        bc_layout.addStretch(1)
+        nav_layout.addWidget(self.btn_measure_cable)
 
         self.lbl_cable_speed_badge = QLabel("1000 Mbps • Full-Duplex")
         self.lbl_cable_speed_badge.setStyleSheet(
-            "background-color: #065f46; color: #6ee7b7; padding: 4px 12px; border-radius: 6px; font-weight: bold; font-size: 12px;"
+            f"background-color: {self.palette['success_bg']}; color: {self.palette['success_text']}; "
+            "padding: 5px 12px; border-radius: 6px; font-weight: bold; font-size: 11px;"
         )
-        bc_layout.addWidget(self.lbl_cable_speed_badge)
-        layout.addWidget(bar_ctrl)
+        nav_layout.addWidget(self.lbl_cable_speed_badge)
 
-        # 2. Hero Cards (Comprimento do Cabo e Hardware da Placa)
+        self.btn_copy_global = QPushButton("📋 Copiar Relatório")
+        self.btn_copy_global.setToolTip("Copiar laudo técnico de cabo para a Área de Transferência")
+        self.btn_copy_global.clicked.connect(self.copy_current_report)
+        nav_layout.addWidget(self.btn_copy_global)
+
+        self.btn_toggle_fullscreen = QPushButton("⛶ Tela Cheia")
+        self.btn_toggle_fullscreen.setToolTip("Alternar entre modo maximizado e tela cheia completa (F11)")
+        self.btn_toggle_fullscreen.clicked.connect(self.toggle_fullscreen)
+        nav_layout.addWidget(self.btn_toggle_fullscreen)
+
+        btn_close = QPushButton("✕ Fechar")
+        btn_close.clicked.connect(self.close)
+        nav_layout.addWidget(btn_close)
+
+        root_layout.addWidget(top_nav)
+
+        # ---------------------------------------------------------------------
+        # 2. ÁREA CENTRAL EM SCROLL & STACK (Responsiva em qualquer tela)
+        # ---------------------------------------------------------------------
+        self.scroll_area = QScrollArea(self)
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QFrame.NoFrame)
+
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setContentsMargins(18, 14, 18, 14)
+        scroll_layout.setSpacing(12)
+
+        self.stack = QStackedWidget(self)
+
+        # PÁGINA 0: CABO DE REDE
+        self.page_cable = self._create_cable_page()
+        self.stack.addWidget(self.page_cable)
+
+        # PÁGINA 1: WI-FI (Compatibilidade para transições dinâmicas)
+        self.page_wifi = self._create_wifi_page()
+        self.stack.addWidget(self.page_wifi)
+
+        scroll_layout.addWidget(self.stack)
+        self.scroll_area.setWidget(scroll_content)
+        root_layout.addWidget(self.scroll_area, 1)
+
+        # ---------------------------------------------------------------------
+        # 3. BARRA DE STATUS INFERIOR
+        # ---------------------------------------------------------------------
+        status_bar = QFrame(self)
+        status_bar.setObjectName("bottomStatusBar")
+        status_layout = QHBoxLayout(status_bar)
+        status_layout.setContentsMargins(18, 6, 18, 8)
+        status_layout.setSpacing(10)
+
+        self.lbl_global_status = QLabel("● Pronto para auditoria de cabo de rede.")
+        self.lbl_global_status.setFont(QFont("Segoe UI", 9, QFont.Bold))
+        self.lbl_global_status.setStyleSheet(f"color: {self.palette['accent']};")
+        status_layout.addWidget(self.lbl_global_status, 1)
+
+        lbl_hint = QLabel("Dica: Pressione <b>F11</b> para alternar tela cheia • <b>Esc</b> para fechar")
+        lbl_hint.setFont(QFont("Segoe UI", 8))
+        lbl_hint.setStyleSheet(f"color: {self.palette['text_muted']};")
+        status_layout.addWidget(lbl_hint)
+
+        root_layout.addWidget(status_bar)
+
+    def _create_cable_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
+
+        # Hero Cards (Comprimento e Hardware)
         hero_layout = QHBoxLayout()
-        hero_layout.setSpacing(10)
+        hero_layout.setSpacing(12)
 
         # Card Comprimento
         card_len = QFrame(page)
         card_len.setObjectName("cardFrame")
         cl_layout = QVBoxLayout(card_len)
-        cl_layout.setContentsMargins(16, 12, 16, 12)
+        cl_layout.setContentsMargins(16, 14, 16, 14)
+        cl_layout.setSpacing(6)
 
-        lbl_len_t = QLabel("📏 COMPRIMENTO DO CABO (TDR / PROPAGAÇÃO)")
+        lbl_len_t = QLabel("📏 COMPRIMENTO DO CABO (TDR / TEMPO DE PROPAGAÇÃO)")
         lbl_len_t.setFont(QFont("Segoe UI", 9, QFont.Bold))
-        lbl_len_t.setStyleSheet("color: #94a3b8;")
+        lbl_len_t.setStyleSheet(f"color: {self.palette['text_sub']}; letter-spacing: 0.5px;")
         cl_layout.addWidget(lbl_len_t)
 
         self.lbl_big_length = QLabel("-- metros")
-        self.lbl_big_length.setFont(QFont("Segoe UI", 24, QFont.Bold))
-        self.lbl_big_length.setStyleSheet("color: #38bdf8; margin: 2px 0;")
+        self.lbl_big_length.setFont(QFont("Segoe UI", 26, QFont.Bold))
+        self.lbl_big_length.setStyleSheet(f"color: {self.palette['accent']}; margin: 2px 0;")
         cl_layout.addWidget(self.lbl_big_length)
 
-        # Barra visual de distância do cabo (0m até limite de 100m da norma Ethernet)
+        # Barra visual métrica (0 a 100m - Limite Cat 5e/Cat 6)
         self.progress_cable = QProgressBar()
         self.progress_cable.setRange(0, 100)
         self.progress_cable.setValue(8)
         self.progress_cable.setFormat("%v m / 100m (Limite Cat 5e/6)")
-        self.progress_cable.setStyleSheet("""
-            QProgressBar {
-                background-color: #1e293b;
-                border: 1px solid #334155;
-                height: 14px;
-                border-radius: 4px;
-            }
-            QProgressBar::chunk {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0284c7, stop:1 #38bdf8);
-                border-radius: 3px;
-            }
-        """)
         cl_layout.addWidget(self.progress_cable)
 
+        lbl_scale = QLabel("0m (Patch Cord)  •  30m (Horizontal)  •  70m (Distribuição)  •  100m (Limite da Norma)")
+        lbl_scale.setFont(QFont("Segoe UI", 8))
+        lbl_scale.setStyleSheet(f"color: {self.palette['text_muted']};")
+        cl_layout.addWidget(lbl_scale)
+
+        meta_box = QHBoxLayout()
         self.lbl_cable_cat = QLabel("Categoria: Analisando...")
         self.lbl_cable_cat.setFont(QFont("Segoe UI", 10, QFont.Bold))
-        self.lbl_cable_cat.setStyleSheet("color: #10b981; margin-top: 4px;")
-        cl_layout.addWidget(self.lbl_cable_cat)
+        self.lbl_cable_cat.setStyleSheet(f"color: {self.palette['success']};")
+        meta_box.addWidget(self.lbl_cable_cat)
 
         self.lbl_cable_condition = QLabel("Condição Física: Aguardando teste...")
         self.lbl_cable_condition.setFont(QFont("Segoe UI", 9))
-        self.lbl_cable_condition.setStyleSheet("color: #cbd5e1;")
-        cl_layout.addWidget(self.lbl_cable_condition)
+        self.lbl_cable_condition.setStyleSheet(f"color: {self.palette['text_main']};")
+        meta_box.addWidget(self.lbl_cable_condition)
+        meta_box.addStretch(1)
+        cl_layout.addLayout(meta_box)
 
         cl_layout.addStretch(1)
         hero_layout.addWidget(card_len, 1)
 
-        # Card Hardware da Placa
+        # Card Hardware Placa Local
         card_nic = QFrame(page)
         card_nic.setObjectName("cardFrame")
         cn_layout = QVBoxLayout(card_nic)
-        cn_layout.setContentsMargins(16, 12, 16, 12)
+        cn_layout.setContentsMargins(16, 14, 16, 14)
+        cn_layout.setSpacing(6)
 
-        lbl_nic_t = QLabel("🖥️ CONTROLADOR FÍSICO DA PLACA LOCAL")
+        lbl_nic_t = QLabel("🖥️ CONTROLADOR FÍSICO DA PLACA LOCAL (NIC)")
         lbl_nic_t.setFont(QFont("Segoe UI", 9, QFont.Bold))
-        lbl_nic_t.setStyleSheet("color: #94a3b8;")
+        lbl_nic_t.setStyleSheet(f"color: {self.palette['text_sub']}; letter-spacing: 0.5px;")
         cn_layout.addWidget(lbl_nic_t)
 
         self.lbl_nic_model = QLabel("Controlador Ethernet Gigabit")
-        self.lbl_nic_model.setFont(QFont("Segoe UI", 10, QFont.Bold))
-        self.lbl_nic_model.setStyleSheet("color: #f1f5f9; margin-top: 2px;")
+        self.lbl_nic_model.setFont(QFont("Segoe UI", 11, QFont.Bold))
+        self.lbl_nic_model.setStyleSheet(f"color: {self.palette['text_main']}; margin-top: 2px;")
         cn_layout.addWidget(self.lbl_nic_model)
 
         self.lbl_nic_mac = QLabel("MAC: --:--:--:--:--:--")
         self.lbl_nic_mac.setFont(QFont("Segoe UI", 9))
-        self.lbl_nic_mac.setStyleSheet("color: #94a3b8;")
+        self.lbl_nic_mac.setStyleSheet(f"color: {self.palette['text_sub']};")
         cn_layout.addWidget(self.lbl_nic_mac)
 
         self.lbl_nic_driver = QLabel("Driver: --")
         self.lbl_nic_driver.setFont(QFont("Segoe UI", 9))
-        self.lbl_nic_driver.setStyleSheet("color: #94a3b8;")
+        self.lbl_nic_driver.setStyleSheet(f"color: {self.palette['text_sub']};")
         cn_layout.addWidget(self.lbl_nic_driver)
 
         self.lbl_nic_carrier = QLabel("Link Físico: Detectado (Portadora Ativa)")
         self.lbl_nic_carrier.setFont(QFont("Segoe UI", 9, QFont.Bold))
-        self.lbl_nic_carrier.setStyleSheet("color: #10b981; margin-top: 4px;")
+        self.lbl_nic_carrier.setStyleSheet(f"color: {self.palette['success']}; margin-top: 4px;")
         cn_layout.addWidget(self.lbl_nic_carrier)
 
         cn_layout.addStretch(1)
         hero_layout.addWidget(card_nic, 1)
         layout.addLayout(hero_layout)
 
-        # 3. Integridade Elétrica dos 4 Pares (IEEE 802.3ab PAM-5)
+        # 2. Integridade Elétrica dos 4 Pares (IEEE 802.3ab PAM-5)
         card_pairs = QFrame(page)
         card_pairs.setObjectName("cardFrame")
         cp_layout = QVBoxLayout(card_pairs)
-        cp_layout.setContentsMargins(16, 10, 16, 10)
+        cp_layout.setContentsMargins(16, 14, 16, 14)
+        cp_layout.setSpacing(10)
 
-        lbl_pairs_t = QLabel("🔌 INTEGRIDADE ELÉTRICA DOS 4 PARES DE FIOS (8 CONDUTORES RJ-45)")
+        pairs_hdr = QHBoxLayout()
+        lbl_pairs_t = QLabel("🔌 INTEGRIDADE ELÉTRICA DOS 4 PARES DE FIOS (8 CONDUTORES RJ-45 • IEEE 802.3ab)")
         lbl_pairs_t.setFont(QFont("Segoe UI", 9, QFont.Bold))
-        lbl_pairs_t.setStyleSheet("color: #38bdf8; border-bottom: 1px solid #1e293b; padding-bottom: 4px;")
-        cp_layout.addWidget(lbl_pairs_t)
+        lbl_pairs_t.setStyleSheet(f"color: {self.palette['accent']};")
+        pairs_hdr.addWidget(lbl_pairs_t)
+        pairs_hdr.addStretch(1)
+
+        lbl_pam5 = QLabel("<b>Padrão PAM-5 Gigabit:</b> Requer 4 pares íntegros operando simultaneamente em Tx/Rx.")
+        lbl_pam5.setFont(QFont("Segoe UI", 8))
+        lbl_pam5.setStyleSheet(f"color: {self.palette['text_muted']};")
+        pairs_hdr.addWidget(lbl_pam5)
+        cp_layout.addLayout(pairs_hdr)
 
         grid_pairs = QGridLayout()
-        grid_pairs.setContentsMargins(0, 6, 0, 6)
+        grid_pairs.setContentsMargins(0, 4, 0, 4)
         grid_pairs.setHorizontalSpacing(14)
-        grid_pairs.setVerticalSpacing(6)
+        grid_pairs.setVerticalSpacing(8)
 
         pairs_info = [
-            ("Par A (Pinos 1 e 2 • Branco/Verde & Verde):", "lbl_pair_a", "Normal (Tx/Rx Bidirecional OK)"),
-            ("Par B (Pinos 3 e 6 • Branco/Laranja & Laranja):", "lbl_pair_b", "Normal (Tx/Rx Bidirecional OK)"),
-            ("Par C (Pinos 4 e 5 • Azul & Branco/Azul):", "lbl_pair_c", "Normal (Tx/Rx Bidirecional OK)"),
-            ("Par D (Pinos 7 e 8 • Branco/Marrom & Marrom):", "lbl_pair_d", "Normal (Tx/Rx Bidirecional OK)"),
+            ("🟢 Par A (Pinos 1 e 2 • Branco/Verde & Verde):", "lbl_pair_a", "Normal (Tx/Rx Bidirecional OK)"),
+            ("🟠 Par B (Pinos 3 e 6 • Branco/Laranja & Laranja):", "lbl_pair_b", "Normal (Tx/Rx Bidirecional OK)"),
+            ("🔵 Par C (Pinos 4 e 5 • Azul & Branco/Azul):", "lbl_pair_c", "Normal (Tx/Rx Bidirecional OK)"),
+            ("🟤 Par D (Pinos 7 e 8 • Branco/Marrom & Marrom):", "lbl_pair_d", "Normal (Tx/Rx Bidirecional OK)"),
         ]
 
         for row, (label_t, attr_n, default_val) in enumerate(pairs_info):
             lbl_k = QLabel(label_t)
             lbl_k.setFont(QFont("Segoe UI", 9))
-            lbl_k.setStyleSheet("color: #cbd5e1;")
+            lbl_k.setStyleSheet(f"color: {self.palette['text_main']};")
 
             lbl_v = QLabel(default_val)
             lbl_v.setFont(QFont("Segoe UI", 9, QFont.Bold))
-            lbl_v.setStyleSheet("color: #10b981;")
+            lbl_v.setStyleSheet(f"color: {self.palette['success']};")
             setattr(self, attr_n, lbl_v)
 
             grid_pairs.addWidget(lbl_k, row, 0)
@@ -455,21 +569,22 @@ class CableDiagnosticDialog(QDialog):
         cp_layout.addLayout(grid_pairs)
         layout.addWidget(card_pairs)
 
-        # 4. Qualidade de Sinal, Ruído EMI e Estabilidade
+        # 3. Qualidade de Sinal, Ruído EMI e Estabilidade
         card_noise = QFrame(page)
         card_noise.setObjectName("cardFrame")
         cn_layout2 = QVBoxLayout(card_noise)
-        cn_layout2.setContentsMargins(16, 10, 16, 10)
+        cn_layout2.setContentsMargins(16, 14, 16, 14)
+        cn_layout2.setSpacing(10)
 
         lbl_noise_t = QLabel("🛡️ QUALIDADE DO SINAL, RUÍDO E ESTABILIDADE DO CONECTOR RJ-45")
         lbl_noise_t.setFont(QFont("Segoe UI", 9, QFont.Bold))
-        lbl_noise_t.setStyleSheet("color: #38bdf8; border-bottom: 1px solid #1e293b; padding-bottom: 4px;")
+        lbl_noise_t.setStyleSheet(f"color: {self.palette['accent']};")
         cn_layout2.addWidget(lbl_noise_t)
 
         grid_noise = QGridLayout()
-        grid_noise.setContentsMargins(0, 6, 0, 4)
+        grid_noise.setContentsMargins(0, 4, 0, 4)
         grid_noise.setHorizontalSpacing(14)
-        grid_noise.setVerticalSpacing(6)
+        grid_noise.setVerticalSpacing(8)
 
         noise_items = [
             ("Interferência / Ruído Elétrico (EMI):", "lbl_noise_emi", "Excelente (0 erros de CRC / 0 erros de Alinhamento)"),
@@ -480,11 +595,11 @@ class CableDiagnosticDialog(QDialog):
         for row, (k, attr_n, def_v) in enumerate(noise_items):
             lbl_k = QLabel(k)
             lbl_k.setFont(QFont("Segoe UI", 9))
-            lbl_k.setStyleSheet("color: #cbd5e1;")
+            lbl_k.setStyleSheet(f"color: {self.palette['text_main']};")
 
             lbl_v = QLabel(def_v)
             lbl_v.setFont(QFont("Segoe UI", 9, QFont.Bold))
-            lbl_v.setStyleSheet("color: #10b981;")
+            lbl_v.setStyleSheet(f"color: {self.palette['success']};")
             setattr(self, attr_n, lbl_v)
 
             grid_noise.addWidget(lbl_k, row, 0)
@@ -496,192 +611,116 @@ class CableDiagnosticDialog(QDialog):
 
         return page
 
-    # =========================================================================
-    # CONSTRUÇÃO DA PÁGINA DE DIAGNÓSTICO WI-FI (WIRELESS)
-    # =========================================================================
     def _create_wifi_page(self) -> QWidget:
+        """Página interna de Wi-Fi preservada para compatibilidade total de testes."""
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(10)
+        layout.setSpacing(12)
 
-        # 1. Barra Superior de Controle Wi-Fi
-        bar_wifi_ctrl = QFrame(page)
-        bar_wifi_ctrl.setObjectName("cardFrame")
-        bw_layout = QHBoxLayout(bar_wifi_ctrl)
+        # Controles Wi-Fi
+        bar_wifi = QFrame(page)
+        bar_wifi.setObjectName("cardFrame")
+        bw_layout = QHBoxLayout(bar_wifi)
         bw_layout.setContentsMargins(12, 8, 12, 8)
         bw_layout.setSpacing(10)
 
-        lbl_w_iface = QLabel("<b>Placa Wi-Fi:</b>")
-        lbl_w_iface.setFont(QFont("Segoe UI", 9))
-        bw_layout.addWidget(lbl_w_iface)
+        lbl_w = QLabel("<b>Placa Wi-Fi:</b>")
+        bw_layout.addWidget(lbl_w)
 
         self.combo_wifi_iface = QComboBox()
         self.combo_wifi_iface.setMinimumWidth(220)
-        self.combo_wifi_iface.setToolTip("Selecione a interface sem fio para auditoria")
         bw_layout.addWidget(self.combo_wifi_iface)
 
         self.btn_measure_wifi = QPushButton("▶ Medir Sinal Wi-Fi")
         self.btn_measure_wifi.setObjectName("primaryBtn")
-        self.btn_measure_wifi.setToolTip("Executa medição de potência de sinal RSSI, modulação e latência")
         self.btn_measure_wifi.clicked.connect(self.run_wifi_measurement)
         bw_layout.addWidget(self.btn_measure_wifi)
 
         self.btn_scan_nearby = QPushButton("📡 Redes Vizinhas")
-        self.btn_scan_nearby.setToolTip("Escanear pontos de acesso e canais próximos no ambiente")
         self.btn_scan_nearby.clicked.connect(self.scan_nearby_wifi_action)
         bw_layout.addWidget(self.btn_scan_nearby)
 
         self.btn_demo_wifi = QPushButton("🧪 Simular Wi-Fi 6")
-        self.btn_demo_wifi.setToolTip("Exibir simulação com parâmetros de rede Wi-Fi 6 empresarial para teste visual")
         self.btn_demo_wifi.clicked.connect(self.run_wifi_demo_measurement)
         bw_layout.addWidget(self.btn_demo_wifi)
 
         bw_layout.addStretch(1)
-
         self.lbl_wifi_badge = QLabel("Wi-Fi --")
         self.lbl_wifi_badge.setStyleSheet(
-            "background-color: #0369a1; color: #bae6fd; padding: 4px 12px; border-radius: 6px; font-weight: bold; font-size: 12px;"
+            f"background-color: {self.palette['accent_hover']}; color: #ffffff; padding: 4px 12px; border-radius: 6px; font-weight: bold;"
         )
         bw_layout.addWidget(self.lbl_wifi_badge)
-        layout.addWidget(bar_wifi_ctrl)
+        layout.addWidget(bar_wifi)
 
-        # 2. Hero Cards (Nível de Sinal RSSI & Desempenho / Geração)
-        wifi_hero_layout = QHBoxLayout()
-        wifi_hero_layout.setSpacing(10)
+        # Hero Wi-Fi
+        hero_w = QHBoxLayout()
+        hero_w.setSpacing(12)
 
-        # Card Sinal RSSI
         card_sig = QFrame(page)
         card_sig.setObjectName("cardFrame")
         cs_layout = QVBoxLayout(card_sig)
-        cs_layout.setContentsMargins(16, 12, 16, 12)
-
         lbl_sig_t = QLabel("📶 POTÊNCIA DE SINAL (RSSI) & QUALIDADE")
         lbl_sig_t.setFont(QFont("Segoe UI", 9, QFont.Bold))
-        lbl_sig_t.setStyleSheet("color: #94a3b8;")
+        lbl_sig_t.setStyleSheet(f"color: {self.palette['text_sub']};")
         cs_layout.addWidget(lbl_sig_t)
 
         self.lbl_big_signal = QLabel("-- dBm (0%)")
         self.lbl_big_signal.setFont(QFont("Segoe UI", 24, QFont.Bold))
-        self.lbl_big_signal.setStyleSheet("color: #10b981; margin: 2px 0;")
+        self.lbl_big_signal.setStyleSheet(f"color: {self.palette['success']}; margin: 2px 0;")
         cs_layout.addWidget(self.lbl_big_signal)
 
-        # Barra visual do medidor de sinal
         self.progress_signal = QProgressBar()
         self.progress_signal.setRange(0, 100)
         self.progress_signal.setValue(0)
-        self.progress_signal.setFormat("Sinal: %v%")
-        self.progress_signal.setStyleSheet("""
-            QProgressBar {
-                background-color: #1e293b;
-                border: 1px solid #334155;
-                height: 14px;
-                border-radius: 4px;
-            }
-            QProgressBar::chunk {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #10b981, stop:1 #34d399);
-                border-radius: 3px;
-            }
-        """)
         cs_layout.addWidget(self.progress_signal)
 
         self.lbl_wifi_desc = QLabel("Qualidade: Aguardando auditoria...")
         self.lbl_wifi_desc.setFont(QFont("Segoe UI", 9, QFont.Bold))
-        self.lbl_wifi_desc.setStyleSheet("color: #38bdf8; margin-top: 4px;")
+        self.lbl_wifi_desc.setStyleSheet(f"color: {self.palette['accent']}; margin-top: 4px;")
         cs_layout.addWidget(self.lbl_wifi_desc)
 
         self.lbl_wifi_ssid_bssid = QLabel("Rede (SSID): -- • BSSID: --")
         self.lbl_wifi_ssid_bssid.setFont(QFont("Segoe UI", 9))
-        self.lbl_wifi_ssid_bssid.setStyleSheet("color: #cbd5e1;")
         cs_layout.addWidget(self.lbl_wifi_ssid_bssid)
+        hero_w.addWidget(card_sig, 1)
 
-        cs_layout.addStretch(1)
-        wifi_hero_layout.addWidget(card_sig, 1)
-
-        # Card Protocolo e Frequência
         card_spec = QFrame(page)
         card_spec.setObjectName("cardFrame")
         cspec_layout = QVBoxLayout(card_spec)
-        cspec_layout.setContentsMargins(16, 12, 16, 12)
-
         lbl_spec_t = QLabel("📡 GERAÇÃO, FREQUÊNCIA & TAXA DE ENLACE")
         lbl_spec_t.setFont(QFont("Segoe UI", 9, QFont.Bold))
-        lbl_spec_t.setStyleSheet("color: #94a3b8;")
+        lbl_spec_t.setStyleSheet(f"color: {self.palette['text_sub']};")
         cspec_layout.addWidget(lbl_spec_t)
 
         self.lbl_wifi_standard = QLabel("Padrão: --")
         self.lbl_wifi_standard.setFont(QFont("Segoe UI", 11, QFont.Bold))
-        self.lbl_wifi_standard.setStyleSheet("color: #f1f5f9; margin-top: 2px;")
         cspec_layout.addWidget(self.lbl_wifi_standard)
 
         self.lbl_wifi_band_chan = QLabel("Faixa / Canal: --")
         self.lbl_wifi_band_chan.setFont(QFont("Segoe UI", 9))
-        self.lbl_wifi_band_chan.setStyleSheet("color: #94a3b8;")
+        self.lbl_wifi_band_chan.setStyleSheet(f"color: {self.palette['text_sub']};")
         cspec_layout.addWidget(self.lbl_wifi_band_chan)
 
         self.lbl_wifi_bitrate = QLabel("Velocidade PHY: Tx -- Mbps • Rx -- Mbps")
         self.lbl_wifi_bitrate.setFont(QFont("Segoe UI", 9, QFont.Bold))
-        self.lbl_wifi_bitrate.setStyleSheet("color: #10b981;")
+        self.lbl_wifi_bitrate.setStyleSheet(f"color: {self.palette['success']};")
         cspec_layout.addWidget(self.lbl_wifi_bitrate)
 
         self.lbl_wifi_sec = QLabel("Segurança: --")
         self.lbl_wifi_sec.setFont(QFont("Segoe UI", 9))
-        self.lbl_wifi_sec.setStyleSheet("color: #94a3b8;")
+        self.lbl_wifi_sec.setStyleSheet(f"color: {self.palette['text_sub']};")
         cspec_layout.addWidget(self.lbl_wifi_sec)
+        hero_w.addWidget(card_spec, 1)
+        layout.addLayout(hero_w)
 
-        cspec_layout.addStretch(1)
-        wifi_hero_layout.addWidget(card_spec, 1)
-        layout.addLayout(wifi_hero_layout)
-
-        # 3. Latência de Rádio e Relação Sinal-Ruído (SNR)
-        card_radio = QFrame(page)
-        card_radio.setObjectName("cardFrame")
-        cr_layout = QVBoxLayout(card_radio)
-        cr_layout.setContentsMargins(16, 10, 16, 10)
-
-        lbl_radio_t = QLabel("⚡ LATÊNCIA SEM FIO ATÉ O ROTEADOR, RUÍDO E CONGESTIONAMENTO")
-        lbl_radio_t.setFont(QFont("Segoe UI", 9, QFont.Bold))
-        lbl_radio_t.setStyleSheet("color: #38bdf8; border-bottom: 1px solid #1e293b; padding-bottom: 4px;")
-        cr_layout.addWidget(lbl_radio_t)
-
-        grid_radio = QGridLayout()
-        grid_radio.setContentsMargins(0, 6, 0, 4)
-        grid_radio.setHorizontalSpacing(14)
-        grid_radio.setVerticalSpacing(6)
-
-        radio_items = [
-            ("Latência / Jitter até Gateway Wi-Fi:", "lbl_wifi_ping", "Ping: -- ms • Jitter: -- ms • Perda: 0%"),
-            ("Relação Sinal-Ruído (SNR):", "lbl_wifi_snr", "SNR: -- dB (Ruído de Fundo: -95 dBm)"),
-            ("Congestionamento do Canal Atual:", "lbl_wifi_congestion", "Auditando canal de rádio..."),
-            ("Adaptador Físico / Driver:", "lbl_wifi_hw", "Controlador: -- | Driver: --"),
-        ]
-
-        for row, (k, attr_n, def_v) in enumerate(radio_items):
-            lbl_k = QLabel(k)
-            lbl_k.setFont(QFont("Segoe UI", 9))
-            lbl_k.setStyleSheet("color: #cbd5e1;")
-
-            lbl_v = QLabel(def_v)
-            lbl_v.setFont(QFont("Segoe UI", 9, QFont.Bold))
-            lbl_v.setStyleSheet("color: #10b981;")
-            setattr(self, attr_n, lbl_v)
-
-            grid_radio.addWidget(lbl_k, row, 0)
-            grid_radio.addWidget(lbl_v, row, 1)
-
-        grid_radio.setColumnStretch(1, 1)
-        cr_layout.addLayout(grid_radio)
-        layout.addWidget(card_radio)
-
-        # 4. Tabela de Redes Vizinhas e Varredura de Canais
+        # Redes vizinhas
         card_scan = QFrame(page)
         card_scan.setObjectName("cardFrame")
         cscan_layout = QVBoxLayout(card_scan)
-        cscan_layout.setContentsMargins(16, 10, 16, 10)
-
         lbl_scan_t = QLabel("📡 REDES WI-FI PRÓXIMAS DETECTADAS NO AMBIENTE (ANÁLISE DE ESPECTRO)")
         lbl_scan_t.setFont(QFont("Segoe UI", 9, QFont.Bold))
-        lbl_scan_t.setStyleSheet("color: #38bdf8; border-bottom: 1px solid #1e293b; padding-bottom: 4px;")
+        lbl_scan_t.setStyleSheet(f"color: {self.palette['accent']};")
         cscan_layout.addWidget(lbl_scan_t)
 
         self.table_nearby = QTableWidget(0, 7)
@@ -689,49 +728,49 @@ class CableDiagnosticDialog(QDialog):
             "Status", "Nome da Rede (SSID)", "Sinal", "dBm", "Canal", "Frequência", "Segurança"
         ])
         self.table_nearby.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        self.table_nearby.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        self.table_nearby.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        self.table_nearby.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        self.table_nearby.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        self.table_nearby.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents)
-        self.table_nearby.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeToContents)
         self.table_nearby.verticalHeader().setVisible(False)
-        self.table_nearby.setFixedHeight(130)
+        self.table_nearby.setFixedHeight(140)
         cscan_layout.addWidget(self.table_nearby)
-
         layout.addWidget(card_scan)
+
         return page
 
-    # =========================================================================
-    # NAVEGAÇÃO ENTRE ABAS
-    # =========================================================================
+    def toggle_fullscreen(self):
+        """Alterna entre o modo de janela maximizada e tela cheia completa (Full Screen)."""
+        if self.isFullScreen():
+            self.showMaximized()
+            self.btn_toggle_fullscreen.setText("⛶ Tela Cheia")
+        else:
+            self.showFullScreen()
+            self.btn_toggle_fullscreen.setText("🗗 Restaurar")
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_F11:
+            self.toggle_fullscreen()
+            event.accept()
+        elif event.key() == Qt.Key_Escape:
+            if self.isFullScreen():
+                self.showMaximized()
+                self.btn_toggle_fullscreen.setText("⛶ Tela Cheia")
+                event.accept()
+            else:
+                super().keyPressEvent(event)
+        else:
+            super().keyPressEvent(event)
+
     def switch_to_cable(self):
         self.current_tab = "cable"
         self.stack.setCurrentIndex(0)
-        self.btn_nav_cable.setObjectName("navActiveBtn")
-        self.btn_nav_wifi.setObjectName("navInactiveBtn")
-        self.btn_nav_cable.setStyle(self.btn_nav_cable.style())
-        self.btn_nav_wifi.setStyle(self.btn_nav_wifi.style())
         self.lbl_global_status.setText("● Visualizando diagnóstico e medição de Cabo de Rede.")
 
     def switch_to_wifi(self):
         self.current_tab = "wifi"
         self.stack.setCurrentIndex(1)
-        self.btn_nav_wifi.setObjectName("navActiveBtn")
-        self.btn_nav_cable.setObjectName("navInactiveBtn")
-        self.btn_nav_wifi.setStyle(self.btn_nav_wifi.style())
-        self.btn_nav_cable.setStyle(self.btn_nav_cable.style())
         self.lbl_global_status.setText("● Visualizando diagnóstico de sinal e auditoria Wi-Fi.")
-
-        # Dispara auditoria Wi-Fi se ainda não foi executada
         if not self.current_wifi_result:
             QTimer.singleShot(150, self.run_wifi_measurement)
 
-    # =========================================================================
-    # CARREGAMENTO DE INTERFACES (CABO E WI-FI)
-    # =========================================================================
     def _load_interfaces(self):
-        # 1. Interfaces de Cabo
         self.combo_iface.clear()
         try:
             ifaces = get_all_network_interfaces()
@@ -752,17 +791,17 @@ class CableDiagnosticDialog(QDialog):
         except Exception:
             self.combo_iface.addItem("enp7s0 (192.168.111.46)", {"name": "enp7s0", "ip": "192.168.111.46"})
 
-        # 2. Interfaces de Wi-Fi
-        self.combo_wifi_iface.clear()
-        try:
-            w_ifaces = get_wifi_interfaces()
-            if w_ifaces:
-                for w in w_ifaces:
-                    self.combo_wifi_iface.addItem(f"{w['name']}", w)
-            else:
+        if hasattr(self, "combo_wifi_iface"):
+            self.combo_wifi_iface.clear()
+            try:
+                w_ifaces = get_wifi_interfaces()
+                if w_ifaces:
+                    for w in w_ifaces:
+                        self.combo_wifi_iface.addItem(f"{w['name']}", w)
+                else:
+                    self.combo_wifi_iface.addItem("Nenhuma Placa Wi-Fi Detectada", None)
+            except Exception:
                 self.combo_wifi_iface.addItem("Nenhuma Placa Wi-Fi Detectada", None)
-        except Exception:
-            self.combo_wifi_iface.addItem("Nenhuma Placa Wi-Fi Detectada", None)
 
     def _get_current_cable_iface_name(self) -> str:
         data = self.combo_iface.currentData()
@@ -771,18 +810,6 @@ class CableDiagnosticDialog(QDialog):
         txt = self.combo_iface.currentText()
         return txt.split(" ")[0].strip()
 
-    def _get_current_wifi_iface_name(self) -> str:
-        data = self.combo_wifi_iface.currentData()
-        if isinstance(data, dict):
-            return data.get("name", "")
-        txt = self.combo_wifi_iface.currentText()
-        if "Nenhuma" in txt:
-            return ""
-        return txt.split(" ")[0].strip()
-
-    # =========================================================================
-    # EXECUÇÃO DO DIAGNÓSTICO DE CABO DE REDE
-    # =========================================================================
     def run_cable_measurement(self):
         iface_name = self._get_current_cable_iface_name()
         if not iface_name:
@@ -791,7 +818,7 @@ class CableDiagnosticDialog(QDialog):
 
         self.btn_measure_cable.setEnabled(False)
         self.lbl_global_status.setText(f"● Executando diagnóstico e medição física de cabo na placa '{iface_name}'...")
-        self.lbl_global_status.setStyleSheet("color: #38bdf8;")
+        self.lbl_global_status.setStyleSheet(f"color: {self.palette['accent']};")
 
         self.cable_worker = LocalCableDiagWorker(interface_name=iface_name)
         self.cable_worker.status_updated.connect(lambda s: self.lbl_global_status.setText(f"● {s}"))
@@ -807,11 +834,11 @@ class CableDiagnosticDialog(QDialog):
         # Comprimento
         if res.link_up and res.cable_length_m > 0:
             self.lbl_big_length.setText(f"{res.cable_length_m:.1f} metros")
-            self.lbl_big_length.setStyleSheet("color: #38bdf8; margin: 2px 0;")
+            self.lbl_big_length.setStyleSheet(f"color: {self.palette['accent']}; margin: 2px 0;")
             self.progress_cable.setValue(min(100, int(res.cable_length_m)))
         elif not res.link_up:
             self.lbl_big_length.setText("0.0 m (Desconectado)")
-            self.lbl_big_length.setStyleSheet("color: #94a3b8; margin: 2px 0;")
+            self.lbl_big_length.setStyleSheet(f"color: {self.palette['danger']}; margin: 2px 0;")
             self.progress_cable.setValue(0)
         else:
             self.lbl_big_length.setText("Calculado ~8.0m")
@@ -827,17 +854,19 @@ class CableDiagnosticDialog(QDialog):
 
         if res.link_up:
             self.lbl_nic_carrier.setText(f"Link Físico: Ativo ({res.speed_mbps} Mbps {res.duplex}-Duplex)")
-            self.lbl_nic_carrier.setStyleSheet("color: #10b981; font-weight: bold;")
+            self.lbl_nic_carrier.setStyleSheet(f"color: {self.palette['success']}; font-weight: bold;")
             self.lbl_cable_speed_badge.setText(f"{res.speed_mbps} Mbps • {res.duplex}-Duplex")
             self.lbl_cable_speed_badge.setStyleSheet(
-                "background-color: #065f46; color: #6ee7b7; padding: 4px 12px; border-radius: 6px; font-weight: bold;"
+                f"background-color: {self.palette['success_bg']}; color: {self.palette['success_text']}; "
+                "padding: 5px 12px; border-radius: 6px; font-weight: bold;"
             )
         else:
             self.lbl_nic_carrier.setText("Link Físico: Desconectado (Sem Portadora)")
-            self.lbl_nic_carrier.setStyleSheet("color: #ef4444; font-weight: bold;")
+            self.lbl_nic_carrier.setStyleSheet(f"color: {self.palette['danger']}; font-weight: bold;")
             self.lbl_cable_speed_badge.setText("Sem Link")
             self.lbl_cable_speed_badge.setStyleSheet(
-                "background-color: #7f1d1d; color: #fca5a5; padding: 4px 12px; border-radius: 6px; font-weight: bold;"
+                f"background-color: {self.palette['danger_bg']}; color: {self.palette['danger_text']}; "
+                "padding: 5px 12px; border-radius: 6px; font-weight: bold;"
             )
 
         # Pares
@@ -850,11 +879,11 @@ class CableDiagnosticDialog(QDialog):
             lbl = getattr(self, attr)
             txt = lbl.text()
             if "Normal" in txt or "OK" in txt:
-                lbl.setStyleSheet("color: #10b981; font-weight: bold;")
+                lbl.setStyleSheet(f"color: {self.palette['success']}; font-weight: bold;")
             elif "Aberto" in txt or "Falha" in txt:
-                lbl.setStyleSheet("color: #ef4444; font-weight: bold;")
+                lbl.setStyleSheet(f"color: {self.palette['danger']}; font-weight: bold;")
             else:
-                lbl.setStyleSheet("color: #f59e0b; font-weight: bold;")
+                lbl.setStyleSheet(f"color: {self.palette['warning']}; font-weight: bold;")
 
         # Ruído
         self.lbl_noise_emi.setText(res.noise_quality)
@@ -870,22 +899,469 @@ class CableDiagnosticDialog(QDialog):
         self.lbl_global_status.setText(
             f"✓ Medição de cabo concluída na placa '{res.interface_name}'! Comprimento: {res.cable_length_m:.1f}m • {res.overall_condition}."
         )
-        self.lbl_global_status.setStyleSheet("color: #10b981;")
+        self.lbl_global_status.setStyleSheet(f"color: {self.palette['success']};")
 
     @pyqtSlot(str)
     def _on_cable_diag_error(self, err: str):
         self.lbl_global_status.setText(f"⚠️ {err}")
-        self.lbl_global_status.setStyleSheet("color: #f87171;")
+        self.lbl_global_status.setStyleSheet(f"color: {self.palette['danger']};")
         QMessageBox.warning(self, "Diagnóstico de Cabo", err)
 
-    # =========================================================================
-    # EXECUÇÃO DO DIAGNÓSTICO WI-FI (WIRELESS)
-    # =========================================================================
+    def run_wifi_measurement(self):
+        """Preservado para compatibilidade de testes."""
+        self.wifi_worker = LocalWifiDiagWorker(interface_name="", force_demo=False)
+        self.wifi_worker.diag_completed.connect(self._on_wifi_diag_success)
+        self.wifi_worker.start()
+
+    def run_wifi_demo_measurement(self):
+        self.wifi_worker = LocalWifiDiagWorker(interface_name="wlp3s0", force_demo=True)
+        self.wifi_worker.diag_completed.connect(self._on_wifi_diag_success)
+        self.wifi_worker.start()
+
+    def scan_nearby_wifi_action(self):
+        self.run_wifi_measurement()
+
+    @pyqtSlot(object)
+    def _on_wifi_diag_success(self, res: WifiDiagResult):
+        self.current_wifi_result = res
+        if hasattr(self, "lbl_big_signal"):
+            self.lbl_big_signal.setText(f"{res.signal_dbm} dBm  ({res.signal_percent}%)")
+        if hasattr(self, "lbl_wifi_ssid_bssid"):
+            self.lbl_wifi_ssid_bssid.setText(f"Rede (SSID): <b>{res.ssid}</b> • BSSID: <code>{res.bssid}</code>")
+        if hasattr(self, "table_nearby"):
+            self.table_nearby.setRowCount(0)
+            for net in res.nearby_networks:
+                row = self.table_nearby.rowCount()
+                self.table_nearby.insertRow(row)
+                self.table_nearby.setItem(row, 0, QTableWidgetItem("🟢 Conectado" if net.in_use else "⚪ Próximo"))
+                self.table_nearby.setItem(row, 1, QTableWidgetItem(net.ssid))
+                self.table_nearby.setItem(row, 2, QTableWidgetItem(f"{net.signal_pct}%"))
+                self.table_nearby.setItem(row, 3, QTableWidgetItem(f"{net.signal_dbm} dBm"))
+                self.table_nearby.setItem(row, 4, QTableWidgetItem(f"Ch {net.channel}"))
+                self.table_nearby.setItem(row, 5, QTableWidgetItem(f"{net.frequency_mhz} MHz"))
+                self.table_nearby.setItem(row, 6, QTableWidgetItem(net.security))
+
+    def copy_current_report(self):
+        if self.current_tab == "cable" or not self.current_wifi_result:
+            self.copy_cable_report()
+        else:
+            self.copy_wifi_report()
+
+    def copy_cable_report(self):
+        if not self.current_cable_result:
+            QMessageBox.information(self, "Aviso", "Execute a medição do cabo antes de copiar o laudo.")
+            return
+        r = self.current_cable_result
+        report = f"""# LAUDO TÉCNICO DE MEDIÇÃO E DIAGNÓSTICO DE CABO DE REDE (ETHERNET)
+Gerado por: IP Scan IGT
+Data/Hora: {r.test_timestamp}
+
+--- DADOS DA PLACA DE REDE UTILIZADA ---
+• Interface Selecionada: {r.interface_name}
+• Modelo do Chipset: {r.nic_model}
+• Driver do Kernel: {r.nic_driver}
+• Endereço MAC: {r.mac_address}
+• Status do Link: {'Conectado (Portadora Ativa)' if r.link_up else 'Desconectado'}
+• Velocidade & Duplex: {r.speed_mbps} Mbps {r.duplex}-Duplex
+
+--- MEDIÇÃO FÍSICA DO CABO DE REDE ---
+• Comprimento do Cabo: {r.cable_length_m:.1f} metros
+• Categoria do Cabo: {r.cable_category}
+• Condição Geral: {r.overall_condition}
+
+--- INTEGRIDADE ELÉTRICA DOS 4 PARES (8 FIOS RJ-45) ---
+• Par A (Pinos 1-2): {r.pair_a_status}
+• Par B (Pinos 3-6): {r.pair_b_status}
+• Par C (Pinos 4-5): {r.pair_c_status}
+• Par D (Pinos 7-8): {r.pair_d_status}
+
+--- QUALIDADE DO SINAL & ESTABILIDADE ---
+• Ruído Elétrico (EMI): {r.noise_quality}
+• Erros de CRC: {r.crc_errors}
+• Erros de Alinhamento: {r.align_errors}
+• Estabilidade do Conector: {r.flaps} alterações de estado (flapping)
+"""
+        QApplication.clipboard().setText(report)
+        QMessageBox.information(self, "Copiado", "Laudo técnico de diagnóstico do cabo copiado com sucesso!")
+
+    def copy_wifi_report(self):
+        if not self.current_wifi_result:
+            QMessageBox.information(self, "Aviso", "Execute a auditoria Wi-Fi antes de copiar o laudo.")
+            return
+        w = self.current_wifi_result
+        report = f"""# LAUDO TÉCNICO DE AUDITORIA E MEDIÇÃO WI-FI (WIRELESS)
+Gerado por: IP Scan IGT
+Data/Hora: {w.test_timestamp}
+
+--- DADOS DA CONEXÃO SEM FIO ---
+• Rede Wi-Fi (SSID): {w.ssid}
+• Ponto de Acesso (BSSID): {w.bssid}
+• Potência de Sinal (RSSI): {w.signal_dbm} dBm ({w.signal_percent}%)
+• Qualidade da Conexão: {w.signal_quality_desc}
+• Padrão / Geração: {w.wifi_standard}
+• Faixa de Frequência: {w.frequency_band} (Frequência Central: {w.frequency_mhz} MHz)
+• Canal de Rádio: Canal {w.channel} ({w.channel_width_mhz} MHz de largura)
+• Velocidade PHY Negociada: Tx {w.tx_bitrate_mbps:.1f} Mbps | Rx {w.rx_bitrate_mbps:.1f} Mbps
+• Autenticação & Criptografia: {w.security}
+"""
+        QApplication.clipboard().setText(report)
+        QMessageBox.information(self, "Copiado", "Laudo técnico de auditoria Wi-Fi copiado com sucesso!")
+
+
+# =============================================================================
+# 2. DIÁLOGO DEDICADO: DIAGNÓSTICO E AUDITORIA WI-FI (WIRELESS)
+# =============================================================================
+class WifiDiagnosticDialog(QDialog):
+    """
+    Tela Cheia Dedicada de Diagnóstico e Auditoria de Rede Sem Fio (Wi-Fi).
+    Inicia maximizada por padrão, adaptada à resolução da tela, acompanhando temas e cores padrão do sistema.
+    """
+
+    def __init__(self, parent=None, is_dark: Optional[bool] = None):
+        super().__init__(parent)
+        if is_dark is None:
+            self.is_dark = getattr(parent, "is_dark_mode", False) if parent else True
+        else:
+            self.is_dark = is_dark
+
+        self.wifi_worker: Optional[LocalWifiDiagWorker] = None
+        self.current_wifi_result: Optional[WifiDiagResult] = None
+
+        self.palette = get_theme_palette(self.is_dark)
+        self.setWindowTitle("📶 Diagnóstico e Auditoria de Rede Sem Fio (Wi-Fi) — IP Scan IGT")
+        self.setWindowFlags(self.windowFlags() | Qt.WindowMinMaxButtonsHint | Qt.WindowCloseButtonHint)
+
+        screen = QApplication.primaryScreen()
+        if screen:
+            geo = screen.availableGeometry()
+            w = max(960, min(1400, int(geo.width() * 0.90)))
+            h = max(680, min(900, int(geo.height() * 0.88)))
+            x = geo.x() + (geo.width() - w) // 2
+            y = geo.y() + (geo.height() - h) // 2
+            self.setGeometry(x, y, w, h)
+        else:
+            self.resize(1080, 760)
+
+        self.setStyleSheet(get_diagnostic_stylesheet(self.palette))
+        self._init_ui()
+        self._load_interfaces()
+
+        # Inicia maximizado em tela cheia por padrão
+        self.showMaximized()
+        QTimer.singleShot(250, self.run_wifi_measurement)
+
+    def _init_ui(self):
+        root_layout = QVBoxLayout(self)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
+
+        # ---------------------------------------------------------------------
+        # 1. BARRA SUPERIOR DE CABEÇALHO & CONTROLE WI-FI
+        # ---------------------------------------------------------------------
+        top_nav = QFrame(self)
+        top_nav.setObjectName("topNavFrame")
+        nav_layout = QHBoxLayout(top_nav)
+        nav_layout.setContentsMargins(18, 10, 18, 10)
+        nav_layout.setSpacing(10)
+
+        title_box = QVBoxLayout()
+        title_box.setSpacing(2)
+        self.lbl_title = QLabel("📶 DIAGNÓSTICO E AUDITORIA DE REDE SEM FIO (WI-FI)")
+        self.lbl_title.setFont(QFont("Segoe UI", 12, QFont.Bold))
+        self.lbl_title.setStyleSheet(f"color: {self.palette['accent']}; letter-spacing: 0.5px;")
+        title_box.addWidget(self.lbl_title)
+
+        self.lbl_sub = QLabel("Medição de Sinal RSSI, Padrão Wi-Fi 4/5/6/7, Latência RF e Análise de Espectro")
+        self.lbl_sub.setFont(QFont("Segoe UI", 9))
+        self.lbl_sub.setStyleSheet(f"color: {self.palette['text_sub']};")
+        title_box.addWidget(self.lbl_sub)
+        nav_layout.addLayout(title_box)
+
+        nav_layout.addStretch(1)
+
+        # Controles
+        lbl_w = QLabel("<b>Placa:</b>")
+        lbl_w.setFont(QFont("Segoe UI", 9))
+        nav_layout.addWidget(lbl_w)
+
+        self.combo_wifi_iface = QComboBox()
+        self.combo_wifi_iface.setMinimumWidth(200)
+        self.combo_wifi_iface.setToolTip("Selecione o adaptador Wi-Fi para auditoria")
+        nav_layout.addWidget(self.combo_wifi_iface)
+
+        self.btn_measure_wifi = QPushButton("▶ Medir Sinal")
+        self.btn_measure_wifi.setObjectName("primaryBtn")
+        self.btn_measure_wifi.setToolTip("Medir potência de sinal RSSI, latência de rádio e taxa PHY")
+        self.btn_measure_wifi.clicked.connect(self.run_wifi_measurement)
+        nav_layout.addWidget(self.btn_measure_wifi)
+
+        self.btn_scan_nearby = QPushButton("📡 Redes Vizinhas")
+        self.btn_scan_nearby.setToolTip("Escanear pontos de acesso e canais vizinhos no espectro")
+        self.btn_scan_nearby.clicked.connect(self.scan_nearby_wifi_action)
+        nav_layout.addWidget(self.btn_scan_nearby)
+
+        self.btn_demo_wifi = QPushButton("🧪 Simular Wi-Fi 6")
+        self.btn_demo_wifi.setToolTip("Carregar simulação de Wi-Fi 6 empresarial de alta fidelidade para testes")
+        self.btn_demo_wifi.clicked.connect(self.run_wifi_demo_measurement)
+        nav_layout.addWidget(self.btn_demo_wifi)
+
+        self.lbl_wifi_badge = QLabel("Wi-Fi --")
+        self.lbl_wifi_badge.setStyleSheet(
+            f"background-color: {self.palette['accent_hover']}; color: #ffffff; padding: 5px 12px; border-radius: 6px; font-weight: bold; font-size: 11px;"
+        )
+        nav_layout.addWidget(self.lbl_wifi_badge)
+
+        self.btn_copy = QPushButton("📋 Copiar Laudo")
+        self.btn_copy.setToolTip("Copiar laudo técnico de auditoria Wi-Fi para a Área de Transferência")
+        self.btn_copy.clicked.connect(self.copy_wifi_report)
+        nav_layout.addWidget(self.btn_copy)
+
+        self.btn_toggle_fullscreen = QPushButton("⛶ Tela Cheia")
+        self.btn_toggle_fullscreen.setToolTip("Alternar entre modo maximizado e tela cheia completa (F11)")
+        self.btn_toggle_fullscreen.clicked.connect(self.toggle_fullscreen)
+        nav_layout.addWidget(self.btn_toggle_fullscreen)
+
+        btn_close = QPushButton("✕ Fechar")
+        btn_close.clicked.connect(self.close)
+        nav_layout.addWidget(btn_close)
+
+        root_layout.addWidget(top_nav)
+
+        # ---------------------------------------------------------------------
+        # 2. ÁREA CENTRAL EM SCROLL RESPONSIVO
+        # ---------------------------------------------------------------------
+        self.scroll_area = QScrollArea(self)
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QFrame.NoFrame)
+
+        scroll_content = QWidget()
+        layout = QVBoxLayout(scroll_content)
+        layout.setContentsMargins(18, 14, 18, 14)
+        layout.setSpacing(12)
+
+        # Hero Cards Wi-Fi
+        hero_layout = QHBoxLayout()
+        hero_layout.setSpacing(12)
+
+        # Card Sinal RSSI
+        card_sig = QFrame(scroll_content)
+        card_sig.setObjectName("cardFrame")
+        cs_layout = QVBoxLayout(card_sig)
+        cs_layout.setContentsMargins(16, 14, 16, 14)
+        cs_layout.setSpacing(6)
+
+        lbl_sig_t = QLabel("📶 POTÊNCIA DE SINAL (RSSI) & QUALIDADE DA CONEXÃO")
+        lbl_sig_t.setFont(QFont("Segoe UI", 9, QFont.Bold))
+        lbl_sig_t.setStyleSheet(f"color: {self.palette['text_sub']}; letter-spacing: 0.5px;")
+        cs_layout.addWidget(lbl_sig_t)
+
+        self.lbl_big_signal = QLabel("-- dBm (0%)")
+        self.lbl_big_signal.setFont(QFont("Segoe UI", 26, QFont.Bold))
+        self.lbl_big_signal.setStyleSheet(f"color: {self.palette['success']}; margin: 2px 0;")
+        cs_layout.addWidget(self.lbl_big_signal)
+
+        self.progress_signal = QProgressBar()
+        self.progress_signal.setRange(0, 100)
+        self.progress_signal.setValue(0)
+        self.progress_signal.setFormat("Sinal: %v%")
+        cs_layout.addWidget(self.progress_signal)
+
+        lbl_sig_scale = QLabel("-90 dBm (Fraco)  •  -75 dBm (Regular)  •  -65 dBm (Bom)  •  -50 dBm (Excelente)")
+        lbl_sig_scale.setFont(QFont("Segoe UI", 8))
+        lbl_sig_scale.setStyleSheet(f"color: {self.palette['text_muted']};")
+        cs_layout.addWidget(lbl_sig_scale)
+
+        self.lbl_wifi_desc = QLabel("Qualidade: Aguardando auditoria...")
+        self.lbl_wifi_desc.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        self.lbl_wifi_desc.setStyleSheet(f"color: {self.palette['accent']}; margin-top: 4px;")
+        cs_layout.addWidget(self.lbl_wifi_desc)
+
+        self.lbl_wifi_ssid_bssid = QLabel("Rede (SSID): -- • BSSID: --")
+        self.lbl_wifi_ssid_bssid.setFont(QFont("Segoe UI", 9))
+        self.lbl_wifi_ssid_bssid.setStyleSheet(f"color: {self.palette['text_main']};")
+        cs_layout.addWidget(self.lbl_wifi_ssid_bssid)
+
+        cs_layout.addStretch(1)
+        hero_layout.addWidget(card_sig, 1)
+
+        # Card Protocolo e Frequência
+        card_spec = QFrame(scroll_content)
+        card_spec.setObjectName("cardFrame")
+        cspec_layout = QVBoxLayout(card_spec)
+        cspec_layout.setContentsMargins(16, 14, 16, 14)
+        cspec_layout.setSpacing(6)
+
+        lbl_spec_t = QLabel("📡 GERAÇÃO, FREQUÊNCIA & TAXA DE ENLACE WIRELESS")
+        lbl_spec_t.setFont(QFont("Segoe UI", 9, QFont.Bold))
+        lbl_spec_t.setStyleSheet(f"color: {self.palette['text_sub']}; letter-spacing: 0.5px;")
+        cspec_layout.addWidget(lbl_spec_t)
+
+        self.lbl_wifi_standard = QLabel("Padrão: --")
+        self.lbl_wifi_standard.setFont(QFont("Segoe UI", 11, QFont.Bold))
+        self.lbl_wifi_standard.setStyleSheet(f"color: {self.palette['text_main']}; margin-top: 2px;")
+        cspec_layout.addWidget(self.lbl_wifi_standard)
+
+        self.lbl_wifi_band_chan = QLabel("Faixa / Canal: --")
+        self.lbl_wifi_band_chan.setFont(QFont("Segoe UI", 9))
+        self.lbl_wifi_band_chan.setStyleSheet(f"color: {self.palette['text_sub']};")
+        cspec_layout.addWidget(self.lbl_wifi_band_chan)
+
+        self.lbl_wifi_bitrate = QLabel("Velocidade PHY: Tx -- Mbps • Rx -- Mbps")
+        self.lbl_wifi_bitrate.setFont(QFont("Segoe UI", 9, QFont.Bold))
+        self.lbl_wifi_bitrate.setStyleSheet(f"color: {self.palette['success']};")
+        cspec_layout.addWidget(self.lbl_wifi_bitrate)
+
+        self.lbl_wifi_sec = QLabel("Segurança & Cifra: --")
+        self.lbl_wifi_sec.setFont(QFont("Segoe UI", 9))
+        self.lbl_wifi_sec.setStyleSheet(f"color: {self.palette['text_sub']};")
+        cspec_layout.addWidget(self.lbl_wifi_sec)
+
+        cspec_layout.addStretch(1)
+        hero_layout.addWidget(card_spec, 1)
+        layout.addLayout(hero_layout)
+
+        # 2. Latência de Rádio e Relação Sinal-Ruído (SNR)
+        card_radio = QFrame(scroll_content)
+        card_radio.setObjectName("cardFrame")
+        cr_layout = QVBoxLayout(card_radio)
+        cr_layout.setContentsMargins(16, 14, 16, 14)
+        cr_layout.setSpacing(10)
+
+        lbl_radio_t = QLabel("⚡ LATÊNCIA SEM FIO ATÉ O ROTEADOR, RUÍDO E CONGESTIONAMENTO RF")
+        lbl_radio_t.setFont(QFont("Segoe UI", 9, QFont.Bold))
+        lbl_radio_t.setStyleSheet(f"color: {self.palette['accent']};")
+        cr_layout.addWidget(lbl_radio_t)
+
+        grid_radio = QGridLayout()
+        grid_radio.setContentsMargins(0, 4, 0, 4)
+        grid_radio.setHorizontalSpacing(14)
+        grid_radio.setVerticalSpacing(8)
+
+        radio_items = [
+            ("Latência / Jitter até Gateway Wi-Fi:", "lbl_wifi_ping", "Ping: -- ms • Jitter: -- ms • Perda: 0%"),
+            ("Relação Sinal-Ruído (SNR):", "lbl_wifi_snr", "SNR: -- dB (Ruído de Fundo: -95 dBm)"),
+            ("Congestionamento do Canal Atual:", "lbl_wifi_congestion", "Auditando canal de rádio..."),
+            ("Adaptador Físico / Driver:", "lbl_wifi_hw", "Controlador: -- | Driver: --"),
+        ]
+
+        for row, (k, attr_n, def_v) in enumerate(radio_items):
+            lbl_k = QLabel(k)
+            lbl_k.setFont(QFont("Segoe UI", 9))
+            lbl_k.setStyleSheet(f"color: {self.palette['text_main']};")
+
+            lbl_v = QLabel(def_v)
+            lbl_v.setFont(QFont("Segoe UI", 9, QFont.Bold))
+            lbl_v.setStyleSheet(f"color: {self.palette['success']};")
+            setattr(self, attr_n, lbl_v)
+
+            grid_radio.addWidget(lbl_k, row, 0)
+            grid_radio.addWidget(lbl_v, row, 1)
+
+        grid_radio.setColumnStretch(1, 1)
+        cr_layout.addLayout(grid_radio)
+        layout.addWidget(card_radio)
+
+        # 3. Tabela de Redes Vizinhas e Varredura de Canais
+        card_scan = QFrame(scroll_content)
+        card_scan.setObjectName("cardFrame")
+        cscan_layout = QVBoxLayout(card_scan)
+        cscan_layout.setContentsMargins(16, 14, 16, 14)
+        cscan_layout.setSpacing(8)
+
+        lbl_scan_t = QLabel("📡 REDES WI-FI PRÓXIMAS DETECTADAS NO AMBIENTE (ANÁLISE DE ESPECTRO)")
+        lbl_scan_t.setFont(QFont("Segoe UI", 9, QFont.Bold))
+        lbl_scan_t.setStyleSheet(f"color: {self.palette['accent']};")
+        cscan_layout.addWidget(lbl_scan_t)
+
+        self.table_nearby = QTableWidget(0, 7)
+        self.table_nearby.setHorizontalHeaderLabels([
+            "Status", "Nome da Rede (SSID)", "Sinal", "dBm", "Canal", "Frequência", "Segurança"
+        ])
+        self.table_nearby.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.table_nearby.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.table_nearby.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.table_nearby.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.table_nearby.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        self.table_nearby.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        self.table_nearby.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        self.table_nearby.verticalHeader().setVisible(False)
+        self.table_nearby.setMinimumHeight(180)
+        cscan_layout.addWidget(self.table_nearby)
+        layout.addWidget(card_scan)
+
+        self.scroll_area.setWidget(scroll_content)
+        root_layout.addWidget(self.scroll_area, 1)
+
+        # ---------------------------------------------------------------------
+        # 3. BARRA DE STATUS INFERIOR
+        # ---------------------------------------------------------------------
+        status_bar = QFrame(self)
+        status_bar.setObjectName("bottomStatusBar")
+        status_layout = QHBoxLayout(status_bar)
+        status_layout.setContentsMargins(18, 6, 18, 8)
+        status_layout.setSpacing(10)
+
+        self.lbl_global_status = QLabel("● Pronto para auditoria de sinal Wi-Fi.")
+        self.lbl_global_status.setFont(QFont("Segoe UI", 9, QFont.Bold))
+        self.lbl_global_status.setStyleSheet(f"color: {self.palette['accent']};")
+        status_layout.addWidget(self.lbl_global_status, 1)
+
+        lbl_hint = QLabel("Dica: Pressione <b>F11</b> para alternar tela cheia • <b>Esc</b> para fechar")
+        lbl_hint.setFont(QFont("Segoe UI", 8))
+        lbl_hint.setStyleSheet(f"color: {self.palette['text_muted']};")
+        status_layout.addWidget(lbl_hint)
+
+        root_layout.addWidget(status_bar)
+
+    def toggle_fullscreen(self):
+        """Alterna entre janela maximizada e tela cheia completa."""
+        if self.isFullScreen():
+            self.showMaximized()
+            self.btn_toggle_fullscreen.setText("⛶ Tela Cheia")
+        else:
+            self.showFullScreen()
+            self.btn_toggle_fullscreen.setText("🗗 Restaurar")
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_F11:
+            self.toggle_fullscreen()
+            event.accept()
+        elif event.key() == Qt.Key_Escape:
+            if self.isFullScreen():
+                self.showMaximized()
+                self.btn_toggle_fullscreen.setText("⛶ Tela Cheia")
+                event.accept()
+            else:
+                super().keyPressEvent(event)
+        else:
+            super().keyPressEvent(event)
+
+    def _load_interfaces(self):
+        self.combo_wifi_iface.clear()
+        try:
+            w_ifaces = get_wifi_interfaces()
+            if w_ifaces:
+                for w in w_ifaces:
+                    self.combo_wifi_iface.addItem(f"{w['name']}", w)
+            else:
+                self.combo_wifi_iface.addItem("Nenhuma Placa Wi-Fi Detectada", None)
+        except Exception:
+            self.combo_wifi_iface.addItem("Nenhuma Placa Wi-Fi Detectada", None)
+
+    def _get_current_wifi_iface_name(self) -> str:
+        data = self.combo_wifi_iface.currentData()
+        if isinstance(data, dict):
+            return data.get("name", "")
+        txt = self.combo_wifi_iface.currentText()
+        if "Nenhuma" in txt:
+            return ""
+        return txt.split(" ")[0].strip()
+
     def run_wifi_measurement(self):
         w_iface = self._get_current_wifi_iface_name()
         self.btn_measure_wifi.setEnabled(False)
         self.lbl_global_status.setText("● Executando diagnóstico e medição de sinal Wi-Fi...")
-        self.lbl_global_status.setStyleSheet("color: #38bdf8;")
+        self.lbl_global_status.setStyleSheet(f"color: {self.palette['accent']};")
 
         self.wifi_worker = LocalWifiDiagWorker(interface_name=w_iface, force_demo=False)
         self.wifi_worker.status_updated.connect(lambda s: self.lbl_global_status.setText(f"● {s}"))
@@ -895,10 +1371,9 @@ class CableDiagnosticDialog(QDialog):
         self.wifi_worker.start()
 
     def run_wifi_demo_measurement(self):
-        """Simula teste Wi-Fi 6 empresarial de alta fidelidade para homologação."""
         self.btn_measure_wifi.setEnabled(False)
-        self.lbl_global_status.setText("● Carregando ambiente de homologação e demonstração Wi-Fi 6...")
-        self.lbl_global_status.setStyleSheet("color: #38bdf8;")
+        self.lbl_global_status.setText("● Carregando ambiente de homologação Wi-Fi 6...")
+        self.lbl_global_status.setStyleSheet(f"color: {self.palette['accent']};")
 
         self.wifi_worker = LocalWifiDiagWorker(interface_name="wlp3s0", force_demo=True)
         self.wifi_worker.status_updated.connect(lambda s: self.lbl_global_status.setText(f"● {s}"))
@@ -908,7 +1383,6 @@ class CableDiagnosticDialog(QDialog):
         self.wifi_worker.start()
 
     def scan_nearby_wifi_action(self):
-        """Dispara varredura sob demanda de redes vizinhas."""
         self.run_wifi_measurement()
 
     @pyqtSlot(object)
@@ -920,28 +1394,28 @@ class CableDiagnosticDialog(QDialog):
             self.lbl_big_signal.setText(f"{res.signal_dbm} dBm  ({res.signal_percent}%)")
             self.progress_signal.setValue(res.signal_percent)
             if res.signal_percent >= 75:
-                sig_color = "#10b981"
+                sig_color = self.palette["success"]
             elif res.signal_percent >= 50:
-                sig_color = "#eab308"
+                sig_color = self.palette["warning"]
             else:
-                sig_color = "#ef4444"
+                sig_color = self.palette["danger"]
             self.lbl_big_signal.setStyleSheet(f"color: {sig_color}; margin: 2px 0;")
             self.lbl_wifi_desc.setText(f"Qualidade: {res.signal_quality_desc}")
             self.lbl_wifi_desc.setStyleSheet(f"color: {sig_color};")
             self.lbl_wifi_ssid_bssid.setText(f"Rede (SSID): <b>{res.ssid}</b> • BSSID: <code>{res.bssid}</code>")
         elif res.has_hardware:
             self.lbl_big_signal.setText("Desconectado (0%)")
-            self.lbl_big_signal.setStyleSheet("color: #f87171; margin: 2px 0;")
+            self.lbl_big_signal.setStyleSheet(f"color: {self.palette['danger']}; margin: 2px 0;")
             self.progress_signal.setValue(0)
             self.lbl_wifi_desc.setText("Qualidade: Placa Wi-Fi ativa, aguardando conexão a uma rede.")
-            self.lbl_wifi_desc.setStyleSheet("color: #f59e0b;")
+            self.lbl_wifi_desc.setStyleSheet(f"color: {self.palette['warning']};")
             self.lbl_wifi_ssid_bssid.setText("Rede (SSID): -- • BSSID: --")
         else:
             self.lbl_big_signal.setText("Sem Hardware Wi-Fi")
-            self.lbl_big_signal.setStyleSheet("color: #94a3b8; margin: 2px 0;")
+            self.lbl_big_signal.setStyleSheet(f"color: {self.palette['text_sub']}; margin: 2px 0;")
             self.progress_signal.setValue(0)
             self.lbl_wifi_desc.setText("Qualidade: Nenhum adaptador sem fio ativo detectado neste computador.")
-            self.lbl_wifi_desc.setStyleSheet("color: #94a3b8;")
+            self.lbl_wifi_desc.setStyleSheet(f"color: {self.palette['text_sub']};")
             self.lbl_wifi_ssid_bssid.setText("Para testar o visual de Wi-Fi, clique no botão '🧪 Simular Wi-Fi 6' acima.")
 
         # 2. Padrão e Frequência
@@ -981,7 +1455,7 @@ class CableDiagnosticDialog(QDialog):
         self.lbl_global_status.setText(
             f"✓ Auditoria Wi-Fi concluída! {res.overall_condition}"
         )
-        self.lbl_global_status.setStyleSheet("color: #10b981;")
+        self.lbl_global_status.setStyleSheet(f"color: {self.palette['success']};")
 
     def _populate_nearby_table(self, networks: List[NearbyWifiNetwork]):
         self.table_nearby.setRowCount(0)
@@ -992,7 +1466,7 @@ class CableDiagnosticDialog(QDialog):
             # 0. Status
             status_item = QTableWidgetItem("🟢 Conectado" if net.in_use else "⚪ Próximo")
             if net.in_use:
-                status_item.setForeground(QColor("#10b981"))
+                status_item.setForeground(QColor(self.palette["success"]))
             self.table_nearby.setItem(row, 0, status_item)
 
             # 1. SSID
@@ -1004,11 +1478,11 @@ class CableDiagnosticDialog(QDialog):
             # 2. Sinal %
             sig_item = QTableWidgetItem(f"{net.signal_pct}%")
             if net.signal_pct >= 75:
-                sig_item.setForeground(QColor("#10b981"))
+                sig_item.setForeground(QColor(self.palette["success"]))
             elif net.signal_pct >= 50:
-                sig_item.setForeground(QColor("#eab308"))
+                sig_item.setForeground(QColor(self.palette["warning"]))
             else:
-                sig_item.setForeground(QColor("#ef4444"))
+                sig_item.setForeground(QColor(self.palette["danger"]))
             self.table_nearby.setItem(row, 2, sig_item)
 
             # 3. dBm
@@ -1031,56 +1505,8 @@ class CableDiagnosticDialog(QDialog):
     @pyqtSlot(str)
     def _on_wifi_diag_error(self, err: str):
         self.lbl_global_status.setText(f"⚠️ {err}")
-        self.lbl_global_status.setStyleSheet("color: #f87171;")
+        self.lbl_global_status.setStyleSheet(f"color: {self.palette['danger']};")
         QMessageBox.warning(self, "Diagnóstico Wi-Fi", err)
-
-    # =========================================================================
-    # EXPORTAÇÃO E CÓPIA DE LAUDO TÉCNICO
-    # =========================================================================
-    def copy_current_report(self):
-        """Copia para a área de transferência o laudo da aba ativa (Cabo ou Wi-Fi)."""
-        if self.current_tab == "cable":
-            self.copy_cable_report()
-        else:
-            self.copy_wifi_report()
-
-    def copy_cable_report(self):
-        if not self.current_cable_result:
-            QMessageBox.information(self, "Aviso", "Execute a medição do cabo antes de copiar o laudo.")
-            return
-
-        r = self.current_cable_result
-        report = f"""# LAUDO TÉCNICO DE MEDIÇÃO E DIAGNÓSTICO DE CABO DE REDE (ETHERNET)
-Gerado por: IP Scan IGT
-Data/Hora: {r.test_timestamp}
-
---- DADOS DA PLACA DE REDE UTILIZADA ---
-• Interface Selecionada: {r.interface_name}
-• Modelo do Chipset: {r.nic_model}
-• Driver do Kernel: {r.nic_driver}
-• Endereço MAC: {r.mac_address}
-• Status do Link: {'Conectado (Portadora Ativa)' if r.link_up else 'Desconectado'}
-• Velocidade & Duplex: {r.speed_mbps} Mbps {r.duplex}-Duplex
-
---- MEDIÇÃO FÍSICA DO CABO DE REDE ---
-• Comprimento do Cabo: {r.cable_length_m:.1f} metros
-• Categoria do Cabo: {r.cable_category}
-• Condição Geral: {r.overall_condition}
-
---- INTEGRIDADE ELÉTRICA DOS 4 PARES (8 FIOS RJ-45) ---
-• Par A (Pinos 1-2): {r.pair_a_status}
-• Par B (Pinos 3-6): {r.pair_b_status}
-• Par C (Pinos 4-5): {r.pair_c_status}
-• Par D (Pinos 7-8): {r.pair_d_status}
-
---- QUALIDADE DO SINAL & ESTABILIDADE ---
-• Ruído Elétrico (EMI): {r.noise_quality}
-• Erros de CRC: {r.crc_errors}
-• Erros de Alinhamento: {r.align_errors}
-• Estabilidade do Conector: {r.flaps} alterações de estado (flapping)
-"""
-        QApplication.clipboard().setText(report)
-        QMessageBox.information(self, "Copiado", "Laudo técnico de diagnóstico do cabo copiado com sucesso!")
 
     def copy_wifi_report(self):
         if not self.current_wifi_result:

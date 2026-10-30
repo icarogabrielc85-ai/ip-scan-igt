@@ -6,7 +6,7 @@ import os
 import subprocess
 
 # Versão Semântica Oficial (MAJOR.MINOR.PATCH)
-APP_VERSION = "2.12.0"
+APP_VERSION = "2.12.1"
 APP_RELEASE_DATE = "30/10/2026"
 
 
@@ -73,6 +73,17 @@ def get_short_version() -> str:
 
 
 VERSION_HISTORY = [
+    {
+        "version": "v2.12.1",
+        "date": "30/10/2026",
+        "title": "Botão Dedicado Wi-Fi no Ribbon, Janelas em Tela Cheia e Padronização Visual de Temas (Cabo & Wi-Fi)",
+        "changes": [
+            "Botão Dedicado '📶 Wi-Fi Test' no Ribbon Principal e Menu Ferramentas (Ctrl+W): desacoplado da janela de teste de cabo e posicionado lado a lado com '⚡ Cable Test' para acesso direto em 1 clique.",
+            "Abertura em Tela Cheia Maximizada por Padrão: tanto a tela de Diagnóstico de Cabo (CableDiagnosticDialog) quanto a de Wi-Fi (WifiDiagnosticDialog) iniciam maximizadas adaptando-se a 100% da resolução da tela, com suporte a F11 e scroll responsivo.",
+            "Padronização Completa de Cores e Temas (Dark & Light Mode): sincronização total com os tokens de design do IP Scan IGT (ui_theme.py), eliminando cores fixas e garantindo alto contraste e elegância visual em ambos os modos.",
+            "Desacoplamento Arquitetural (wifi_diagnostic_dialog.py): criação de diálogo visual independente para Wi-Fi sem botões ou abas confusas dentro da janela de cabo de rede.",
+        ],
+    },
     {
         "version": "v2.12.0",
         "date": "30/10/2026",

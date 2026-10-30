@@ -1,5 +1,5 @@
 # BLUEPRINT — IP SCAN IGT
-**Versão:** 2.12.0 (Edição Multiplataforma: Linux & Windows)  
+**Versão:** 2.12.1 (Edição Multiplataforma: Linux & Windows)  
 **Projeto:** IP Scan IGT  
 **Repositório GitHub:** [https://github.com/icarogabrielc85-ai/ip-scan-igt](https://github.com/icarogabrielc85-ai/ip-scan-igt)  
 **Diretório Local (PC):** `/home/icaro/linux-ipscan`  
@@ -148,6 +148,8 @@ flowchart TD
 | [`snapshot_engine.py`](file:///home/icaro/linux-ipscan/snapshot_engine.py) | Motor de **Snapshots de Auditoria & Comparador de Mudanças (Baseline Diff)** (`SnapshotManager` + `SnapshotDiffDialog`), destacando novos hosts (`🟢`), servidores ausentes (`🔴`) e portas/CVEs/MAC modificados (`🟠`). |
 | [`upnp_engine.py`](file:///home/icaro/linux-ipscan/upnp_engine.py) | Descoberta multicast e unicast **UPnP / SSDP (UDP 1900)** com parser de XML RootDevice para extrair fabricante, modelo exato e número de série de Smart TVs, roteadores Wi-Fi Mesh, Chromecasts e IoT. |
 | [`traceroute_dialog.py`](file:///home/icaro/linux-ipscan/traceroute_dialog.py) | Ferramenta gráfica de **Traceroute Visual por Saltos (TTL)** (`TracerouteWorker` + `TracerouteDialog`) com grafo encadeado de roteadores intermediários e diagnóstico de latência por salto. |
+| [`cable_diagnostic_dialog.py`](file:///home/icaro/linux-ipscan/cable_diagnostic_dialog.py) | Janela dedicada em tela cheia (`CableDiagnosticDialog`) para diagnóstico elétrico e medição métrica TDR de cabo de rede Ethernet via placa local (IEEE 802.3ab PAM-5). |
+| [`wifi_diagnostic_dialog.py`](file:///home/icaro/linux-ipscan/wifi_diagnostic_dialog.py) | Janela dedicada em tela cheia (`WifiDiagnosticDialog`) para auditoria de sinal Wi-Fi (RSSI dBm e %), identificação de padrão (Wi-Fi 4 ao 7), taxas PHY, latência RF e análise de espectro. |
 | [`lldp_engine.py`](file:///home/icaro/linux-ipscan/lldp_engine.py) | Motor de descoberta L2 **LLDP (IEEE 802.1AB)**, **Cisco CDP** e mapeamento SNMP Bridge-MIB (`dot1dTpFdbTable`), extraindo modelo do switch, IP de gerência, VLAN, capacidades, número total de portas e a porta física exata em que o computador está conectado. |
 | [`lldp_dialog.py`](file:///home/icaro/linux-ipscan/lldp_dialog.py) | Janela dedicada (`LLDPSwitchDialog`) com controles de escuta passiva L2, consulta SNMP, seletor de placas e cards informativos detalhados de infraestrutura. |
 | [`switch_visual_widget.py`](file:///home/icaro/linux-ipscan/switch_visual_widget.py) | Componente gráfico vetorial de alta precisão (`SwitchFrontPanelWidget`) que renderiza o painel frontal 1U de switch em rack de 19" (8, 16, 24 ou 48 portas RJ45 + SFP+ uplinks), destacando com animação pulsante, patch cord conectado e badge a porta física conectada. |
@@ -289,10 +291,11 @@ flowchart TD
   - **Relação Sinal-Ruído (SNR) e Latência de Rádio:** Cálculo de SNR contra o ruído de fundo (Noise Floor), medição de latência ICMP sub-milissegundo até o Access Point/Gateway, jitter e taxa de perda de pacotes sem fio.
   - **Espectro de Redes Vizinhas e Análise de Congestionamento:** Varredura em tempo real de APs vizinhos, identificando sobreposição de canais e recomendando canais menos congestionados.
   - **Modo de Demonstração / Homologação Wi-Fi 6:** Suporte à simulação de enlace Wi-Fi 6 corporativo para validação em estações sem placa Wi-Fi física.
-- **Janela Interativa Unificada (UI/UX) ([`cable_diagnostic_dialog.py`](file:///home/icaro/linux-ipscan/cable_diagnostic_dialog.py)):**
-  - Acessível pelo atalho global **`Ctrl + K`**, pelo novo botão dedicado **`⚡ Cable Test`** no Ribbon superior da tela principal (posicionado ao lado do botão `🔌 Porta Switch`) ou pelo menu **Ferramentas > Diagnóstico de Cabo e Wi-Fi (NIC)**.
-  - Navegação fluida em abas segmentadas: **[⚡ Cabo de Rede (Ethernet)]** e **[📶 Wi-Fi (Sinal & Redes)]**.
-  - Barra visual de distância métrica relativa ao limite de 100m, medidor gráfico de nível de sinal RSSI com gradientes dinâmicos, tabela de redes vizinhas e botão para cópia instantânea de laudo técnico completo.
+- **Janelas Especializadas em Tela Cheia e Desacoplamento Ribbon (v2.12.1):**
+  - **Acesso Dedicado em 1 Clique no Ribbon Principal:** O botão de Wi-Fi foi desacoplado do interior da janela de cabo de rede e alocado lado a lado na barra superior: **`⚡ Cable Test`** (`Ctrl + K`) e **`📶 Wi-Fi Test`** (`Ctrl + W`), além de entradas independentes no menu **Ferramentas**.
+  - **Abertura Inteligente em Tela Cheia:** Tanto o diálogo de cabo ([`cable_diagnostic_dialog.py`](file:///home/icaro/linux-ipscan/cable_diagnostic_dialog.py)) quanto o diálogo de Wi-Fi ([`wifi_diagnostic_dialog.py`](file:///home/icaro/linux-ipscan/wifi_diagnostic_dialog.py)) iniciam maximizados por padrão adaptando-se a 100% da tela, com suporte a modo fullscreen sem bordas via **F11** ou botão **⛶ Tela Cheia**.
+  - **Padronização Estética de Cores e Temas:** Aderência estrita ao Design System do IP Scan IGT (`ui_theme.py`), com sincronização dinâmica para Tema Escuro (Slate 950/900/800 com badges ciano e esmeralda) e Tema Claro (Slate 100/50 com cards brancos de alto contraste e bordas limpas).
+  - Barra visual de distância métrica (0-100m Cat 5e/6), layout gráfico dos 4 pares (IEEE 802.3ab PAM-5), medidor luminoso de nível de sinal RSSI, espectro de canais vizinhos e laudo técnico com exportação para a Área de Transferência.
 
 ### 4.16. Atualizador Automático In-App com Auto-Restart em 1 Clique (v2.12.0)
 - **Comparação Semântica Inteligente de Versões ([`updater_engine.py`](file:///home/icaro/linux-ipscan/updater_engine.py)):**
@@ -347,9 +350,11 @@ flowchart TD
 ### Atalhos de Teclado Globais:
 - **`F5`**: Iniciar / Parar Varredura de Rede
 - **`Esc`**: Parar Varredura Ativa
+- **`F11`**: Alternar Modo Tela Cheia / Janela Maximizada (Cable & Wi-Fi Diags)
 - **`Ctrl + N`**: Abrir Console de Varredura Nmap
 - **`Ctrl + L`**: Abrir Identificador de Porta de Switch (LLDP / CDP)
-- **`Ctrl + K`**: Abrir Diagnóstico e Medição de Rede (Cabo & Wi-Fi — Botão `⚡ Cable Test`)
+- **`Ctrl + K`**: Abrir Diagnóstico e Medição de Cabo de Rede (Botão `⚡ Cable Test`)
+- **`Ctrl + W`**: Abrir Diagnóstico e Auditoria de Rede Sem Fio (Botão `📶 Wi-Fi Test`)
 - **`Ctrl + I`**: Abrir Seletor de Placas de Rede
 - **`Ctrl + E`**: Expandir Todos os Serviços `[+]`
 - **`Ctrl + R`**: Recolher Todos os Dispositivos `[-]`
@@ -360,4 +365,4 @@ flowchart TD
 - **`Ctrl + Q`**: Sair do Aplicativo
 
 ---
-*Blueprint oficial v2.12.0 aprovado e sincronizado com o repositório do projeto IP Scan IGT.*
+*Blueprint oficial v2.12.1 aprovado e sincronizado com o repositório do projeto IP Scan IGT.*

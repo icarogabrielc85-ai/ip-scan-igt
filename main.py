@@ -608,10 +608,15 @@ class MainWindow(QMainWindow):
         self.act_lldp_switch.triggered.connect(self.action_open_lldp_dialog)
         self.menu_tools.addAction(self.act_lldp_switch)
 
-        self.act_cable_diag = QAction(tr("menu_cable_test", "⚡ Diagnóstico de Cabo e Wi-Fi (NIC)..."), self)
+        self.act_cable_diag = QAction(tr("menu_cable_test", "⚡ Diagnóstico de Cabo de Rede (Ethernet)..."), self)
         self.act_cable_diag.setShortcut("Ctrl+K")
         self.act_cable_diag.triggered.connect(self.open_cable_diagnostic_dialog)
         self.menu_tools.addAction(self.act_cable_diag)
+
+        self.act_wifi_diag = QAction(tr("menu_wifi_test", "📶 Diagnóstico de Rede Sem Fio (Wi-Fi)..."), self)
+        self.act_wifi_diag.setShortcut("Ctrl+W")
+        self.act_wifi_diag.triggered.connect(self.open_wifi_diagnostic_dialog)
+        self.menu_tools.addAction(self.act_wifi_diag)
 
         # 4. Segurança & Auditoria (Nmap, Network Guard, Watchdog, Snapshots)
         self.menu_security = menu_bar.addMenu(tr("menu_security", "Segurança"))
@@ -922,13 +927,21 @@ class MainWindow(QMainWindow):
         self.btn_switch_port.clicked.connect(self.action_open_lldp_dialog)
         ribbon_layout.addWidget(self.btn_switch_port)
 
-        # Cable & Wi-Fi Diagnostic
+        # Cable Diagnostic
         self.btn_cable_test = QPushButton("⚡ Cable Test")
         self.btn_cable_test.setObjectName("ribbonBtn")
         self.btn_cable_test.setFixedHeight(28)
-        self.btn_cable_test.setToolTip("Diagnóstico e medição física de cabo de rede e sinal Wi-Fi (Ctrl+K)")
+        self.btn_cable_test.setToolTip(tr("tooltip_cable_test", "Diagnóstico e medição física de cabo de rede Ethernet (Ctrl+K)"))
         self.btn_cable_test.clicked.connect(self.open_cable_diagnostic_dialog)
         ribbon_layout.addWidget(self.btn_cable_test)
+
+        # Wi-Fi Diagnostic
+        self.btn_wifi_test = QPushButton("📶 Wi-Fi Test")
+        self.btn_wifi_test.setObjectName("ribbonBtn")
+        self.btn_wifi_test.setFixedHeight(28)
+        self.btn_wifi_test.setToolTip(tr("tooltip_wifi_test", "Diagnóstico, medição de sinal RSSI e análise de redes Wi-Fi (Ctrl+W)"))
+        self.btn_wifi_test.clicked.connect(self.open_wifi_diagnostic_dialog)
+        ribbon_layout.addWidget(self.btn_wifi_test)
 
         # Executive Report Export Menu button
         self.btn_report = QPushButton("📑 Relatório ▾")
@@ -1413,9 +1426,14 @@ class MainWindow(QMainWindow):
             self.btn_switch_port.setToolTip(tr("tooltip_switch_port", "Identificar porta do switch gerenciável conectado via LLDP/CDP ou consulta SNMP (Ctrl+L)"))
         if hasattr(self, "btn_cable_test"):
             self.btn_cable_test.setText(tr("btn_cable_test", "⚡ Cable Test"))
-            self.btn_cable_test.setToolTip(tr("tooltip_cable_test", "Diagnóstico e medição física de cabo de rede e sinal Wi-Fi (Ctrl+K)"))
+            self.btn_cable_test.setToolTip(tr("tooltip_cable_test", "Diagnóstico e medição física de cabo de rede Ethernet (Ctrl+K)"))
+        if hasattr(self, "btn_wifi_test"):
+            self.btn_wifi_test.setText(tr("btn_wifi_test", "📶 Wi-Fi Test"))
+            self.btn_wifi_test.setToolTip(tr("tooltip_wifi_test", "Diagnóstico, medição de sinal RSSI e análise de redes Wi-Fi (Ctrl+W)"))
         if hasattr(self, "act_cable_diag"):
-            self.act_cable_diag.setText(tr("menu_cable_test", "⚡ Diagnóstico de Cabo e Wi-Fi (NIC)..."))
+            self.act_cable_diag.setText(tr("menu_cable_test", "⚡ Diagnóstico de Cabo de Rede (Ethernet)..."))
+        if hasattr(self, "act_wifi_diag"):
+            self.act_wifi_diag.setText(tr("menu_wifi_test", "📶 Diagnóstico de Rede Sem Fio (Wi-Fi)..."))
         if hasattr(self, "topology_widget"):
             self.topology_widget.retranslate_ui()
 
@@ -3090,6 +3108,13 @@ class MainWindow(QMainWindow):
         from cable_diagnostic_dialog import CableDiagnosticDialog
         iface = self.local_info.get("interface", "enp7s0")
         dlg = CableDiagnosticDialog(self, initial_iface=iface, is_dark=self.is_dark_mode, initial_tab=initial_tab)
+        dlg.showMaximized()
+        dlg.exec_()
+
+    def open_wifi_diagnostic_dialog(self):
+        from cable_diagnostic_dialog import WifiDiagnosticDialog
+        dlg = WifiDiagnosticDialog(self, is_dark=self.is_dark_mode)
+        dlg.showMaximized()
         dlg.exec_()
 
     def generate_executive_html_report(self, records: dict) -> str:
